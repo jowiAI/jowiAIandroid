@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.Jowi" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@color/workis_canvas_light</item>
+    </style>
+</resources>

@@ -1,0 +1,154 @@
+package ai.workis.jowi.data
+
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonPrimitive
+
+// Console payloads — every field nullable (optional-decode discipline:
+// several fields ship after the client; a deploy lights them up).
+
+/** Accepts both 121 and "121" — the live API emits numeric ids. */
+object FlexString : KSerializer<String> {
+    override val descriptor: SerialDescriptor =
+        PrimitiveSerialDescriptor("FlexString", PrimitiveKind.STRING)
+
+    override fun deserialize(decoder: Decoder): String {
+        val json = decoder as? JsonDecoder ?: return decoder.decodeString()
+        val el = json.decodeJsonElement()
+        return (el as? JsonPrimitive)?.content ?: el.toString()
+    }
+
+    override fun serialize(encoder: Encoder, value: String) = encoder.encodeString(value)
+}
+
+@Serializable
+data class QuestionTopic(val topic: String? = null, val count: Int? = null)
+
+@Serializable
+data class UnansweredQuestion(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val q: String? = null,
+    val days: Int? = null,
+    val kind: String? = null, // "handoff" | "unmatched"
+)
+
+@Serializable
+data class ConsoleSummary(
+    val newApplications: Int? = null,
+    val awaitingApproval: Int? = null,
+    val activePartners: Int? = null,
+    val openQuestions: Int? = null,
+    val openConversations: Int? = null,
+    val oldestQuestionDays: Int? = null,
+    val unansweredQuestions: List<UnansweredQuestion>? = null,
+    val questionTopics: List<QuestionTopic>? = null,
+)
+
+@Serializable
+data class ApplicationRow(
+    @Serializable(with = FlexString::class) val applicationId: String? = null,
+    val company: String? = null,
+    val shortName: String? = null,
+    @Serializable(with = FlexString::class) val vkn: String? = null,
+    val city: String? = null,
+    val role: String? = null,
+    val email: String? = null,
+    val confidence: Double? = null,
+    val hasTaxFile: Boolean? = null,
+    @Serializable(with = FlexString::class) val partnerId: String? = null,
+    val partnerStatus: String? = null,
+    val appliedAt: String? = null,
+    val openChats: Int? = null,
+    val openQuestions: Int? = null,
+)
+
+@Serializable
+data class ConsoleApplications(
+    val leads: List<ApplicationRow>? = null,
+    val pending: List<ApplicationRow>? = null,
+    val approved: List<ApplicationRow>? = null,
+)
+
+@Serializable
+data class ConsoleQuestion(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val q: String? = null,
+    val days: Int? = null,
+    val kind: String? = null,
+    val visitor: String? = null,
+    val hasEmail: Boolean? = null,
+    val topic: String? = null,
+)
+
+@Serializable
+data class ConsoleQuestions(val questions: List<ConsoleQuestion>? = null)
+
+@Serializable
+data class PartnerRow(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val name: String? = null,
+    val shortName: String? = null,
+    val status: String? = null,
+    val city: String? = null,
+    val sector: String? = null,
+    val seat: String? = null, // "partner" | "virtual" | "expert"
+    val openConversations: Int? = null,
+    val openQuestions: Int? = null,
+    val lastActivityDays: Int? = null,
+)
+
+@Serializable
+data class ConsolePartners(val partners: List<PartnerRow>? = null)
+
+@Serializable
+data class ConversationRow(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val partner: String? = null,
+    val lastMessage: String? = null,
+    val days: Int? = null,
+    val open: Boolean? = null,
+    val messageCount: Int? = null,
+)
+
+@Serializable
+data class ConsoleConversations(val conversations: List<ConversationRow>? = null)
+
+@Serializable
+data class ConsoleMessage(
+    val role: String? = null, // user | jowi | expert | lead
+    val text: String? = null,
+    val at: String? = null,
+    val internal: Boolean? = null,
+    val toWho: String? = null, // "partner" | "lead" | "expert" | null
+)
+
+@Serializable
+data class ConversationDetail(
+    val partner: String? = null,
+    val open: Boolean? = null,
+    val canInternal: Boolean? = null,
+    val messages: List<ConsoleMessage>? = null,
+)
+
+@Serializable
+data class SimpleResult(
+    val success: Boolean = false,
+    val message: String? = null,
+    val error: String? = null,
+    val conversationId: String? = null,
+)
+
+@Serializable
+data class AnswerBody(val answer: String, val teach: Boolean = true)
+
+@Serializable
+data class ReplyBody(val text: String, val internal: Boolean? = null)
+
+@Serializable
+data class StartConvBody(val text: String)

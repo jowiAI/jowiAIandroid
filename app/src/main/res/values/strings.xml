@@ -1,0 +1,14 @@
+<resources>
+    <!-- Android-only strings. Everything else is GENERATED from the iOS
+         String Catalog into strings_catalog.xml — run tools/generate_strings.py.
+         Never add a key here that the catalog already provides. -->
+    <string name="app_name">Jowi</string>
+    <string name="jowi_tab">Jowi</string>
+    <string name="lang_tr">Türkçe</string>
+    <string name="lang_en">English</string>
+    <string name="account_role">Role</string>
+    <string name="apply_sector_hint">Sector (optional)</string>
+    <string name="apply_view_pdf">View the supplier agreement (PDF)</string>
+    <string name="bio_title">Unlock Jowi</string>
+    <string name="bio_subtitle">Confirm it\'s you to continue</string>
+</resources>

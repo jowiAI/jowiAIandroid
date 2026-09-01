@@ -1,0 +1,55 @@
+# jowiAIandroid — Jowi (Workis) Android app
+
+Native Android port of the SwiftUI app at `~/Documents/swiftUIProjects/jowiAIs`,
+talking to the same Django API (`~/Documents/pythonProjects/jowiAI`).
+Read those repos' docs before changing API or brand code:
+`jowiAIs/docs/API_CONTRACT.md`, `jowiAI/docs/WORKIS_BRAND_TOKENS.md`, `WORKIS_ARCHITECTURE.md`.
+
+## Stack
+
+- Kotlin (built-in via AGP 9.3.x — no `org.jetbrains.kotlin.android` plugin), Jetpack Compose (BOM), Material 3
+- Gradle 9.7.1 wrapper; build from CLI with:
+  `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew assembleDebug`
+- Package / applicationId: `ai.workis.jowi`. minSdk 26, compileSdk 37, targetSdk 36.
+- In place: Retrofit + OkHttp + kotlinx.serialization, EncryptedSharedPreferences (token),
+  BiometricPrompt gate on launch (ui/BiometricGate.kt — skips when no lock/biometric enrolled),
+  per-app locale via AppCompat, prefs in SharedPreferences (`workis_lang`, `workis_appearance`).
+- Still planned: Chrome Custom Tabs (plain ACTION_VIEW for now), push seam (FCM not implemented server-side).
+
+## API rules (from API_CONTRACT.md — the mobile side never edits Django serializers)
+
+- Base: `https://workis.ai/api/v1/` · header `Authorization: Token <key>` (NOT Bearer), `Accept-Language: tr|en` on every request.
+- Responses are camelCase; money is decimal-as-string → `BigDecimal`, never Double.
+- Decode tolerantly: nullable fields + `ignoreUnknownKeys = true` (backend lights fields up after client ships).
+- 401 → wipe token, back to login. 403 → routing signal (missing seat profile → onboarding), not an error screen.
+- No pagination on `/workis/` lists, no WebSockets (poll/pull-to-refresh), push not implemented yet.
+- Login is e-mail → OTP (`/auth/otp/request|verify/` — contract proposed, backend gap). `POST /auth/validate-token/` on launch.
+- Roles are exact-match ints: 1 Partner, 2 Guest, 3 Coordinator, 4 Region lead. Console UI only for role 3 or 4.
+- Live console endpoints emit ids/vkn as NUMBERS ("id":121) although the contract reads string — decode
+  id-like fields with `FlexString` (data/ConsoleModels.kt), never plain String.
+
+## Strings / i18n — single source: the iOS String Catalog
+
+`jowiAIs/Shared/Localizable.xcstrings` is the ONE translation source for both apps.
+`python3 tools/generate_strings.py` regenerates `res/values*/strings_catalog.xml`
+(camelCase keys → snake_case: signInTitle → R.string.sign_in_title) and
+`res/xml/locales_config.xml`. Run it after any catalog change; never edit the
+generated files. New language = new locale in the catalog + rerun + add it to the
+language pickers (LoginScreen tabs, AccountScreen) + Django `settings.LANGUAGES`.
+Hand-kept `strings.xml` holds Android-only keys (app_name, bio_*, lang names…) —
+never duplicate a catalog key there.
+
+## Brand (canonical source: iOS `WorkisTheme.swift`; mirrored in `ui/theme/`)
+
+- Kiremit-400 `#E8703F` = primary button fill only; kiremit-500 `#D95F2E` = slash/icons.
+  One tinted primary action per screen; success green is status, never action; no pure black/white.
+- IBM Plex bundled in `res/font` (Sans variable + Mono statics). Mono only for logo/digits/eyebrows; Sans for reading text.
+- Loading idioms: inline button spinner / breathing slash (`WorkisMark(breathing = true)`) / typing dots — never mix.
+- iOS "Liquid Glass" is NOT faked — use Material 3 tonal surfaces. Cards: `surface` color, radius 20dp, 1dp `border` hairline.
+
+## Scope
+
+Port only Workis-era screens: Splash → OTP Login (TR/EN tabs + public Jowi ask) → Apply wizard →
+Main tabs (Panel [role 3/4] · Talepler · Hesap · Jowi) + coordinator console screens.
+Do NOT port legacy jowi/Decora screens (ContentView, ChatView, Dashboard…) or `/api/ask-question/`.
+`/workis/console/sistem/` stays web-only. Localization via `strings.xml` + `values-tr/` (not a hand-rolled struct).

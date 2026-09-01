@@ -1,0 +1,9 @@
+<resources>
+    <!-- Mirror of ui/theme/Color.kt for the few pre-Compose surfaces
+         (window background, launcher icon). Change Color.kt first,
+         then keep these four in sync — nothing else defines color in XML. -->
+    <color name="workis_canvas_light">#F2EEE8</color>
+    <color name="workis_canvas_dark">#16171B</color>
+    <color name="workis_kiremit_500">#D95F2E</color>
+    <color name="ic_launcher_background">#16171B</color>
+</resources>
