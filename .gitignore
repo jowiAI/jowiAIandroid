@@ -7,3 +7,7 @@ build/
 /captures
 .externalNativeBuild
 .cxx
+
+# release signing — keystore + passwords stay local (back them up outside git)
+/keystore/
+/keystore.properties
