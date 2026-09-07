@@ -71,10 +71,13 @@ fun AccountScreen(onReaccept: () -> Unit = {}) {
         SettingsCard {
             InfoRow(stringResource(R.string.email_label), Graph.auth.email() ?: "—")
             RowDivider()
-            InfoRow(
-                stringResource(R.string.account_role),
-                Graph.auth.roleDisplay() ?: Graph.auth.roleCode()?.toString() ?: "—",
-            )
+            // role_display when the payload carries it, else the seat label for the code
+            val roleLabel = Graph.auth.roleDisplay() ?: when (Graph.auth.roleCode()) {
+                1 -> stringResource(R.string.seat_partner)
+                5 -> stringResource(R.string.seat_expert)
+                else -> Graph.auth.roleCode()?.toString()
+            } ?: "—"
+            InfoRow(stringResource(R.string.account_role), roleLabel)
         }
 
         Spacer(Modifier.height(16.dp))
