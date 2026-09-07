@@ -8,6 +8,9 @@ import retrofit2.http.PUT
 import retrofit2.http.Part
 import retrofit2.http.PartMap
 import retrofit2.http.Path
+import retrofit2.http.Query
+import retrofit2.http.Streaming
+import retrofit2.http.Url
 
 interface WorkisApi {
 
@@ -56,12 +59,31 @@ interface WorkisApi {
         @Part taxFile: okhttp3.MultipartBody.Part,
     ): ApplySubmitResponse
 
+    /** Agreement metadata driving the paper: `?role=<wizard pick>` or `?key=supplier|carrier|expert`. */
+    @GET("workis/agreement/")
+    suspend fun agreement(
+        @Query("role") role: String? = null,
+        @Query("key") key: String? = null,
+    ): AgreementMeta
+
+    /** Raw fetch (PDFs). Goes through the same client, so the token header rides along. */
+    @Streaming
+    @GET
+    suspend fun download(@Url url: String): okhttp3.ResponseBody
+
     // --- coordinator console (role 3 or 4, exact match) ---
     @GET("workis/console/summary/")
     suspend fun consoleSummary(): ConsoleSummary
 
     @GET("workis/console/applications/")
     suspend fun consoleApplications(): ConsoleApplications
+
+    @GET("workis/console/applications/{id}/")
+    suspend fun applicationDetail(@Path("id") id: String): ApplicationDetail
+
+    /** ONE field per call — cell-exit autosave semantics (web detail's inline editing). */
+    @POST("workis/console/applications/{id}/update/")
+    suspend fun applicationUpdate(@Path("id") id: String, @Body body: UpdateFieldBody): SimpleResult
 
     @POST("workis/console/applications/{id}/create-partner/")
     suspend fun applicationCreatePartner(@Path("id") id: String): SimpleResult

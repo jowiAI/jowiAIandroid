@@ -15,6 +15,7 @@ import ai.workis.jowi.data.ConsoleQuestions
 import ai.workis.jowi.data.ConsoleSummary
 import ai.workis.jowi.data.ConversationDetail
 import ai.workis.jowi.data.ReplyBody
+import ai.workis.jowi.data.SimpleResult
 import ai.workis.jowi.data.safeCall
 import kotlinx.coroutines.launch
 
@@ -52,28 +53,29 @@ class ConsoleViewModel : ViewModel() {
     fun loadConversations() = fetch({ conversations = it }) { Graph.api.consoleConversations() }
     fun loadThread(id: String) = fetch({ thread = it }) { Graph.api.conversationDetail(id) }
 
-    private fun action(id: String, after: () -> Unit = {}, call: suspend () -> Unit) {
+    /** Console action: {success, message}; `after` gets the server's message on success. */
+    private fun action(id: String, after: (String?) -> Unit = {}, call: suspend () -> SimpleResult) {
         busyId = id
         error = null
         viewModelScope.launch {
             when (val r = safeCall(lang) { call() }) {
-                is ApiResult.Ok -> after()
+                is ApiResult.Ok -> after(r.value.message)
                 is ApiResult.Err -> error = r.message
             }
             busyId = null
         }
     }
 
-    fun createPartner(id: String) =
-        action(id, after = { loadApps(); loadSummary() }) { Graph.api.applicationCreatePartner(id) }
+    fun createPartner(id: String, onDone: (String?) -> Unit = {}) =
+        action(id, after = { loadApps(); loadSummary(); onDone(it) }) { Graph.api.applicationCreatePartner(id) }
 
     fun invite(id: String) = action(id) { Graph.api.applicationInvite(id) }
 
     fun closeLead(id: String) =
         action(id, after = { loadApps() }) { Graph.api.applicationClose(id) }
 
-    fun approvePartner(partnerId: String) =
-        action(partnerId, after = { loadApps(); loadSummary() }) { Graph.api.partnerApprove(partnerId) }
+    fun approvePartner(partnerId: String, onDone: (String?) -> Unit = {}) =
+        action(partnerId, after = { loadApps(); loadSummary(); onDone(it) }) { Graph.api.partnerApprove(partnerId) }
 
     fun questionDone(id: String) =
         action(id, after = { loadQuestions(); loadSummary() }) { Graph.api.questionDone(id) }

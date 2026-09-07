@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,10 +37,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.workis.jowi.R
+import ai.workis.jowi.data.ApplicationRow
 import ai.workis.jowi.data.QuestionTopic
 import ai.workis.jowi.ui.components.WorkisMark
 import ai.workis.jowi.ui.theme.Beige
@@ -56,6 +59,7 @@ sealed interface ConsoleDest {
     data object Partners : ConsoleDest
     data object Conversations : ConsoleDest
     data class Thread(val id: String, val partner: String?) : ConsoleDest
+    data class Detail(val row: ApplicationRow) : ConsoleDest
 }
 
 @Composable
@@ -63,14 +67,19 @@ fun ConsoleRoot(vm: ConsoleViewModel = viewModel()) {
     var dest by remember { mutableStateOf<ConsoleDest>(ConsoleDest.Home) }
 
     BackHandler(enabled = dest != ConsoleDest.Home) {
-        dest = if (dest is ConsoleDest.Thread) ConsoleDest.Conversations else ConsoleDest.Home
+        dest = when (dest) {
+            is ConsoleDest.Thread -> ConsoleDest.Conversations
+            is ConsoleDest.Detail -> ConsoleDest.Pipeline
+            else -> ConsoleDest.Home
+        }
     }
 
     when (val d = dest) {
         is ConsoleDest.Home -> ConsoleHome(vm) { dest = it }
         is ConsoleDest.Pipeline -> ConsoleSub(stringResource(R.string.console_all_apps), { dest = ConsoleDest.Home }) {
-            ConsolePipeline(vm)
+            ConsolePipeline(vm) { dest = ConsoleDest.Detail(it) }
         }
+        is ConsoleDest.Detail -> ApplicationDetailScreen(vm, d.row) { dest = ConsoleDest.Pipeline }
         is ConsoleDest.Questions -> ConsoleSub(stringResource(R.string.questions_title), { dest = ConsoleDest.Home }) {
             ConsoleQuestionsScreen(vm)
         }
@@ -88,7 +97,12 @@ fun ConsoleRoot(vm: ConsoleViewModel = viewModel()) {
 
 /** Sub-screen scaffold: back-circle top-left + title, mirrors the iOS header pattern. */
 @Composable
-fun ConsoleSub(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
+fun ConsoleSub(
+    title: String,
+    onBack: () -> Unit,
+    trailing: @Composable RowScope.() -> Unit = {},
+    content: @Composable () -> Unit,
+) {
     val colors = WorkisTheme.colors
     Column(
         modifier = Modifier
@@ -113,7 +127,11 @@ fun ConsoleSub(title: String, onBack: () -> Unit, content: @Composable () -> Uni
                 style = MaterialTheme.typography.headlineMedium,
                 fontSize = 22.sp,
                 color = colors.ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
+            trailing()
         }
         Spacer(Modifier.height(14.dp))
         content()

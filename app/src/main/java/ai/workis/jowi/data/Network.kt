@@ -9,7 +9,12 @@ import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.io.IOException
 
-const val WORKIS_BASE_URL = "https://workis.ai/api/v1/"
+const val WORKIS_ORIGIN = "https://workis.ai"
+const val WORKIS_BASE_URL = "$WORKIS_ORIGIN/api/v1/"
+
+/** Contract paths (`/sozlesme/uzman/pdf/`, `/workis/console/…/signed.pdf`) → absolute. */
+fun absoluteWorkisUrl(path: String): String =
+    if (path.startsWith("http")) path else WORKIS_ORIGIN + path
 
 val WorkisJson = Json {
     ignoreUnknownKeys = true
@@ -77,12 +82,20 @@ fun applyErrorMessage(code: String?, lang: String): String {
     }
 }
 
-/** Pull the `error` code out of a non-2xx apply response body, if present. */
-fun errorCodeFromBody(e: HttpException): String? = runCatching {
+private fun bodyField(e: HttpException, vararg keys: String): String? = runCatching {
     val body = e.response()?.errorBody()?.string() ?: return null
-    WorkisJson.decodeFromString<kotlinx.serialization.json.JsonObject>(body)["error"]
-        ?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
+    val obj = WorkisJson.decodeFromString<kotlinx.serialization.json.JsonObject>(body)
+    keys.firstNotNullOfOrNull { k ->
+        (obj[k] as? kotlinx.serialization.json.JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
+    }
 }.getOrNull()
+
+/** Pull the `error` code out of a non-2xx apply response body, if present. */
+fun errorCodeFromBody(e: HttpException): String? = bodyField(e, "error")
+
+/** Server-worded `message`/`error` from a non-2xx body, else the status idiom. */
+fun messageFromBody(e: HttpException, lang: String): String =
+    bodyField(e, "message", "error") ?: statusMessage(e.code(), lang)
 
 suspend fun <T> safeCall(lang: String, block: suspend () -> T): ApiResult<T> =
     try {

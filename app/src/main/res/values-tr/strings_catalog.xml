@@ -3,6 +3,7 @@
      Regenerate with: python3 tools/generate_strings.py -->
 <resources>
     <string name="account_language">Dil</string>
+    <string name="agreement_section">SÖZLEŞME KABULÜ</string>
     <string name="answer_action">Cevapla</string>
     <string name="answer_placeholder">Cevabınız…</string>
     <string name="answer_title">Soruyu cevapla</string>
@@ -76,20 +77,45 @@
     <string name="create">Oluştur</string>
     <string name="create_partner">Partner oluştur</string>
     <string name="days_word">gün</string>
+    <string name="detail_saved">kaydedildi</string>
     <string name="different_email">Farklı e-posta</string>
     <string name="done">Tamam</string>
     <string name="email_hint">İş e-postanı kullan; hesabını firmanla eşleştirmemizi kolaylaştırır.</string>
     <string name="email_label">İş e-postası</string>
     <string name="email_placeholder">ornek@firma.com</string>
     <string name="email_section">İŞ E-POSTASI</string>
+    <string name="expert_affiliation">Üretici / satıcı bağlantısı beyanı</string>
+    <string name="expert_affiliation_note">Bu beyan yayınlanmaz; tarafsızlık değerlendirmesi için tutulur. Uzman içerikleri her durumda fiyat-kör çalışır.</string>
+    <string name="expert_affiliation_placeholder">Bir üretici veya satıcıyla çalışıyorsanız yazın (firma adı, ilişki). Bağlantınız yoksa \'Yok\' yazın.</string>
+    <string name="expert_agree">[Uzman Katkı Sözleşmesi](https://workis.ai/sozlesme/uzman/)\'ni okudum, elektronik ortamda kabul ediyorum; beyanımın doğru olduğunu, katkılarımın isimli olarak kaydedileceğini ve [gizlilik politikasını](https://workis.ai/yasal/gizlilik/) kabul ediyorum. ([PDF](https://workis.ai/sozlesme/uzman/pdf/))</string>
+    <string name="expert_card_sub">Firma değil, bilgi getiriyorsanız — uzman başvurusu.</string>
+    <string name="expert_card_title">Sektör uzmanı mısınız?</string>
+    <string name="expert_email">E-posta</string>
+    <string name="expert_email_hint">Giriş şifresizdir: bu adrese gelen tek kullanımlık kodla girersiniz.</string>
+    <string name="expert_email_placeholder">siz@firma.com</string>
+    <string name="expert_intro">Workis\'te uzmanlar sektör bilgisini yazar; Jowi bu bilgiyle cevap verir ve her katkı isimli olarak kayıt altındadır. Uzmanlar ürün fiyatlarını ve teklifleri **hiçbir zaman görmez** — tavsiyenin tarafsızlığı böyle korunur.</string>
+    <string name="expert_name">Ad Soyad</string>
+    <string name="expert_name_placeholder">Mehmet Yılmaz</string>
+    <string name="expert_section">UZMAN BİLGİLERİ</string>
+    <string name="expert_sector">Uzmanlık sektörünüz</string>
+    <string name="expert_sector_placeholder">örn. Yangın Güvenliği, HVAC, Hidrolik</string>
+    <string name="expert_sent">İnceleyip e-posta adresinize dönüş yapacağız; onaylandığında giriş davetiniz bu adrese gelir. İmzalı sözleşme kopyanız da gelen kutunuzda.</string>
+    <string name="expert_submit">Başvuruyu gönder</string>
+    <string name="expert_summary">Uzmanlık / deneyim özeti</string>
+    <string name="expert_summary_placeholder">Kaç yıl, hangi alanlarda, hangi standartlarla çalıştınız? (örn. 15 yıl yangın söndürme sistemleri; TS EN 671, NFPA 13 projelendirme…)</string>
+    <string name="expert_title">Uzman başvurusu</string>
     <string name="f_address">Adres</string>
+    <string name="f_catalog_formats">Katalog formatları</string>
     <string name="f_city">Şehir</string>
     <string name="f_company">Firma unvanı</string>
     <string name="f_entity_type">Şirket türü</string>
+    <string name="f_sector">Sektör</string>
     <string name="f_short_name">Kısa ad / marka</string>
     <string name="f_tax_number">Vergi kimlik no</string>
     <string name="f_tax_office">Vergi dairesi</string>
     <string name="face_id">Face ID ile giriş</string>
+    <string name="face_idcancel">Başka hesapla gir</string>
+    <string name="face_idreason">Workis hesabınıza giriş</string>
     <string name="has_email_label">e-posta gidecek</string>
     <string name="internal_badge">İÇ NOT</string>
     <string name="internal_note">İç not</string>
@@ -102,6 +128,7 @@
     <string name="new_sub">Üretici veya alıcı olarak başvur — kurulum bizden.</string>
     <string name="new_title">Workis\'te yeni misin?</string>
     <string name="next">İleri</string>
+    <string name="no_agreement">Kayıtlı sözleşme kabulü yok.</string>
     <string name="no_email">e-posta yok</string>
     <string name="no_profile_body">Bu hesabın henüz Workis üyeliği yok. Başvurunuz onaylandıysa, onay e-postanızdaki adresle girin. Yeni misin? Giriş ekranından başvurabilirsin.</string>
     <string name="oldest_word">en eski</string>
@@ -114,6 +141,7 @@
     <string name="pipeline_empty">Kapsamında şu an bekleyen başvuru yok.</string>
     <string name="pipeline_leads">BAŞVURULAR</string>
     <string name="pipeline_pending">ONAY BEKLEYEN</string>
+    <string name="prior_questions_section">BAŞVURU ÖNCESİ SORULAR</string>
     <string name="privacy">Gizlilik Politikası</string>
     <string name="public_ask_hint">Başvuruyla ilgili her şeyi sorabilirsin — vergi levhası, üyelik, Workis\'in işleyişi. Cevaplar bilgi bankamızdan gelir; cevaplanamayan sorular ekibe ulaşır.</string>
     <string name="questions_title">Sorular</string>
@@ -145,6 +173,7 @@
     <string name="sign_in_copy">Şifre yok. E-postana tek kullanımlık giriş bağlantısı ve 6 haneli kod göndereceğiz. İlk girişte hesabın otomatik oluşturulur.</string>
     <string name="sign_in_title">Giriş yapın</string>
     <string name="sign_out">Çıkış yap</string>
+    <string name="signed_pdf">İmzalı PDF</string>
     <string name="start_conv_hint">Partner bunu Jowi sohbetinde ve akışında görür.</string>
     <string name="start_conversation">Sohbet başlat</string>
     <string name="stat_active">Aktif partner</string>

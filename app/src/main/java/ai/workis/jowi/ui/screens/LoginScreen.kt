@@ -1,6 +1,5 @@
 package ai.workis.jowi.ui.screens
 
-import android.content.Intent
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -24,6 +23,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -47,7 +48,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import androidx.core.os.LocaleListCompat
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
@@ -55,6 +55,7 @@ import ai.workis.jowi.data.ApiResult
 import ai.workis.jowi.data.ApplyAskBody
 import ai.workis.jowi.data.safeCall
 import ai.workis.jowi.ui.components.WorkisMark
+import ai.workis.jowi.ui.components.openInApp
 import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.OnKiremitFill
@@ -116,7 +117,13 @@ fun LoginScreen(onApply: () -> Unit = {}) {
         Spacer(Modifier.height(56.dp))
 
         Column(Modifier.padding(horizontal = 28.dp)) {
-            WorkisMark(size = 24)
+            // Brand in the header, web-card style; the scheme picker sits up
+            // here as a secondary circle (the language lives in the tab bar).
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                WorkisMark(size = 24)
+                Spacer(Modifier.weight(1f))
+                AppearanceButton()
+            }
             Spacer(Modifier.height(36.dp))
 
             if (!showJowi) {
@@ -246,11 +253,7 @@ fun LoginScreen(onApply: () -> Unit = {}) {
                 fontFamily = WorkisSans,
                 fontSize = 13.sp,
                 color = colors.faint,
-                modifier = Modifier.clickable {
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW, "https://workis.ai/gizlilik/".toUri())
-                    )
-                },
+                modifier = Modifier.clickable { openInApp(context, "https://workis.ai/gizlilik/") },
             )
         }
         Spacer(Modifier.height(14.dp))
@@ -285,6 +288,56 @@ fun LoginScreen(onApply: () -> Unit = {}) {
                 icon = WorkisIcons.Sparkle,
                 selected = showJowi,
             ) { showJowi = true }
+        }
+    }
+}
+
+/** Appearance (System / Light / Dark) before sign-in — iOS's Menu+Picker circle. */
+@Composable
+private fun AppearanceButton() {
+    val colors = WorkisTheme.colors
+    val appearance by Graph.appearance.collectAsState()
+    var open by remember { mutableStateOf(false) }
+    val options = listOf(
+        Triple("system", R.string.appearance_system, WorkisIcons.HalfCircle),
+        Triple("light", R.string.appearance_light, WorkisIcons.Sun),
+        Triple("dark", R.string.appearance_dark, WorkisIcons.Moon),
+    )
+    Box {
+        IconButton(
+            onClick = { open = true },
+            modifier = Modifier
+                .size(36.dp)
+                .background(colors.surface, CircleShape)
+                .border(1.dp, colors.border, CircleShape),
+        ) {
+            Icon(
+                options.firstOrNull { it.first == appearance }?.third ?: WorkisIcons.HalfCircle,
+                contentDescription = stringResource(R.string.appearance),
+                tint = colors.ink,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { (value, labelRes, icon) ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            stringResource(labelRes),
+                            fontFamily = WorkisSans,
+                            fontSize = 14.sp,
+                            color = if (appearance == value) colors.accentText else colors.ink,
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            icon, contentDescription = null, modifier = Modifier.size(18.dp),
+                            tint = if (appearance == value) Kiremit500 else colors.muted,
+                        )
+                    },
+                    onClick = { Graph.setAppearance(value); open = false },
+                )
+            }
         }
     }
 }

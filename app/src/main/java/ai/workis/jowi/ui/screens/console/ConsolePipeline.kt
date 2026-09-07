@@ -2,6 +2,7 @@ package ai.workis.jowi.ui.screens.console
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,20 +33,20 @@ import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 
 @Composable
-fun ConsolePipeline(vm: ConsoleViewModel) {
+fun ConsolePipeline(vm: ConsoleViewModel, onOpen: (ApplicationRow) -> Unit) {
     val colors = WorkisTheme.colors
     LaunchedEffect(Unit) { if (vm.apps == null) vm.loadApps() }
     val apps = vm.apps
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (apps != null) {
-            section(R.string.pipeline_leads, apps.leads.orEmpty()) { row ->
+            section(R.string.pipeline_leads, apps.leads.orEmpty(), onOpen) { row ->
                 LeadActions(vm, row)
             }
-            section(R.string.pipeline_pending, apps.pending.orEmpty()) { row ->
+            section(R.string.pipeline_pending, apps.pending.orEmpty(), onOpen) { row ->
                 PendingActions(vm, row)
             }
-            section(R.string.pipeline_approved, apps.approved.orEmpty()) { null }
+            section(R.string.pipeline_approved, apps.approved.orEmpty(), onOpen) { null }
         }
         item {
             vm.error?.let { Text(it, color = colors.danger, fontSize = 13.sp) }
@@ -65,6 +66,7 @@ fun ConsolePipeline(vm: ConsoleViewModel) {
 private fun androidx.compose.foundation.lazy.LazyListScope.section(
     titleRes: Int,
     rows: List<ApplicationRow>,
+    onOpen: (ApplicationRow) -> Unit,
     actions: @Composable (ApplicationRow) -> Unit?,
 ) {
     if (rows.isEmpty()) return
@@ -79,17 +81,18 @@ private fun androidx.compose.foundation.lazy.LazyListScope.section(
             modifier = Modifier.padding(top = 6.dp),
         )
     }
-    items(rows) { row -> ApplicationCard(row) { actions(row) } }
+    items(rows) { row -> ApplicationCard(row, { onOpen(row) }) { actions(row) } }
 }
 
 @Composable
-private fun ApplicationCard(row: ApplicationRow, actions: @Composable () -> Unit?) {
+private fun ApplicationCard(row: ApplicationRow, onOpen: () -> Unit, actions: @Composable () -> Unit?) {
     val colors = WorkisTheme.colors
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(colors.surface, RoundedCornerShape(20.dp))
             .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+            .clickable(onClick = onOpen) // tap = the review card (detail); actions stay inline
             .padding(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {

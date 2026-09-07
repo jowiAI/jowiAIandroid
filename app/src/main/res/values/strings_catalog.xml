@@ -3,6 +3,7 @@
      Regenerate with: python3 tools/generate_strings.py -->
 <resources>
     <string name="account_language">Language</string>
+    <string name="agreement_section">AGREEMENT ACCEPTANCE</string>
     <string name="answer_action">Answer</string>
     <string name="answer_placeholder">Your answer…</string>
     <string name="answer_title">Answer the question</string>
@@ -76,20 +77,45 @@
     <string name="create">Create</string>
     <string name="create_partner">Create partner</string>
     <string name="days_word">days</string>
+    <string name="detail_saved">saved</string>
     <string name="different_email">Different e-mail</string>
     <string name="done">Done</string>
     <string name="email_hint">Use your work e-mail; it helps us match your account with your company.</string>
     <string name="email_label">Work email</string>
     <string name="email_placeholder">you@company.com</string>
     <string name="email_section">WORK EMAIL</string>
+    <string name="expert_affiliation">Manufacturer / seller affiliation declaration</string>
+    <string name="expert_affiliation_note">This declaration is never published; it is kept for the impartiality review. Expert content always runs price-blind.</string>
+    <string name="expert_affiliation_placeholder">If you work with a manufacturer or seller, say so (company, relationship). If none, write \'None\'.</string>
+    <string name="expert_agree">I have read and electronically accept the [Expert Contribution Agreement](https://workis.ai/sozlesme/uzman/); I confirm my declaration is accurate, that my contributions will be recorded under my name, and I accept the [privacy policy](https://workis.ai/legal/privacy/). ([PDF](https://workis.ai/sozlesme/uzman/pdf/))</string>
+    <string name="expert_card_sub">Not a company but bringing knowledge — expert application.</string>
+    <string name="expert_card_title">Are you a sector expert?</string>
+    <string name="expert_email">E-mail</string>
+    <string name="expert_email_hint">Sign-in is passwordless: you enter with a one-time code sent to this address.</string>
+    <string name="expert_email_placeholder">you@company.com</string>
+    <string name="expert_intro">On Workis, experts write down sector knowledge; Jowi answers with it and every contribution is recorded under the expert\'s name. Experts **never see** product prices or offers — that is how the advice stays impartial.</string>
+    <string name="expert_name">Full name</string>
+    <string name="expert_name_placeholder">Jane Smith</string>
+    <string name="expert_section">EXPERT DETAILS</string>
+    <string name="expert_sector">Your sector of expertise</string>
+    <string name="expert_sector_placeholder">e.g. Fire Safety, HVAC, Hydraulics</string>
+    <string name="expert_sent">We\'ll review it and get back to you by e-mail; once approved, your sign-in invite arrives at this address. Your signed agreement copy is in your inbox too.</string>
+    <string name="expert_submit">Submit application</string>
+    <string name="expert_summary">Expertise / experience summary</string>
+    <string name="expert_summary_placeholder">How many years, in which fields, with which standards? (e.g. 15 years of fire suppression systems; TS EN 671, NFPA 13 design…)</string>
+    <string name="expert_title">Expert application</string>
     <string name="f_address">Address</string>
+    <string name="f_catalog_formats">Catalog formats</string>
     <string name="f_city">City</string>
     <string name="f_company">Company name</string>
     <string name="f_entity_type">Company type</string>
+    <string name="f_sector">Sector</string>
     <string name="f_short_name">Short name / brand</string>
     <string name="f_tax_number">Tax ID</string>
     <string name="f_tax_office">Tax office</string>
     <string name="face_id">Sign in with Face ID</string>
+    <string name="face_idcancel">Use another account</string>
+    <string name="face_idreason">Sign in to your Workis account</string>
     <string name="has_email_label">will be e-mailed</string>
     <string name="internal_badge">INTERNAL</string>
     <string name="internal_note">Internal note</string>
@@ -102,6 +128,7 @@
     <string name="new_sub">Apply as a maker or buyer — we handle setup.</string>
     <string name="new_title">New to Workis?</string>
     <string name="next">Next</string>
+    <string name="no_agreement">No agreement acceptance on record.</string>
     <string name="no_email">no e-mail</string>
     <string name="no_profile_body">This account has no Workis membership yet. If your application was approved, sign in with the address from your approval e-mail. New here? Apply from the sign-in screen.</string>
     <string name="oldest_word">oldest</string>
@@ -114,6 +141,7 @@
     <string name="pipeline_empty">No applications in your scope right now.</string>
     <string name="pipeline_leads">LEADS</string>
     <string name="pipeline_pending">AWAITING APPROVAL</string>
+    <string name="prior_questions_section">PRE-APPLICATION QUESTIONS</string>
     <string name="privacy">Privacy Policy</string>
     <string name="public_ask_hint">Ask anything about the application — the tax certificate, membership, how Workis works. Answers come from our knowledge base; unanswered questions reach the team.</string>
     <string name="questions_title">Questions</string>
@@ -145,6 +173,7 @@
     <string name="sign_in_copy">No password. We\'ll email you a one-time sign-in link and a 6-digit code. Your account is created on first sign-in.</string>
     <string name="sign_in_title">Sign in</string>
     <string name="sign_out">Sign out</string>
+    <string name="signed_pdf">Signed PDF</string>
     <string name="start_conv_hint">The partner sees this in their Jowi chat and activity feed.</string>
     <string name="start_conversation">Start conversation</string>
     <string name="stat_active">Active partners</string>

@@ -8,7 +8,5 @@
     <string name="lang_en">English</string>
     <string name="account_role">Role</string>
     <string name="apply_sector_hint">Sector (optional)</string>
-    <string name="apply_view_pdf">View the supplier agreement (PDF)</string>
     <string name="bio_title">Unlock Jowi</string>
-    <string name="bio_subtitle">Confirm it\'s you to continue</string>
 </resources>

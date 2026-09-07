@@ -5,6 +5,12 @@ talking to the same Django API (`~/Documents/pythonProjects/jowiAI`).
 Read those repos' docs before changing API or brand code:
 `jowiAIs/docs/API_CONTRACT.md`, `jowiAI/docs/WORKIS_BRAND_TOKENS.md`, `WORKIS_ARCHITECTURE.md`.
 
+**Parity ledger: `jowiAIs/docs/ANDROID_PARITY.md`.** Every iOS change Android must
+mirror lands there as a dated entry (iOS commit · what · OPEN/DONE/SKIP). Closing an
+entry = write the Android commit hash next to it. Section 1 carries the standing rules
+(markdown keys are rendered, navigation/selection grammar, cell-exit autosave + green
+tick, status never color-only). API shapes are never repeated there — API_CONTRACT.md.
+
 ## Stack
 
 - Kotlin (built-in via AGP 9.3.x — no `org.jetbrains.kotlin.android` plugin), Jetpack Compose (BOM), Material 3
@@ -14,7 +20,14 @@ Read those repos' docs before changing API or brand code:
 - In place: Retrofit + OkHttp + kotlinx.serialization, EncryptedSharedPreferences (token),
   BiometricPrompt gate on launch (ui/BiometricGate.kt — skips when no lock/biometric enrolled),
   per-app locale via AppCompat, prefs in SharedPreferences (`workis_lang`, `workis_appearance`).
-- Still planned: Chrome Custom Tabs (plain ACTION_VIEW for now), push seam (FCM not implemented server-side).
+- Chrome Custom Tabs via `openInApp()` (ui/components/Markdown.kt) — every `workis.ai` link
+  in consent texts opens in-app; catalog markdown (`**bold**`, `[label](url)`) renders
+  through `MarkdownText`. Still planned: push seam (FCM not implemented server-side).
+- Agreement paper (`ui/components/AgreementPaper.kt`) is shared by wizard step 04 and the
+  expert screen; its text comes from `GET /workis/agreement/?role=|key=` and the PDF renders
+  natively (android.graphics.pdf.PdfRenderer, `PdfPages`). Never hard-code a PDF path.
+- Cell-exit autosave rows: `FormRow` (ui/components/FormRows.kt) — `onCommit` fires when
+  focus leaves; expert form saves a prefs draft, application detail POSTs one field per call.
 
 ## API rules (from API_CONTRACT.md — the mobile side never edits Django serializers)
 

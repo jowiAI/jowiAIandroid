@@ -75,6 +75,61 @@ data class ConsoleApplications(
     val approved: List<ApplicationRow>? = null,
 )
 
+/** GET applications/{id}/ — the shipped payload says `id`/`createdAt`; the
+ *  contract's `applicationId`/`appliedAt` are accepted too so a rename on
+ *  either side never blanks the screen. */
+@Serializable
+data class ApplicationDetail(
+    @Serializable(with = FlexString::class) val applicationId: String? = null,
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val company: String? = null,
+    val shortName: String? = null,
+    val email: String? = null,
+    val sector: String? = null,
+    val city: String? = null,
+    @Serializable(with = FlexString::class) val taxNumber: String? = null,
+    val taxOffice: String? = null,
+    val entityType: String? = null,
+    val address: String? = null,
+    @Serializable(with = FlexString::class) val catalogFormats: String? = null,
+    val confidence: Double? = null,
+    val role: String? = null,
+    val status: String? = null,
+    val appliedAt: String? = null,
+    val createdAt: String? = null,
+    @Serializable(with = FlexString::class) val partnerId: String? = null,
+    val partnerStatus: String? = null,
+    /** false once approved — every field freezes (server 403s edits anyway). */
+    val canEdit: Boolean? = null,
+    val hasTaxFile: Boolean? = null,
+    val agreement: AgreementAcceptance? = null,
+    val priorQuestions: List<PriorQuestion>? = null,
+) {
+    val resolvedId: String? get() = applicationId ?: id
+    val resolvedAppliedAt: String? get() = appliedAt ?: createdAt
+}
+
+@Serializable
+data class AgreementAcceptance(
+    val version: Int? = null,
+    val kind: String? = null,
+    val acceptedAt: String? = null,
+    val ip: String? = null,
+    val sha: String? = null,
+    val signerName: String? = null,
+    val signedPdfUrl: String? = null,
+)
+
+@Serializable
+data class PriorQuestion(
+    val at: String? = null,
+    val q: String? = null,
+    val tag: String? = null,
+)
+
+@Serializable
+data class UpdateFieldBody(val field: String, val value: String)
+
 @Serializable
 data class ConsoleQuestion(
     @Serializable(with = FlexString::class) val id: String? = null,

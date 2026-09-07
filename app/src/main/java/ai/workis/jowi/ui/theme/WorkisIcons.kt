@@ -104,4 +104,69 @@ object WorkisIcons {
             lineTo(7.5f, 19f); lineTo(7.5f, 16f); lineTo(4f, 16f); close()
         }
     }
+
+    /** SF "graduationcap" — the expert door's icon. */
+    val GraduationCap: ImageVector = stroked("GraduationCap") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(2.5f, 9.5f); lineTo(12f, 5f); lineTo(21.5f, 9.5f); lineTo(12f, 14f); close()
+            moveTo(6.5f, 11.5f); lineTo(6.5f, 16f)
+            quadTo(12f, 20.5f, 17.5f, 16f); lineTo(17.5f, 11.5f)
+            moveTo(21.5f, 9.5f); lineTo(21.5f, 15f)
+        }
+    }
+
+    /** SF "circle.lefthalf.filled" — appearance: system. */
+    val HalfCircle: ImageVector = ImageVector.Builder(
+        name = "HalfCircle", defaultWidth = 24.dp, defaultHeight = 24.dp,
+        viewportWidth = 24f, viewportHeight = 24f,
+    ).apply {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+        ) {
+            moveTo(3f, 12f)
+            arcToRelative(9f, 9f, 0f, true, false, 18f, 0f)
+            arcToRelative(9f, 9f, 0f, true, false, -18f, 0f)
+        }
+        path(fill = SolidColor(Color.Black)) {
+            moveTo(12f, 3f)
+            arcToRelative(9f, 9f, 0f, false, false, 0f, 18f)
+            close()
+        }
+    }.build()
+
+    /** SF "sun.max" — appearance: light. */
+    val Sun: ImageVector = stroked("Sun") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(8f, 12f)
+            arcToRelative(4f, 4f, 0f, true, false, 8f, 0f)
+            arcToRelative(4f, 4f, 0f, true, false, -8f, 0f)
+            moveTo(12f, 2.5f); lineTo(12f, 5f)
+            moveTo(12f, 19f); lineTo(12f, 21.5f)
+            moveTo(2.5f, 12f); lineTo(5f, 12f)
+            moveTo(19f, 12f); lineTo(21.5f, 12f)
+            moveTo(5.3f, 5.3f); lineTo(7f, 7f)
+            moveTo(17f, 17f); lineTo(18.7f, 18.7f)
+            moveTo(5.3f, 18.7f); lineTo(7f, 17f)
+            moveTo(17f, 7f); lineTo(18.7f, 5.3f)
+        }
+    }
+
+    /** SF "moon" — appearance: dark. */
+    val Moon: ImageVector = stroked("Moon") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(20f, 14.5f)
+            arcToRelative(8.5f, 8.5f, 0f, true, true, -10.5f, -10.5f)
+            arcToRelative(7f, 7f, 0f, false, false, 10.5f, 10.5f)
+            close()
+        }
+    }
 }

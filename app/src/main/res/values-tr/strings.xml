@@ -5,7 +5,5 @@
     <string name="lang_en">English</string>
     <string name="account_role">Rol</string>
     <string name="apply_sector_hint">Sektör (isteğe bağlı)</string>
-    <string name="apply_view_pdf">Tedarikçi sözleşmesini görüntüle (PDF)</string>
     <string name="bio_title">Jowi kilidini aç</string>
-    <string name="bio_subtitle">Devam etmek için kimliğinizi doğrulayın</string>
 </resources>

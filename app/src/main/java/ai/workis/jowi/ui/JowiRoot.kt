@@ -33,7 +33,7 @@ fun JowiRoot() {
     val activity = androidx.compose.ui.platform.LocalContext.current
         as? androidx.fragment.app.FragmentActivity
     val bioTitle = androidx.compose.ui.res.stringResource(ai.workis.jowi.R.string.bio_title)
-    val bioSubtitle = androidx.compose.ui.res.stringResource(ai.workis.jowi.R.string.bio_subtitle)
+    val bioSubtitle = androidx.compose.ui.res.stringResource(ai.workis.jowi.R.string.face_idreason)
 
     LaunchedEffect(Unit) {
         // brand moment: keep the curtain up briefly while the checks run

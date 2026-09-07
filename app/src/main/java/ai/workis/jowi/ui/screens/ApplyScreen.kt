@@ -1,6 +1,5 @@
 package ai.workis.jowi.ui.screens
 
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -20,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -40,6 +42,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,14 +50,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -64,7 +68,11 @@ import ai.workis.jowi.data.ApplySubmitBody
 import ai.workis.jowi.data.applyErrorMessage
 import ai.workis.jowi.data.errorCodeFromBody
 import ai.workis.jowi.data.statusMessage
+import ai.workis.jowi.ui.components.AgreementLoader
+import ai.workis.jowi.ui.components.AgreementPaper
+import ai.workis.jowi.ui.components.MarkdownText
 import ai.workis.jowi.ui.components.WorkisMark
+import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.OnKiremitFill
@@ -84,6 +92,11 @@ enum class ApplyStep { Intro, Role, Tax, Email, Sign, Success }
 class ApplyViewModel : ViewModel() {
     var step by mutableStateOf(ApplyStep.Intro)
     var role by mutableStateOf<String?>(null) // buyer | maker | both | carrier
+    /** The expert door (a person, not a company — own screen, not a wizard step). */
+    var showExpert by mutableStateOf(false)
+
+    /** Step-04 paper text, driven by the chosen role (carrier signs the carrier text). */
+    val agreement = AgreementLoader(viewModelScope)
 
     var company by mutableStateOf("")
     var shortName by mutableStateOf("")
@@ -120,6 +133,13 @@ class ApplyViewModel : ViewModel() {
             ApplyStep.Sign -> ApplyStep.Email
             else -> step
         }
+    }
+
+    /** Selecting IS proceeding — and the paper for that role starts prefetching. */
+    fun chooseRole(value: String) {
+        role = value
+        agreement.loadRole(value)
+        step = ApplyStep.Tax
     }
 
     fun parse(bytes: ByteArray, name: String, mime: String) {
@@ -242,6 +262,11 @@ fun ApplyScreen(onClose: () -> Unit, vm: ApplyViewModel = viewModel()) {
     val colors = WorkisTheme.colors
     val context = LocalContext.current
 
+    if (vm.showExpert) {
+        ExpertApplyScreen(onClose = { vm.showExpert = false })
+        return
+    }
+
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
@@ -261,6 +286,7 @@ fun ApplyScreen(onClose: () -> Unit, vm: ApplyViewModel = viewModel()) {
         modifier = Modifier
             .fillMaxSize()
             .background(colors.canvas)
+            .statusBarsPadding()
             .padding(horizontal = 24.dp)
             .imePadding(),
     ) {
@@ -406,11 +432,7 @@ private fun RoleStep(vm: ApplyViewModel) {
                         if (selected) Kiremit500 else colors.border,
                         RoundedCornerShape(20.dp),
                     )
-                    .clickable {
-                        // tap = select + advance (iOS behavior)
-                        vm.role = value
-                        vm.step = ApplyStep.Tax
-                    }
+                    .clickable { vm.chooseRole(value) } // tap = select + advance (iOS behavior)
                     .padding(16.dp),
             ) {
                 Text(
@@ -423,6 +445,57 @@ private fun RoleStep(vm: ApplyViewModel) {
                 Text(stringResource(descRes), color = colors.muted, fontSize = 13.sp)
             }
         }
+        Spacer(Modifier.height(2.dp))
+        ExpertCard { vm.showExpert = true }
+    }
+}
+
+/**
+ * The expert door: same card shape as the roles, but visibly a different KIND
+ * of door — a DASHED neutral border (a solid coloured border means "selected"
+ * on this page, so this card never gets one), graduation cap + chevron in blue.
+ */
+@Composable
+private fun ExpertCard(onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    val shape = RoundedCornerShape(20.dp)
+    val dash = colors.faint
+    Row(
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.surface, shape)
+            .drawBehind {
+                val stroke = 1.dp.toPx()
+                drawRoundRect(
+                    color = dash,
+                    cornerRadius = CornerRadius(20.dp.toPx()),
+                    style = Stroke(
+                        width = stroke,
+                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx())),
+                    ),
+                )
+            }
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+    ) {
+        Icon(
+            WorkisIcons.GraduationCap, contentDescription = null,
+            tint = colors.blue, modifier = Modifier.size(20.dp).padding(top = 1.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                stringResource(R.string.expert_card_title),
+                color = colors.ink, fontWeight = FontWeight.SemiBold, fontSize = 16.sp,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(stringResource(R.string.expert_card_sub), color = colors.muted, fontSize = 13.sp, lineHeight = 18.sp)
+        }
+        Icon(
+            Icons.Filled.KeyboardArrowRight, contentDescription = null,
+            tint = colors.blue, modifier = Modifier.size(20.dp),
+        )
     }
 }
 
@@ -477,39 +550,21 @@ private fun EmailStep(vm: ApplyViewModel) {
 @Composable
 private fun SignStep(vm: ApplyViewModel) {
     val colors = WorkisTheme.colors
-    val context = LocalContext.current
+    LaunchedEffect(vm.role) { vm.role?.let { vm.agreement.loadRole(it) } }
 
-    TextButton(onClick = {
-        context.startActivity(
-            Intent(Intent.ACTION_VIEW, "https://workis.ai/sozlesme/tedarikci/pdf/".toUri()),
-        )
-    }) {
-        Text(stringResource(R.string.apply_view_pdf), color = colors.accentText, fontSize = 14.sp)
-    }
-    Spacer(Modifier.height(8.dp))
-
-    ApplyField(vm.signerName, { vm.signerName = it }, R.string.sign_cell_label)
-    if (vm.signerName.isNotBlank()) {
-        // typed name previews as handwriting on the sign-here band
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(colors.surface, RoundedCornerShape(14.dp))
-                .border(1.dp, colors.border, RoundedCornerShape(14.dp))
-                .padding(vertical = 18.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                vm.signerName,
-                fontFamily = FontFamily.Cursive,
-                fontStyle = FontStyle.Italic,
-                fontSize = 26.sp,
-                color = colors.ink,
-            )
-        }
-    }
+    Text(
+        stringResource(R.string.apply_step4_sub),
+        color = colors.muted, fontSize = 14.sp, lineHeight = 20.sp,
+    )
     Spacer(Modifier.height(12.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    // Which text is shown comes from ?role= — a carrier signs the carrier PDF.
+    AgreementPaper(
+        loader = vm.agreement,
+        signerName = vm.signerName,
+        onSignerChange = { vm.signerName = it },
+    )
+    Spacer(Modifier.height(14.dp))
+    Row(verticalAlignment = Alignment.Top) {
         Checkbox(
             checked = vm.agree,
             onCheckedChange = { vm.agree = it },
@@ -518,7 +573,12 @@ private fun SignStep(vm: ApplyViewModel) {
                 checkmarkColor = OnKiremitFill,
             ),
         )
-        Text(stringResource(R.string.apply_agree), color = colors.ink, fontSize = 13.sp)
+        // markdown links (agreement page, privacy, PDF) open in-app
+        MarkdownText(
+            stringResource(R.string.apply_agree),
+            color = colors.muted, fontSize = 13.sp, lineHeight = 19.sp,
+            modifier = Modifier.padding(top = 12.dp),
+        )
     }
     Spacer(Modifier.height(16.dp))
     PrimaryButton(

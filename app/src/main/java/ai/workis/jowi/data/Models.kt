@@ -83,6 +83,21 @@ data class ApplySubmitBody(
     val lang: String? = null,
     val shortName: String? = null,
     val confidence: Double? = null,
+    // role=expert only (API_CONTRACT.md → "EXPERT application"): `company` carries the full name
+    val expertise: String? = null,
+    val affiliation: String? = null,
+)
+
+/** GET /workis/agreement/?role=|key= — the paper's letterhead + which PDF to render. */
+@Serializable
+data class AgreementMeta(
+    val key: String? = null,
+    val version: Int? = null,
+    val title: String? = null,
+    val sha: String? = null,
+    val createdAt: String? = null,
+    val pageUrl: String? = null,
+    val pdfUrl: String? = null,
 )
 
 @Serializable
