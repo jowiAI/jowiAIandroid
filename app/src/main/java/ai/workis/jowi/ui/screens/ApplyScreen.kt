@@ -573,9 +573,10 @@ private fun SignStep(vm: ApplyViewModel) {
                 checkmarkColor = OnKiremitFill,
             ),
         )
-        // markdown links (agreement page, privacy, PDF) open in-app
+        // markdown links (agreement page, privacy, PDF) open in-app; a carrier
+        // consents to the carrier agreement, not the supplier's
         MarkdownText(
-            stringResource(R.string.apply_agree),
+            stringResource(if (vm.role == "carrier") R.string.apply_agree_carrier else R.string.apply_agree),
             color = colors.muted, fontSize = 13.sp, lineHeight = 19.sp,
             modifier = Modifier.padding(top = 12.dp),
         )

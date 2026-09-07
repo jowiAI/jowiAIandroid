@@ -121,6 +121,57 @@ interface WorkisApi {
     @POST("workis/console/partners/{partnerId}/conversation/")
     suspend fun startConversation(@Path("partnerId") partnerId: String, @Body body: StartConvBody): SimpleResult
 
+    /** Expert applicant = a person, not a partner: approve makes the expert seat + invite. */
+    @POST("workis/console/applications/{id}/approve-expert/")
+    suspend fun applicationApproveExpert(@Path("id") id: String): SimpleResult
+
+    // --- expert seat (role 5 only; every endpoint 403s for other seats) — slice 1 ---
+    @GET("workis/expert/summary/")
+    suspend fun expertSummary(): ExpertSummary
+
+    @GET("workis/expert/questions/")
+    suspend fun expertQuestions(): ConsoleQuestions
+
+    @POST("workis/expert/questions/{id}/answer/")
+    suspend fun expertAnswer(@Path("id") id: String, @Body body: ExpertAnswerBody): SimpleResult
+
+    @GET("workis/expert/reviews/")
+    suspend fun expertReviews(): ExpertReviews
+
+    @POST("workis/expert/reviews/{sessionKey}/")
+    suspend fun expertCloseReview(@Path("sessionKey") sessionKey: String, @Body body: CloseReviewBody): SimpleResult
+
+    @POST("workis/expert/companions/{id}/")
+    suspend fun expertCompanionVerdict(@Path("id") id: String, @Body body: VerdictBody): SimpleResult
+
+    @GET("workis/expert/knowledge/")
+    suspend fun expertKnowledge(@Query("q") q: String? = null): ExpertKnowledge
+
+    @POST("workis/expert/knowledge/")
+    suspend fun expertAddKnowledge(@Body body: KnowledgeBody): KnowledgeSaveResult
+
+    @POST("workis/expert/knowledge/units/{id}/toggle/")
+    suspend fun expertToggleUnit(@Path("id") id: String): ToggleResult
+
+    @GET("workis/expert/consults/")
+    suspend fun expertConsults(): ExpertConsults
+
+    @GET("workis/expert/consults/{id}/")
+    suspend fun expertConsult(@Path("id") id: String): ExpertConsultDetail
+
+    @POST("workis/expert/consults/{id}/reply/")
+    suspend fun expertConsultReply(@Path("id") id: String, @Body body: TextBody): SimpleResult
+
+    @POST("workis/expert/consults/{id}/unavailable/")
+    suspend fun expertConsultUnavailable(@Path("id") id: String, @Body body: UnavailableBody): SimpleResult
+
+    // --- §10.2 agreement re-acceptance (every seat) ---
+    @GET("workis/agreement/pending/")
+    suspend fun agreementPending(): AgreementPending
+
+    @POST("workis/agreement/accept/")
+    suspend fun agreementAccept(@Body body: AcceptAgreementBody): SimpleResult
+
     // --- ask jowi ---
     @POST("workis/ask/")
     suspend fun ask(@Body body: AskBody): AskResponse

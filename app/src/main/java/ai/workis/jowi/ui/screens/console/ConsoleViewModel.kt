@@ -69,6 +69,10 @@ class ConsoleViewModel : ViewModel() {
     fun createPartner(id: String, onDone: (String?) -> Unit = {}) =
         action(id, after = { loadApps(); loadSummary(); onDone(it) }) { Graph.api.applicationCreatePartner(id) }
 
+    /** An expert applicant is a person, not a partner: approve makes the expert seat (+ invite). */
+    fun approveExpert(id: String, onDone: (String?) -> Unit = {}) =
+        action(id, after = { loadApps(); loadSummary(); onDone(it) }) { Graph.api.applicationApproveExpert(id) }
+
     fun invite(id: String) = action(id) { Graph.api.applicationInvite(id) }
 
     fun closeLead(id: String) =

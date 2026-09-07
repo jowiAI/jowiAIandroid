@@ -276,7 +276,11 @@ private fun PrimaryAction(console: ConsoleViewModel, vm: AppDetailViewModel, row
     val partnerStatus = d?.partnerStatus ?: row.partnerStatus
     val appId = row.applicationId ?: return
     val busy = console.busyId != null
+    val role = d?.role ?: row.role
     val (label, action) = when {
+        partnerId == null && role == "expert" -> R.string.approve_expert to {
+            console.approveExpert(appId) { vm.actionNote = it; vm.load() }
+        }
         partnerId == null -> R.string.create_partner to {
             console.createPartner(appId) { vm.actionNote = it; vm.load() }
         }

@@ -25,7 +25,7 @@ class AuthRepository(
     private fun loadStoredUser(): JsonObject? =
         store.userJson?.let { runCatching { WorkisJson.decodeFromString<JsonObject>(it) }.getOrNull() }
 
-    // role: 1 Partner, 2 Guest, 3 Coordinator, 4 Region lead — exact-match, never >=
+    // role: 1 Partner, 2 Guest, 3 Coordinator, 4 Region lead, 5 Expert — exact-match, never >=
     fun roleCode(): Int? = _user.value?.get("role")?.jsonPrimitive?.intOrNull
     fun email(): String? = _user.value?.get("email")?.jsonPrimitive?.contentOrNull
     fun displayName(): String? =
@@ -34,6 +34,26 @@ class AuthRepository(
     fun roleDisplay(): String? =
         _user.value?.get("role_display")?.jsonPrimitive?.contentOrNull
     fun isCoordinator(): Boolean = roleCode() == 3 || roleCode() == 4
+    /** The expert seat gets its own Panel and holds no buyer seat (Cases hidden). */
+    fun isExpert(): Boolean = roleCode() == 5
+
+    // §10.2 re-acceptance state — asked after sign-in; the Hesap reminder row reads it too.
+    private val _agreementPending = MutableStateFlow<AgreementPending?>(null)
+    val agreementPending: StateFlow<AgreementPending?> = _agreementPending
+
+    suspend fun refreshAgreementPending() {
+        when (val r = safeCall(lang()) { api.agreementPending() }) {
+            is ApiResult.Ok -> _agreementPending.value = r.value
+            is ApiResult.Err -> Unit // 403 no_seat / network: nothing pending to show
+        }
+    }
+
+    /** POST /agreement/accept/ {signerName} — same evidence chain as the web. */
+    suspend fun acceptAgreement(signerName: String): ApiResult<SimpleResult> {
+        val r = safeCall(lang()) { api.agreementAccept(AcceptAgreementBody(signerName)) }
+        if (r is ApiResult.Ok && r.value.success) refreshAgreementPending()
+        return r
+    }
 
     private fun applyAuth(resp: AuthResponse) {
         resp.token?.let { store.token = it }
@@ -81,6 +101,7 @@ class AuthRepository(
     fun signOutLocally() {
         store.clear()
         _user.value = null
+        _agreementPending.value = null
         _isAuthenticated.value = false
     }
 }

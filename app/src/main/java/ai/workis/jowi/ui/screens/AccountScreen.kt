@@ -3,6 +3,16 @@ package ai.workis.jowi.ui.screens
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material3.Icon
+import androidx.compose.ui.Alignment
+import ai.workis.jowi.ui.theme.Beige
+import ai.workis.jowi.ui.theme.BeigeBg
+import ai.workis.jowi.ui.theme.WorkisIcons
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,12 +45,13 @@ import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.launch
 
 @Composable
-fun AccountScreen() {
+fun AccountScreen(onReaccept: () -> Unit = {}) {
     val colors = WorkisTheme.colors
     val scope = rememberCoroutineScope()
     val lang by Graph.language.collectAsState()
     val appearance by Graph.appearance.collectAsState()
     val user by Graph.auth.user.collectAsState()
+    val pending by Graph.auth.agreementPending.collectAsState()
 
     Column(
         modifier = Modifier
@@ -115,6 +126,28 @@ fun AccountScreen() {
                         colors = segmentedColors(),
                     ) { Text(label, fontSize = 13.sp) }
                 }
+            }
+        }
+
+        // §10.2 reminder — stays until the seat re-accepts
+        if (pending?.pending == true) {
+            Spacer(Modifier.height(16.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(BeigeBg, RoundedCornerShape(20.dp))
+                    .clickable(onClick = onReaccept)
+                    .padding(16.dp),
+            ) {
+                Icon(WorkisIcons.DocPlus, contentDescription = null, tint = Beige, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    stringResource(R.string.reaccept_pending_row),
+                    color = Beige, fontSize = 14.sp, lineHeight = 20.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = Beige)
             }
         }
 

@@ -37,7 +37,10 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
 - 401 → wipe token, back to login. 403 → routing signal (missing seat profile → onboarding), not an error screen.
 - No pagination on `/workis/` lists, no WebSockets (poll/pull-to-refresh), push not implemented yet.
 - Login is e-mail → OTP (`/auth/otp/request|verify/` — contract proposed, backend gap). `POST /auth/validate-token/` on launch.
-- Roles are exact-match ints: 1 Partner, 2 Guest, 3 Coordinator, 4 Region lead. Console UI only for role 3 or 4.
+- Roles are exact-match ints: 1 Partner, 2 Guest, 3 Coordinator, 4 Region lead, 5 Expert. Coordinator console
+  only for role 3 or 4; role 5 gets its own Panel (`ui/screens/expert/`, `/workis/expert/*`) and no Cases tab.
+- §10.2 re-acceptance: `GET /workis/agreement/pending/` after sign-in (AuthRepository.agreementPending) → the
+  paper opens once per launch (`AgreementReacceptScreen`); Hesap keeps a reminder row until accepted.
 - Live console endpoints emit ids/vkn as NUMBERS ("id":121) although the contract reads string — decode
   id-like fields with `FlexString` (data/ConsoleModels.kt), never plain String.
 
@@ -63,6 +66,6 @@ never duplicate a catalog key there.
 ## Scope
 
 Port only Workis-era screens: Splash → OTP Login (TR/EN tabs + public Jowi ask) → Apply wizard →
-Main tabs (Panel [role 3/4] · Talepler · Hesap · Jowi) + coordinator console screens.
+Main tabs (Panel [role 3/4 console · role 5 expert] · Talepler · Hesap · Jowi) + console/expert screens.
 Do NOT port legacy jowi/Decora screens (ContentView, ChatView, Dashboard…) or `/api/ask-question/`.
 `/workis/console/sistem/` stays web-only. Localization via `strings.xml` + `values-tr/` (not a hand-rolled struct).

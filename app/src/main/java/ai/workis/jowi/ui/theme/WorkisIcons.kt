@@ -169,4 +169,82 @@ object WorkisIcons {
             close()
         }
     }
+
+    /** SF "questionmark.circle" — waiting questions tile. */
+    val QuestionCircle: ImageVector = stroked("QuestionCircle") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(3f, 12f)
+            arcToRelative(9f, 9f, 0f, true, false, 18f, 0f)
+            arcToRelative(9f, 9f, 0f, true, false, -18f, 0f)
+            moveTo(9.2f, 9.5f)
+            arcToRelative(2.8f, 2.8f, 0f, true, true, 4f, 2.5f)
+            quadTo(12f, 12.6f, 12f, 14f)
+            moveTo(12f, 17f); lineTo(12f, 17.2f)
+        }
+    }
+
+    /** SF "hand.thumbsdown" — reviews tile. */
+    val ThumbsDown: ImageVector = stroked("ThumbsDown") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(7f, 4f); lineTo(16.5f, 4f); lineTo(16.5f, 14f); lineTo(12.5f, 20.5f)
+            quadTo(10f, 20f, 10.5f, 17f); lineTo(11f, 14f); lineTo(5.5f, 14f)
+            quadTo(3.5f, 14f, 4f, 12f); lineTo(5f, 6f); quadTo(5.3f, 4f, 7f, 4f); close()
+            moveTo(16.5f, 4f); lineTo(20f, 4f); lineTo(20f, 14f); lineTo(16.5f, 14f)
+        }
+    }
+
+    /** SF "pencil.line" — knowledge tile. */
+    val Pencil: ImageVector = stroked("Pencil") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(4f, 16f); lineTo(14.5f, 5.5f); lineTo(18.5f, 9.5f); lineTo(8f, 20f); lineTo(4f, 20f); close()
+            moveTo(12f, 20f); lineTo(20.5f, 20f)
+        }
+    }
+
+    /** SF "chart.bar" — this month. */
+    val ChartBars: ImageVector = stroked("ChartBars") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(4f, 20f); lineTo(4f, 13f); lineTo(8f, 13f); lineTo(8f, 20f); close()
+            moveTo(10f, 20f); lineTo(10f, 7f); lineTo(14f, 7f); lineTo(14f, 20f); close()
+            moveTo(16f, 20f); lineTo(16f, 4f); lineTo(20f, 4f); lineTo(20f, 20f); close()
+        }
+    }
+
+    /** SF "checklist" — setup. */
+    val Checklist: ImageVector = stroked("Checklist") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(3.5f, 7f); lineTo(5f, 8.5f); lineTo(8f, 5.5f)
+            moveTo(11f, 7f); lineTo(20.5f, 7f)
+            moveTo(3.5f, 15f); lineTo(5f, 16.5f); lineTo(8f, 13.5f)
+            moveTo(11f, 15f); lineTo(20.5f, 15f)
+        }
+    }
+
+    /** SF "doc.text.badge.plus" — agreement re-acceptance reminder. */
+    val DocPlus: ImageVector = stroked("DocPlus") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(6f, 3.5f); lineTo(14f, 3.5f); lineTo(18.5f, 8f); lineTo(18.5f, 12f)
+            moveTo(18.5f, 12f); lineTo(18.5f, 20.5f); lineTo(6f, 20.5f); close()
+            moveTo(9f, 12f); lineTo(14f, 12f)
+            moveTo(9f, 15.5f); lineTo(14f, 15.5f)
+        }
+    }
 }

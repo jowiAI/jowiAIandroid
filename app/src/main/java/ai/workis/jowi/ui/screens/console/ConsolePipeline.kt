@@ -154,7 +154,11 @@ private fun ActionButton(label: Int, busy: Boolean, danger: Boolean = false, onC
 private fun LeadActions(vm: ConsoleViewModel, row: ApplicationRow) {
     val id = row.applicationId ?: return
     Row {
-        ActionButton(R.string.create_partner, vm.busyId == id) { vm.createPartner(id) }
+        if (row.role == "expert") {
+            ActionButton(R.string.approve_expert, vm.busyId == id) { vm.approveExpert(id) }
+        } else {
+            ActionButton(R.string.create_partner, vm.busyId == id) { vm.createPartner(id) }
+        }
         if (row.partnerId == null) {
             ActionButton(R.string.close_lead, vm.busyId == id, danger = true) { vm.closeLead(id) }
         }
