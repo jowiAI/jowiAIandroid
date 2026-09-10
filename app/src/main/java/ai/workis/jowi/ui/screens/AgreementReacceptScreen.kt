@@ -2,6 +2,7 @@ package ai.workis.jowi.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -47,6 +48,7 @@ import ai.workis.jowi.data.applyErrorMessage
 import ai.workis.jowi.ui.components.AgreementLoader
 import ai.workis.jowi.ui.components.AgreementPaper
 import ai.workis.jowi.ui.components.MarkdownText
+import ai.workis.jowi.ui.components.OutcomeView
 import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.OnKiremitFill
@@ -105,6 +107,19 @@ fun AgreementReacceptScreen(onClose: () -> Unit, vm: ReacceptViewModel = viewMod
     BackHandler(onBack = onClose)
 
     val valid = vm.agreed && vm.signerName.isNotBlank()
+
+    if (vm.done) {
+        // one outcome shape for every "it's done" state
+        Box(Modifier.fillMaxSize().background(colors.canvas).statusBarsPadding()) {
+            OutcomeView(
+                title = stringResource(R.string.reaccept_done_title),
+                message = stringResource(R.string.reaccept_done),
+                actionTitle = stringResource(R.string.done),
+                onAction = onClose,
+            )
+        }
+        return
+    }
 
     Column(
         Modifier

@@ -1,5 +1,6 @@
 package ai.workis.jowi.data
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
@@ -119,14 +120,81 @@ data class ApplyAskResponse(val ok: Boolean = false, val text: String? = null)
 @Serializable
 data class AskBody(
     val q: String,
+    /** The typed text when Jowi's reading was sent instead (clarification, 2026-09-09). */
+    val qOriginal: String? = null,
     val page: String? = null,
     val ctxList: String? = null,
     val voice: Boolean? = null,
+)
+
+/** One catalogue seller in a match — snake_case from the web payload. Price-blind here. */
+@Serializable
+data class AskOffer(val sku: String? = null, val name: String? = null)
+
+@Serializable
+data class AskSeller(
+    @SerialName("partner_id") @Serializable(with = FlexString::class) val partnerId: String? = null,
+    val name: String? = null,
+    val city: String? = null,
+    val offers: List<AskOffer>? = null,
 )
 
 @Serializable
 data class AskResponse(
     val success: Boolean = false,
     val answer: String? = null,
-    val source: String? = null,
+    val source: String? = null, // "page" | "chain" | "knowledge" | "model" | "knowledge+model" | "match" …
+    /** Seat-aware ask: which chain answered — "buyer" | "console" | "expert". */
+    val surface: String? = null,
+    /** Guidance when `answer` is null (server-localized). */
+    val message: String? = null,
+    // purchase request: kind == "match" carries the parsed item/qty + sellers
+    val kind: String? = null,
+    val item: String? = null,
+    @Serializable(with = FlexString::class) val qty: String? = null,
+    val sellers: List<AskSeller>? = null,
+    @Serializable(with = FlexString::class) val listId: String? = null,
+    // answer policy B: a stamp under the bubble; `kb` present → 👍/👎
+    val label: String? = null,
+    val kb: String? = null,
 )
+
+/** One row of the Jowi thread (GET /workis/ask/history/) — the SAME thread the web drawer keeps. */
+@Serializable
+data class AskLine(
+    val who: String? = null, // user | jowi | expert | lead
+    val text: String? = null,
+    val href: String? = null,
+    val at: String? = null,
+    val qOriginal: String? = null,
+    val kind: String? = null,
+    val item: String? = null,
+    @Serializable(with = FlexString::class) val qty: String? = null,
+    val sellers: List<AskSeller>? = null,
+    @Serializable(with = FlexString::class) val listId: String? = null,
+    val label: String? = null,
+    val kb: String? = null,
+    val source: String? = null,
+    val surface: String? = null,
+)
+
+@Serializable
+data class AskHistory(val success: Boolean? = null, val lines: List<AskLine>? = null)
+
+@Serializable
+data class AskPreviewBody(val q: String)
+
+/** Jowi's clean reading of a typed question, decided BEFORE the send. */
+@Serializable
+data class AskPreview(
+    val q: String? = null,
+    val qClarified: String? = null,
+    val changed: Boolean? = null,
+    val material: Boolean? = null,
+)
+
+@Serializable
+data class AskLikeBody(val kb: String, val v: String) // "up" | "down"
+
+@Serializable
+data class AskLikeResult(val success: Boolean = false, val rated: Boolean? = null)

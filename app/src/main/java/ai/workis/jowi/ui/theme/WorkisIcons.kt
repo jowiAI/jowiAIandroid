@@ -247,4 +247,17 @@ object WorkisIcons {
             moveTo(9f, 15.5f); lineTo(14f, 15.5f)
         }
     }
+
+    /** SF "book" — the earnings guide door. */
+    val Book: ImageVector = stroked("Book") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(12f, 6.5f)
+            quadTo(9f, 4f, 3.5f, 5f); lineTo(3.5f, 18.5f); quadTo(9f, 17.5f, 12f, 20f)
+            quadTo(15f, 17.5f, 20.5f, 18.5f); lineTo(20.5f, 5f); quadTo(15f, 4f, 12f, 6.5f)
+            lineTo(12f, 20f)
+        }
+    }
 }

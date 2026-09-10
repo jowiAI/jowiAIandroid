@@ -139,7 +139,18 @@ data class ConsoleQuestion(
     val visitor: String? = null,
     val hasEmail: Boolean? = null,
     val topic: String? = null,
-)
+    // clarification + translation (2026-09-09): `q` is the WORKING text (Jowi's accepted
+    // reading); `qOriginal` the raw keystrokes when it differs; `qLocalized` the machine
+    // translation into the expert's language (null until ready — the list never waits)
+    val qOriginal: String? = null,
+    val clarifiedByJowi: Boolean? = null,
+    val qLocalized: String? = null,
+    val qLang: String? = null,
+    val localizedIsMachine: Boolean? = null,
+) {
+    /** What the expert reads first; the original rides underneath. */
+    val display: String get() = qLocalized?.takeIf { it.isNotEmpty() } ?: q.orEmpty()
+}
 
 @Serializable
 data class ConsoleQuestions(val questions: List<ConsoleQuestion>? = null)

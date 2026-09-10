@@ -26,6 +26,13 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
 - Agreement paper (`ui/components/AgreementPaper.kt`) is shared by wizard step 04 and the
   expert screen; its text comes from `GET /workis/agreement/?role=|key=` and the PDF renders
   natively (android.graphics.pdf.PdfRenderer, `PdfPages`). Never hard-code a PDF path.
+- Jowi tab (`ui/screens/JowiScreen.kt`) is the SERVER's thread (`GET ask/history/`, shared with the
+  web drawer; no device storage): `ask/preview/` before every send (10 s, fallback = typed text),
+  policy-B stamp + 👍/👎 via `ask/like/`, match card, "Aç" links in-app. OkHttp read timeout is 90 s
+  because answers are model calls.
+- Server Markdown (expert guide) renders through `MarkdownDocument` (ui/components/) — the dialect in
+  API_CONTRACT (##/###, > quote box, GFM tables, lists, `code` chips). Never re-author guide text.
+- Every "it's done" state is `OutcomeView` (glyph + mono title + one paragraph + one kiremit action).
 - Cell-exit autosave rows: `FormRow` (ui/components/FormRows.kt) — `onCommit` fires when
   focus leaves; expert form saves a prefs draft, application detail POSTs one field per call.
 

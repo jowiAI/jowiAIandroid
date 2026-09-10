@@ -31,6 +31,9 @@ fun buildApi(
         level = HttpLoggingInterceptor.Level.BASIC
     }
     val client = OkHttpClient.Builder()
+        // Jowi answers are model calls (10–40 s); the default 10 s read timeout cut them off
+        .readTimeout(90, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .addInterceptor { chain ->
             val builder = chain.request().newBuilder()
                 .header("Accept-Language", languageProvider())

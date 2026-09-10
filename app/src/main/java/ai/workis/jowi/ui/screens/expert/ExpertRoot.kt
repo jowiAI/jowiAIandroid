@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -69,6 +70,7 @@ sealed interface ExpertDest {
     data object Knowledge : ExpertDest
     data object Consults : ExpertDest
     data class Thread(val id: String, val title: String) : ExpertDest
+    data object Guide : ExpertDest
 }
 
 @Composable
@@ -87,6 +89,7 @@ fun ExpertRoot(vm: ExpertViewModel = viewModel()) {
             ExpertConsultsScreen(vm) { id, title -> dest = ExpertDest.Thread(id, title) }
         }
         is ExpertDest.Thread -> ExpertConsultThread(vm, d.id, d.title) { dest = ExpertDest.Consults }
+        ExpertDest.Guide -> ExpertGuideScreen(pdfUrl = vm.summary?.guidePdfUrl, onBack = home)
     }
 }
 
@@ -165,6 +168,18 @@ private fun Board(s: ExpertSummary, onOpen: (ExpertDest) -> Unit) {
             icon = WorkisIcons.Pencil,
             modifier = Modifier.height(56.dp),
         ) { onOpen(ExpertDest.Knowledge) }
+        // the earnings guide — server Markdown, native chrome; the ONE guide door
+        Card(Modifier.fillMaxWidth().height(56.dp), { onOpen(ExpertDest.Guide) }) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+                Icon(WorkisIcons.Book, contentDescription = null, tint = colorsOf().accentText, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.expert_guide_door), fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colorsOf().ink,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                )
+                Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colorsOf().faint, modifier = Modifier.size(18.dp))
+            }
+        }
 
         SectionHeader(stringResource(R.string.expert_month), WorkisIcons.ChartBars)
         MonthCard(s.month)
@@ -173,6 +188,9 @@ private fun Board(s: ExpertSummary, onOpen: (ExpertDest) -> Unit) {
         SetupCard(s.setup)
     }
 }
+
+@Composable
+private fun colorsOf() = WorkisTheme.colors
 
 @Composable
 private fun SectionHeader(title: String, icon: ImageVector) {

@@ -172,7 +172,25 @@ interface WorkisApi {
     @POST("workis/agreement/accept/")
     suspend fun agreementAccept(@Body body: AcceptAgreementBody): SimpleResult
 
-    // --- ask jowi ---
+    // --- ask jowi (seat-aware; one AskThread per user, shared with the web drawer) ---
     @POST("workis/ask/")
     suspend fun ask(@Body body: AskBody): AskResponse
+
+    /** Compose-time rewrite — the caller falls back to the typed text on failure/timeout. */
+    @POST("workis/ask/preview/")
+    suspend fun askPreview(@Body body: AskPreviewBody): AskPreview
+
+    @GET("workis/ask/history/")
+    suspend fun askHistory(): AskHistory
+
+    @POST("workis/ask/history/clear/")
+    suspend fun askHistoryClear(): SimpleResult
+
+    /** 👍/👎 on a knowledge-backed answer; first verdict wins (rated: false afterwards). */
+    @POST("workis/ask/like/")
+    suspend fun askLike(@Body body: AskLikeBody): AskLikeResult
+
+    /** The earnings guide as Markdown sections (public). */
+    @GET("workis/expert/guide/")
+    suspend fun expertGuide(): ExpertGuide
 }

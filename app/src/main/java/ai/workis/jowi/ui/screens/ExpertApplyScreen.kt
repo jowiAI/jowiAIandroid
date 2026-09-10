@@ -55,6 +55,7 @@ import ai.workis.jowi.ui.components.AgreementPaper
 import ai.workis.jowi.ui.components.FormRow
 import ai.workis.jowi.ui.components.FormSection
 import ai.workis.jowi.ui.components.MarkdownText
+import ai.workis.jowi.ui.components.OutcomeView
 import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.OnKiremitFill
@@ -360,31 +361,10 @@ private fun Footnote(text: String) {
 
 @Composable
 private fun SuccessView(onClose: () -> Unit) {
-    val colors = WorkisTheme.colors
-    Column(
-        Modifier.fillMaxSize().padding(horizontal = 30.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Spacer(Modifier.weight(1f))
-        Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(52.dp))
-        Spacer(Modifier.height(16.dp))
-        Text(
-            stringResource(R.string.apply_sent_title),
-            fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = colors.ink,
-        )
-        Spacer(Modifier.height(10.dp))
-        Text(
-            stringResource(R.string.expert_sent),
-            fontSize = 15.sp, lineHeight = 22.sp, color = colors.muted, textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(24.dp))
-        Button(
-            onClick = onClose,
-            colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill),
-            modifier = Modifier.height(48.dp),
-        ) {
-            Text(stringResource(R.string.done), fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.padding(horizontal = 18.dp))
-        }
-        Spacer(Modifier.weight(1f))
-    }
+    OutcomeView(
+        title = stringResource(R.string.apply_sent_title),
+        message = stringResource(R.string.expert_sent),
+        actionTitle = stringResource(R.string.done),
+        onAction = onClose,
+    )
 }

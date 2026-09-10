@@ -215,6 +215,8 @@ private fun Bubble(m: ConsultMessage) {
     val colors = WorkisTheme.colors
     val mine = m.role == "expert"
     val system = m.role == "system"
+    val translated = !m.textLocalized.isNullOrEmpty() && m.textLocalized != m.text
+    var showOriginal by remember { mutableStateOf(false) }
     val who = when (m.role) {
         "expert" -> "🎓 " + stringResource(R.string.expert_you)
         "system" -> "·"
@@ -234,10 +236,20 @@ private fun Bubble(m: ConsultMessage) {
             m.at?.let { Text(it.take(16).replace("T", " "), fontFamily = WorkisMono, fontSize = 9.sp, color = colors.faint) }
         }
         Text(
-            m.text.orEmpty(),
+            if (translated) m.textLocalized.orEmpty() else m.text.orEmpty(),
             fontSize = if (system) 13.sp else 14.sp, lineHeight = 20.sp,
             fontStyle = if (system) FontStyle.Italic else FontStyle.Normal,
             color = if (system) colors.muted else colors.ink,
         )
+        if (translated) {
+            // machine translation, marked; the original one tap away
+            Text(
+                stringResource(R.string.machine_translation) + " · " +
+                    stringResource(if (showOriginal) R.string.hide_original else R.string.show_original),
+                fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.accentText,
+                modifier = Modifier.clickable { showOriginal = !showOriginal },
+            )
+            if (showOriginal) Text(m.text.orEmpty(), fontSize = 13.sp, lineHeight = 19.sp, color = colors.muted)
+        }
     }
 }

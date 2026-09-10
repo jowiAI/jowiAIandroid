@@ -47,6 +47,8 @@
     <string name="approve">Onayla</string>
     <string name="approve_expert">Uzmanı onayla</string>
     <string name="ask_answer_source_chain">kayıtlarından</string>
+    <string name="ask_answer_source_console">konsol kayıtlarından</string>
+    <string name="ask_answer_source_knowledge">bilgi katmanından</string>
     <string name="ask_answer_source_page">bu sayfadan</string>
     <string name="ask_placeholder">Jowi\'ye sor…</string>
     <string name="back">Geri</string>
@@ -58,6 +60,10 @@
     <string name="cases_title">Taleplerin</string>
     <string name="check_copy">Tek kullanımlık giriş bağlantısı ve 6 haneli kodu şu adrese gönderdik:</string>
     <string name="check_title">E-postanı kontrol et</string>
+    <string name="clarify_title">Jowi bunu şöyle okudu</string>
+    <string name="clarify_typed_label">YAZILDIĞI GİBİ</string>
+    <string name="clarify_use_own">Kendi sözlerim</string>
+    <string name="clarify_use_reading">Bu okuma</string>
     <string name="close_lead">Kapat</string>
     <string name="close_lead_confirm">Bu başvuru kapatılsın mı?</string>
     <string name="close_question">Kapat</string>
@@ -108,6 +114,8 @@
     <string name="expert_email">E-posta</string>
     <string name="expert_email_hint">Giriş şifresizdir: bu adrese gelen tek kullanımlık kodla girersiniz.</string>
     <string name="expert_email_placeholder">siz@firma.com</string>
+    <string name="expert_guide_door">Kazanç ve ödeme rehberi</string>
+    <string name="expert_guide_title">Rehber</string>
     <string name="expert_intro">Workis\'te uzmanlar sektör bilgisini yazar; Jowi bu bilgiyle cevap verir ve her katkı isimli olarak kayıt altındadır. Uzmanlar ürün fiyatlarını ve teklifleri **hiçbir zaman görmez** — tavsiyenin tarafsızlığı böyle korunur.</string>
     <string name="expert_knowledge_empty">Henüz hiçbir şey yok — yukarıya ilk notu yaz.</string>
     <string name="expert_knowledge_filter">Bilgileri filtrele</string>
@@ -176,12 +184,20 @@
     <string name="face_id">Face ID ile giriş</string>
     <string name="face_idcancel">Başka hesapla gir</string>
     <string name="face_idreason">Workis hesabınıza giriş</string>
+    <string name="guide_share">PDF olarak paylaş</string>
     <string name="has_email_label">e-posta gidecek</string>
+    <string name="hide_original">orijinali gizle</string>
     <string name="internal_badge">İÇ NOT</string>
     <string name="internal_note">İç not</string>
+    <string name="jowi_clear">Sohbeti temizle</string>
+    <string name="jowi_clear_confirm">Web\'deki sohbet de temizlenir; kayıtlar koordinatör gözetimi için saklanır.</string>
     <string name="jowi_empty">Listelerini, siparişlerini, cari ya da takvimini sor — Jowi kayıtlarından cevaplar.</string>
+    <string name="jowi_open_link">Aç</string>
     <string name="jowi_prompt">Jowi\'ye sor…</string>
     <string name="link_hint">Kod yerine e-postadaki bağlantıya dokunman da yeterli.</string>
+    <string name="machine_translation">makine çevirisi</string>
+    <string name="match_header">Satın alma talebi</string>
+    <string name="match_offers">teklif</string>
     <string name="msg_word">mesaj</string>
     <string name="new_case_placeholder">İhtiyacını anlat — ör. \"Çekvalf DN50, 20 adet\"</string>
     <string name="new_case_title">Yeni talep</string>
@@ -193,6 +209,7 @@
     <string name="no_profile_body">Bu hesabın henüz Workis üyeliği yok. Başvurunuz onaylandıysa, onay e-postanızdaki adresle girin. Yeni misin? Giriş ekranından başvurabilirsin.</string>
     <string name="oldest_word">en eski</string>
     <string name="opening_placeholder">Açılış mesajınız…</string>
+    <string name="original_label">ORİJİNAL</string>
     <string name="partners_empty">Henüz Workis partneri yok — ilk başvuruyu Başvurular ekranından partnere çevir.</string>
     <string name="partners_filter_prompt">Ad, şehir, sektör…</string>
     <string name="partners_title">Partnerler</string>
@@ -208,6 +225,7 @@
     <string name="reaccept_accept">Kabul et</string>
     <string name="reaccept_agree_suffix"> metnini okudum, elektronik ortamda kabul ediyorum.</string>
     <string name="reaccept_done">Kabul kaydedildi — imzalı kopyanız e-postayla yolda.</string>
+    <string name="reaccept_done_title">Sözleşme kabul edildi</string>
     <string name="reaccept_intro">Sözleşmenizin yeni sürümü yürürlükte. Yeni metni inceleyin ve adınızı yazarak yeniden kabul edin; koltuğunuz bu arada çalışmaya devam eder.</string>
     <string name="reaccept_later">Daha sonra</string>
     <string name="reaccept_pending_row">Sözleşmenin yeni sürümü kabulünüzü bekliyor</string>
@@ -233,6 +251,7 @@
     <string name="seat_virtual">Sanal</string>
     <string name="see_all">tümü</string>
     <string name="send">Gönder</string>
+    <string name="show_original">orijinali göster</string>
     <string name="sign_cell_label">İMZANIZ — ADINIZI YAZIN *</string>
     <string name="sign_date">TARİH</string>
     <string name="sign_date_caption">imza tarihi</string>
@@ -254,6 +273,12 @@
     <string name="tab_cases">Talepler</string>
     <string name="teach_sub">Cevap bilgi katmanına işlenir — aynı soruyu bir sonraki soran Jowi\'den anında alır. Soran kişi adres bıraktıysa e-posta da gönderilir.</string>
     <string name="teach_toggle">Jowi\'ye öğret</string>
+    <string name="thumbs_already">Bu yanıt zaten değerlendirilmiş.</string>
+    <string name="thumbs_down">Uzman incelesin</string>
+    <string name="thumbs_down_full">Bence problem var, uzman incelesin</string>
+    <string name="thumbs_thanks">Geri bildirim için teşekkürler.</string>
+    <string name="thumbs_up">İşime yaradı</string>
+    <string name="thumbs_up_full">Doğru, işime yaradı</string>
     <string name="tl1s">Satıyor musunuz, alıyor musunuz?</string>
     <string name="tl1t">01 · ROL</string>
     <string name="tl2s">Bilgilerinizi levhadan biz okuruz</string>

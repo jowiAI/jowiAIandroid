@@ -71,6 +71,7 @@ import ai.workis.jowi.data.statusMessage
 import ai.workis.jowi.ui.components.AgreementLoader
 import ai.workis.jowi.ui.components.AgreementPaper
 import ai.workis.jowi.ui.components.MarkdownText
+import ai.workis.jowi.ui.components.OutcomeView
 import ai.workis.jowi.ui.components.WorkisMark
 import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.Kiremit400
@@ -591,29 +592,10 @@ private fun SignStep(vm: ApplyViewModel) {
 
 @Composable
 private fun SuccessStep(vm: ApplyViewModel, onClose: () -> Unit) {
-    val colors = WorkisTheme.colors
-    Spacer(Modifier.height(40.dp))
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            Icons.Filled.Check,
-            contentDescription = null,
-            tint = SuccessGreen,
-            modifier = Modifier.size(48.dp),
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            stringResource(R.string.apply_sent_title),
-            style = MaterialTheme.typography.headlineMedium,
-            fontSize = 22.sp,
-            color = colors.ink,
-        )
-        Spacer(Modifier.height(10.dp))
-        Text(
-            vm.successMessage ?: stringResource(R.string.apply_sent),
-            color = colors.muted,
-            fontSize = 14.sp,
-        )
-        Spacer(Modifier.height(28.dp))
-        PrimaryButton(stringResource(R.string.done), enabled = true, onClick = onClose)
-    }
+    OutcomeView(
+        title = stringResource(R.string.apply_sent_title),
+        message = vm.successMessage ?: stringResource(R.string.apply_sent),
+        actionTitle = stringResource(R.string.done),
+        onAction = onClose,
+    )
 }

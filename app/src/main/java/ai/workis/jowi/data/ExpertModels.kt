@@ -43,6 +43,22 @@ data class ExpertSummary(
     val month: ExpertMonth? = null,
     val setup: ExpertSetup? = null,
     val affiliationsExcluded: Int? = null,
+    /** The earnings guide (web page + the same as ONE PDF, absolute) — never re-authored here. */
+    val guideUrl: String? = null,
+    val guidePdfUrl: String? = null,
+)
+
+/** GET /workis/expert/guide/ — Markdown sections rendered natively; order and count are the server's. */
+@Serializable
+data class GuideSection(val key: String? = null, val title: String? = null, val markdown: String? = null)
+
+@Serializable
+data class ExpertGuide(
+    val success: Boolean? = null,
+    val version: String? = null,
+    val contentHash: String? = null,
+    val updatedAt: String? = null,
+    val sections: List<GuideSection>? = null,
 )
 
 @Serializable
@@ -153,6 +169,9 @@ data class ConsultMessage(
     val role: String? = null, // buyer | expert | system
     val text: String? = null,
     val at: String? = null,
+    /** Machine translation into the reader's language (2026-09-09); the original stays in `text`. */
+    val textLocalized: String? = null,
+    val lang: String? = null,
 )
 
 @Serializable

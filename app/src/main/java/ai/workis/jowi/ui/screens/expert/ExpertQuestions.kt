@@ -82,7 +82,7 @@ fun ExpertQuestionsScreen(vm: ExpertViewModel) {
 
     target?.let { q ->
         AnswerSheet(
-            question = q.q ?: "",
+            question = q.display,
             busy = vm.busyKey != null,
             onDismiss = { target = null },
             onSend = { answer, teach -> q.id?.let { id -> vm.answer(id, answer, teach) { target = null } } },
@@ -119,7 +119,20 @@ private fun QuestionRow(q: ConsoleQuestion, onClick: () -> Unit) {
                 fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint,
             )
         }
-        Text("“${q.q.orEmpty()}”", fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
+        // translation is the main line; the working text (original language)
+        // and the raw keystrokes ride underneath, small
+        Text("“${q.display}”", fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
+        if (q.display != q.q.orEmpty()) {
+            Text(
+                stringResource(R.string.original_label) +
+                    (if (q.localizedIsMachine == true) " · " + stringResource(R.string.machine_translation) else "") +
+                    " · " + q.q.orEmpty(),
+                fontFamily = WorkisMono, fontSize = 11.sp, lineHeight = 16.sp, color = colors.faint,
+            )
+        }
+        q.qOriginal?.takeIf { it != q.q }?.let {
+            Text(stringResource(R.string.clarify_typed_label) + " · " + it, fontFamily = WorkisMono, fontSize = 11.sp, lineHeight = 16.sp, color = colors.faint)
+        }
         q.hasEmail?.let { has ->
             Text(
                 stringResource(if (has) R.string.has_email_label else R.string.no_email),
