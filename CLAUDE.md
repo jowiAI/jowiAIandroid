@@ -32,6 +32,10 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   because answers are model calls.
 - Server Markdown (expert guide) renders through `MarkdownDocument` (ui/components/) — the dialect in
   API_CONTRACT (##/###, > quote box, GFM tables, lists, `code` chips). Never re-author guide text.
+- Knowledge (Bilgi) is ONE screen behind a seat: `ExpertKnowledgeScreen(seat = Expert | Console)` with
+  `KnowledgeViewModel` (expert/* vs console/* doors; console adds semantic search, author tags, pairs).
+- Expert slice 2: `ExpertEarnings.kt` (door = the Panel's "Bu ay" card) and `ExpertAccountSections.kt`
+  (Hesap sections for role 5 + departure/rejoin). Money stays decimal-as-string end to end.
 - Every "it's done" state is `OutcomeView` (glyph + mono title + one paragraph + one kiremit action).
 - Cell-exit autosave rows: `FormRow` (ui/components/FormRows.kt) — `onCommit` fires when
   focus leaves; expert form saves a prefs draft, application detail POSTs one field per call.
