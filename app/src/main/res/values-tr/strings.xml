@@ -6,4 +6,6 @@
     <string name="account_role">Rol</string>
     <string name="apply_sector_hint">Sektör (isteğe bağlı)</string>
     <string name="bio_title">Jowi kilidini aç</string>
+    <string name="age_minutes">%d dk</string>
+    <string name="age_hours">%d sa</string>
 </resources>

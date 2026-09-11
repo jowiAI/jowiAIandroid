@@ -100,6 +100,14 @@ interface WorkisApi {
     @GET("workis/console/questions/")
     suspend fun consoleQuestions(): ConsoleQuestions
 
+    /** "Jowi answered" rows (roles 3|4); sources/topics re-aggregate under the active filter. */
+    @GET("workis/console/jowi-answered/")
+    suspend fun consoleJowiAnswered(
+        @Query("days") days: Int,
+        @Query("source") source: String? = null,
+        @Query("topic") topic: String? = null,
+    ): JowiAnsweredLane
+
     @POST("workis/console/questions/{id}/done/")
     suspend fun questionDone(@Path("id") id: String): SimpleResult
 
@@ -140,9 +148,6 @@ interface WorkisApi {
 
     @POST("workis/expert/reviews/{sessionKey}/")
     suspend fun expertCloseReview(@Path("sessionKey") sessionKey: String, @Body body: CloseReviewBody): SimpleResult
-
-    @POST("workis/expert/companions/{id}/")
-    suspend fun expertCompanionVerdict(@Path("id") id: String, @Body body: VerdictBody): SimpleResult
 
     @GET("workis/expert/knowledge/")
     suspend fun expertKnowledge(@Query("q") q: String? = null): ExpertKnowledge

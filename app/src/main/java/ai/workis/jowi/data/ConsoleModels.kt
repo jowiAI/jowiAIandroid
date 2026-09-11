@@ -48,6 +48,69 @@ data class ConsoleSummary(
     val oldestQuestionDays: Int? = null,
     val unansweredQuestions: List<UnansweredQuestion>? = null,
     val questionTopics: List<QuestionTopic>? = null,
+    /** "Jowi answered" lane (2026-09-10): what Jowi answered in the window, by source and topic. */
+    val jowiAnswered: JowiAnswered? = null,
+)
+
+@Serializable
+data class JowiSource(
+    val source: String? = null,
+    val label: String? = null,
+    val count: Int? = null,
+    val up: Int? = null,
+    val down: Int? = null,
+)
+
+@Serializable
+data class JowiTopic(val topic: String? = null, val count: Int? = null, val down: Int? = null)
+
+@Serializable
+data class JowiAnswered(
+    val days: Int? = null,
+    val total: Int? = null,
+    val sources: List<JowiSource>? = null,
+    val topics: List<JowiTopic>? = null,
+    val dislikedOpen: Int? = null,
+)
+
+/** GET /workis/console/jowi-answered/ — the web Sorular page's second tab as rows; walls are the server's. */
+@Serializable
+data class JowiRowCompany(val short: String? = null, val seat: String? = null)
+
+@Serializable
+data class JowiRowReview(
+    val outcome: String? = null, // corrected | confirmed
+    val by: String? = null,
+    val at: String? = null,
+    val text: String? = null,
+)
+
+@Serializable
+data class JowiAnsweredRow(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val askedAt: String? = null,
+    val question: String? = null,
+    val answerExcerpt: String? = null,
+    val source: String? = null, // knowledge | knowledge+model | model | offtopic
+    val label: String? = null,
+    val topic: String? = null,
+    val verdict: String? = null, // up | down | null
+    val company: JowiRowCompany? = null,
+    val review: JowiRowReview? = null,
+    /** who still has to act on a 👎: "expert" | "staff" | null */
+    val awaiting: String? = null,
+    @Serializable(with = FlexString::class) val threadId: String? = null,
+    @Serializable(with = FlexString::class) val messageId: String? = null,
+)
+
+@Serializable
+data class JowiAnsweredLane(
+    val days: Int? = null,
+    val total: Int? = null,
+    val closedCount: Int? = null,
+    val sources: List<JowiSource>? = null,
+    val topics: List<JowiTopic>? = null,
+    val rows: List<JowiAnsweredRow>? = null,
 )
 
 @Serializable

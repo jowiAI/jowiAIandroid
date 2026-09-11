@@ -14,6 +14,7 @@ import ai.workis.jowi.data.ConsolePartners
 import ai.workis.jowi.data.ConsoleQuestions
 import ai.workis.jowi.data.ConsoleSummary
 import ai.workis.jowi.data.ConversationDetail
+import ai.workis.jowi.data.JowiAnsweredLane
 import ai.workis.jowi.data.ReplyBody
 import ai.workis.jowi.data.SimpleResult
 import ai.workis.jowi.data.safeCall
@@ -27,6 +28,13 @@ class ConsoleViewModel : ViewModel() {
     var partners by mutableStateOf<ConsolePartners?>(null)
     var conversations by mutableStateOf<ConsoleConversations?>(null)
     var thread by mutableStateOf<ConversationDetail?>(null)
+
+    // "Jowi yanıtladı" lane (read-only; the web Sorular page's second tab)
+    var laneDays by mutableStateOf(7)
+    var laneSource by mutableStateOf<String?>(null)
+    var laneTopic by mutableStateOf<String?>(null)
+    var laneData by mutableStateOf<JowiAnsweredLane?>(null)
+    var laneError by mutableStateOf<String?>(null)
 
     var loading by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
@@ -52,6 +60,16 @@ class ConsoleViewModel : ViewModel() {
     fun loadPartners() = fetch({ partners = it }) { Graph.api.consolePartners() }
     fun loadConversations() = fetch({ conversations = it }) { Graph.api.consoleConversations() }
     fun loadThread(id: String) = fetch({ thread = it }) { Graph.api.conversationDetail(id) }
+
+    fun loadLane() {
+        laneError = null
+        viewModelScope.launch {
+            when (val r = safeCall(lang) { Graph.api.consoleJowiAnswered(laneDays, laneSource, laneTopic) }) {
+                is ApiResult.Ok -> laneData = r.value
+                is ApiResult.Err -> laneError = r.message
+            }
+        }
+    }
 
     /** Console action: {success, message}; `after` gets the server's message on success. */
     private fun action(id: String, after: (String?) -> Unit = {}, call: suspend () -> SimpleResult) {

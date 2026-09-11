@@ -64,9 +64,11 @@
     <string name="clarify_typed_label">AS TYPED</string>
     <string name="clarify_use_own">My own words</string>
     <string name="clarify_use_reading">This reading</string>
+    <string name="clear_filter">clear filter</string>
     <string name="close_lead">Close</string>
     <string name="close_lead_confirm">Close this application?</string>
     <string name="close_question">Done</string>
+    <string name="closed_questions">questions closed</string>
     <string name="code_placeholder">6-digit code</string>
     <string name="console_all_apps">Applications</string>
     <string name="console_empty">All clear — no applications or open questions right now.</string>
@@ -101,15 +103,14 @@
     <string name="expert_card_sub">Not a company but bringing knowledge — expert application.</string>
     <string name="expert_card_title">Are you a sector expert?</string>
     <string name="expert_close_review">Close review</string>
-    <string name="expert_companions">Suggestions</string>
-    <string name="expert_companions_sub">Product pairs to verify — price-blind: product names and the rationale, never offers.</string>
-    <string name="expert_confirm">Confirm</string>
+    <string name="expert_confirmed">Expert confirmed</string>
     <string name="expert_conflict_new">new</string>
     <string name="expert_conflict_old">old</string>
     <string name="expert_conflicts">Conflicting facts</string>
     <string name="expert_consults_empty">No channels yet — one opens when a buyer picks you as advisor from their project screen.</string>
     <string name="expert_consults_sub">One channel per buyer — their project chose you as advisor. Price-blind by design: what you see is the problem, never the money.</string>
     <string name="expert_consults_title">Consultations</string>
+    <string name="expert_corrected">Expert corrected</string>
     <string name="expert_correction_placeholder">Correction (optional) — the right fact, clear and independent</string>
     <string name="expert_email">E-mail</string>
     <string name="expert_email_hint">Sign-in is passwordless: you enter with a one-time code sent to this address.</string>
@@ -132,7 +133,6 @@
     <string name="expert_pts_uses">uses in answers</string>
     <string name="expert_questions_empty">Nothing waiting in your sectors right now — open questions Jowi couldn\'t answer with verified knowledge land here.</string>
     <string name="expert_questions_title">Questions</string>
-    <string name="expert_reject">Reject</string>
     <string name="expert_retire_hint">checked = retire the entry</string>
     <string name="expert_reviews_empty">Nothing to review.</string>
     <string name="expert_reviews_sub">These answers were flagged wrong. Review the facts they stood on: retire the wrong ones, write the correction (it is added as expert knowledge) and close the review.</string>
@@ -189,11 +189,18 @@
     <string name="hide_original">hide original</string>
     <string name="internal_badge">INTERNAL</string>
     <string name="internal_note">Internal note</string>
+    <string name="jowi_answered_last">last</string>
+    <string name="jowi_answered_title">Jowi answered</string>
+    <string name="jowi_awaiting_expert">awaiting expert</string>
+    <string name="jowi_awaiting_staff">awaiting you</string>
     <string name="jowi_clear">Clear conversation</string>
     <string name="jowi_clear_confirm">Also clears the web drawer; the rows stay for coordinator oversight.</string>
     <string name="jowi_empty">Ask about your lists, orders, ledger or calendar — Jowi answers from your records.</string>
+    <string name="jowi_lane_empty">Nothing in this window.</string>
+    <string name="jowi_lane_sub">Questions Jowi answered on its own while people were buying and selling — verified facts, generative model text, off-topic refusals. Read-only; a 👎 on a generative answer is already in the experts\' review queue.</string>
     <string name="jowi_open_link">Open</string>
     <string name="jowi_prompt">Ask Jowi…</string>
+    <string name="lane_waiting">Awaiting reply</string>
     <string name="link_hint">Tapping the link in the e-mail works too.</string>
     <string name="machine_translation">machine translation</string>
     <string name="match_header">Purchase request</string>
@@ -208,6 +215,7 @@
     <string name="no_email">no e-mail</string>
     <string name="no_profile_body">This account has no Workis membership yet. If your application was approved, sign in with the address from your approval e-mail. New here? Apply from the sign-in screen.</string>
     <string name="oldest_word">oldest</string>
+    <string name="open_thread">Thread</string>
     <string name="opening_placeholder">Your opening message…</string>
     <string name="original_label">ORIGINAL</string>
     <string name="partners_empty">No Workis partners yet — convert the first application on the Applications screen.</string>
@@ -249,6 +257,7 @@
     <string name="seat_expert">Expert</string>
     <string name="seat_partner">Partner</string>
     <string name="seat_virtual">Virtual</string>
+    <string name="seat_visitor">visitor</string>
     <string name="see_all">all</string>
     <string name="send">Send</string>
     <string name="show_original">show original</string>

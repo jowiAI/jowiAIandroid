@@ -9,4 +9,6 @@
     <string name="account_role">Role</string>
     <string name="apply_sector_hint">Sector (optional)</string>
     <string name="bio_title">Unlock Jowi</string>
+    <string name="age_minutes">%d min</string>
+    <string name="age_hours">%d h</string>
 </resources>

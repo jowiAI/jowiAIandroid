@@ -64,9 +64,11 @@
     <string name="clarify_typed_label">YAZILDIĞI GİBİ</string>
     <string name="clarify_use_own">Kendi sözlerim</string>
     <string name="clarify_use_reading">Bu okuma</string>
+    <string name="clear_filter">filtreyi temizle</string>
     <string name="close_lead">Kapat</string>
     <string name="close_lead_confirm">Bu başvuru kapatılsın mı?</string>
     <string name="close_question">Kapat</string>
+    <string name="closed_questions">soru kapatıldı</string>
     <string name="code_placeholder">6 haneli kod</string>
     <string name="console_all_apps">Başvurular</string>
     <string name="console_empty">Her şey temiz — şu an bekleyen başvuru ya da açık soru yok.</string>
@@ -101,15 +103,14 @@
     <string name="expert_card_sub">Firma değil, bilgi getiriyorsanız — uzman başvurusu.</string>
     <string name="expert_card_title">Sektör uzmanı mısınız?</string>
     <string name="expert_close_review">İncelemeyi kapat</string>
-    <string name="expert_companions">Öneriler</string>
-    <string name="expert_companions_sub">Doğrulanacak ürün eşleri — fiyat-kör: ürün adları ve gerekçe, asla teklif.</string>
-    <string name="expert_confirm">Onayla</string>
+    <string name="expert_confirmed">Uzman doğruladı</string>
     <string name="expert_conflict_new">yeni</string>
     <string name="expert_conflict_old">eski</string>
     <string name="expert_conflicts">Çakışan bilgiler</string>
     <string name="expert_consults_empty">Henüz kanal yok — bir alıcı sizi proje ekranından danışman olarak seçince açılır.</string>
     <string name="expert_consults_sub">Alıcı başına bir kanal — projesi sizi danışman olarak seçti. Tasarım gereği fiyat-kör: gördüğünüz sorundur, para asla değil.</string>
     <string name="expert_consults_title">Danışmalar</string>
+    <string name="expert_corrected">Uzman düzeltti</string>
     <string name="expert_correction_placeholder">Düzeltme (isteğe bağlı) — doğru bilgi, açık ve bağımsız biçimde</string>
     <string name="expert_email">E-posta</string>
     <string name="expert_email_hint">Giriş şifresizdir: bu adrese gelen tek kullanımlık kodla girersiniz.</string>
@@ -132,7 +133,6 @@
     <string name="expert_pts_uses">yanıtlarda kullanım</string>
     <string name="expert_questions_empty">Şu an sektörlerinizde bekleyen yok — Jowi\'nin doğrulanmış bilgiyle yanıtlayamadığı açık sorular buraya düşer.</string>
     <string name="expert_questions_title">Sorular</string>
-    <string name="expert_reject">Reddet</string>
     <string name="expert_retire_hint">işaretli = kaydı kaldır</string>
     <string name="expert_reviews_empty">İncelenecek yanıt yok.</string>
     <string name="expert_reviews_sub">Bu yanıtlar yanlış olarak işaretlendi. Dayandıkları bilgileri incele: yanlış olanları kullanımdan kaldır, düzeltmeyi yaz (uzman bilgisi olarak eklenir) ve incelemeyi kapat.</string>
@@ -189,11 +189,18 @@
     <string name="hide_original">orijinali gizle</string>
     <string name="internal_badge">İÇ NOT</string>
     <string name="internal_note">İç not</string>
+    <string name="jowi_answered_last">son</string>
+    <string name="jowi_answered_title">Jowi yanıtladı</string>
+    <string name="jowi_awaiting_expert">uzman bekliyor</string>
+    <string name="jowi_awaiting_staff">sizi bekliyor</string>
     <string name="jowi_clear">Sohbeti temizle</string>
     <string name="jowi_clear_confirm">Web\'deki sohbet de temizlenir; kayıtlar koordinatör gözetimi için saklanır.</string>
     <string name="jowi_empty">Listelerini, siparişlerini, cari ya da takvimini sor — Jowi kayıtlarından cevaplar.</string>
+    <string name="jowi_lane_empty">Bu aralıkta kayıt yok.</string>
+    <string name="jowi_lane_sub">Alım satım sırasında Jowi\'nin kendi başına yanıtladığı sorular — doğrulanmış bilgi, üretken model bilgisi, kapsam dışı retler. Salt okunur; üretken bir yanıta verilen 👎 zaten uzmanların inceleme kuyruğundadır.</string>
     <string name="jowi_open_link">Aç</string>
     <string name="jowi_prompt">Jowi\'ye sor…</string>
+    <string name="lane_waiting">Yanıt bekleyen</string>
     <string name="link_hint">Kod yerine e-postadaki bağlantıya dokunman da yeterli.</string>
     <string name="machine_translation">makine çevirisi</string>
     <string name="match_header">Satın alma talebi</string>
@@ -208,6 +215,7 @@
     <string name="no_email">e-posta yok</string>
     <string name="no_profile_body">Bu hesabın henüz Workis üyeliği yok. Başvurunuz onaylandıysa, onay e-postanızdaki adresle girin. Yeni misin? Giriş ekranından başvurabilirsin.</string>
     <string name="oldest_word">en eski</string>
+    <string name="open_thread">Sohbet</string>
     <string name="opening_placeholder">Açılış mesajınız…</string>
     <string name="original_label">ORİJİNAL</string>
     <string name="partners_empty">Henüz Workis partneri yok — ilk başvuruyu Başvurular ekranından partnere çevir.</string>
@@ -249,6 +257,7 @@
     <string name="seat_expert">Uzman</string>
     <string name="seat_partner">Partner</string>
     <string name="seat_virtual">Sanal</string>
+    <string name="seat_visitor">ziyaretçi</string>
     <string name="see_all">tümü</string>
     <string name="send">Gönder</string>
     <string name="show_original">orijinali göster</string>

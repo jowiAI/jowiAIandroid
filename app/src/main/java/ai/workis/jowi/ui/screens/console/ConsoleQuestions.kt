@@ -14,6 +14,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -21,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,18 +40,57 @@ import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 
 @Composable
-fun ConsoleQuestionsScreen(vm: ConsoleViewModel) {
+fun ConsoleQuestionsScreen(
+    vm: ConsoleViewModel,
+    openJowi: Boolean = false,
+    jowiSource: String? = null,
+    jowiTopic: String? = null,
+    onOpenThread: (id: String, partner: String?) -> Unit = { _, _ -> },
+) {
     val colors = WorkisTheme.colors
     LaunchedEffect(Unit) { if (vm.questions == null) vm.loadQuestions() }
 
     var topicFilter by remember { mutableStateOf<String?>(null) }
     var answering by remember { mutableStateOf<ConsoleQuestion?>(null) }
+    // "Jowi yanıtladı" lane — the Panel's chips land here with the lane open and a filter preselected
+    var lane by rememberSaveable { mutableStateOf(if (openJowi) "jowi" else "pending") }
+    LaunchedEffect(Unit) {
+        if (openJowi) { vm.laneSource = jowiSource; vm.laneTopic = jowiTopic }
+        if (lane == "jowi") vm.loadLane()
+    }
 
     val all = vm.questions?.questions.orEmpty()
     val topics = all.mapNotNull { it.topic }.distinct()
     val rows = if (topicFilter == null) all else all.filter { it.topic == topicFilter }
+    val laneTotal = vm.laneData?.total ?: vm.summary?.jowiAnswered?.total ?: 0
 
     Column(Modifier.fillMaxWidth()) {
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            listOf(
+                "pending" to (stringResource(R.string.lane_waiting) + " · ${all.size}"),
+                "jowi" to (stringResource(R.string.jowi_answered_title) + " · $laneTotal"),
+            ).forEachIndexed { i, (key, label) ->
+                SegmentedButton(
+                    selected = lane == key,
+                    onClick = { lane = key; if (key == "jowi" && vm.laneData == null) vm.loadLane() },
+                    shape = SegmentedButtonDefaults.itemShape(index = i, count = 2),
+                    colors = SegmentedButtonDefaults.colors(
+                        activeContainerColor = colors.surface, activeContentColor = colors.ink,
+                        inactiveContainerColor = colors.canvas, inactiveContentColor = colors.muted,
+                    ),
+                ) { Text(label, fontSize = 13.sp, maxLines = 1) }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+
+        if (lane == "jowi") {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                jowiLane(vm, onOpenThread)
+                item { Spacer(Modifier.height(30.dp)) }
+            }
+            return@Column
+        }
+
         if (topics.isNotEmpty()) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(topics) { t ->

@@ -19,7 +19,6 @@ import ai.workis.jowi.data.KnowledgeBody
 import ai.workis.jowi.data.KnowledgeConflict
 import ai.workis.jowi.data.TextBody
 import ai.workis.jowi.data.UnavailableBody
-import ai.workis.jowi.data.VerdictBody
 import ai.workis.jowi.data.messageFromBody
 import ai.workis.jowi.data.safeCall
 import ai.workis.jowi.data.statusMessage
@@ -118,12 +117,6 @@ class ExpertViewModel : ViewModel() {
     fun closeReview(sessionKey: String, retire: List<String>, correction: String) =
         action(sessionKey, { ok, _ -> if (ok) loadReviews() }) {
             Graph.api.expertCloseReview(sessionKey, CloseReviewBody(retire, correction.ifBlank { null }))
-                .let { it.success to (it.message ?: it.error) }
-        }
-
-    fun companionVerdict(id: String, confirm: Boolean) =
-        action(id, { ok, _ -> if (ok) loadReviews() }) {
-            Graph.api.expertCompanionVerdict(id, VerdictBody(if (confirm) "confirm" else "reject"))
                 .let { it.success to (it.message ?: it.error) }
         }
 

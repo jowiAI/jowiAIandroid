@@ -37,13 +37,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.workis.jowi.R
-import ai.workis.jowi.data.CompanionPair
 import ai.workis.jowi.data.ReviewSession
 import ai.workis.jowi.ui.components.WorkisMark
 import ai.workis.jowi.ui.theme.Kiremit300
@@ -98,7 +96,7 @@ private fun GlassButton(label: String, busy: Boolean, enabled: Boolean, accent: 
     }
 }
 
-/** İncelemeler: flagged sessions (units as checkboxes → retire, correction, close) + Öneriler (product pairs). */
+/** İncelemeler: flagged sessions (units as checkboxes → retire, correction, close). */
 @Composable
 fun ExpertReviewsScreen(vm: ExpertViewModel) {
     val colors = WorkisTheme.colors
@@ -129,14 +127,7 @@ fun ExpertReviewsScreen(vm: ExpertViewModel) {
                         enabled = vm.busyKey == null,
                     ) { vm.closeReview(key, retire[key].orEmpty().toList(), corrections[key].orEmpty().trim()) }
                 }
-                val comps = data.companions.orEmpty()
-                if (comps.isNotEmpty()) {
-                    Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(stringResource(R.string.expert_companions), fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = colors.ink)
-                        Text(stringResource(R.string.expert_companions_sub), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted)
-                    }
-                    comps.forEach { c -> CompanionCard(c, vm) }
-                }
+                // product pairs ("Öneriler") moved to staff (2026-09-11) — no cards here
             }
             vm.reviewsError != null -> Text(vm.reviewsError.orEmpty(), color = colors.danger, fontSize = 13.sp)
             else -> Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) {
@@ -216,35 +207,6 @@ private fun SessionCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.expert_retire_hint), fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint, modifier = Modifier.weight(1f))
             GlassButton("✓ " + stringResource(R.string.expert_close_review), busy = busy, enabled = enabled, onClick = onClose)
-        }
-    }
-}
-
-@Composable
-private fun CompanionCard(c: CompanionPair, vm: ExpertViewModel) {
-    val colors = WorkisTheme.colors
-    val id = c.id ?: return
-    SurfaceCard {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(c.a.orEmpty(), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
-            Text("⇄", fontSize = 12.sp, color = colors.faint)
-            Text(c.b ?: "?", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            c.relation?.takeIf { it.isNotEmpty() }?.let {
-                Text(it.uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.accentText)
-            }
-            c.count?.takeIf { it > 0 }?.let {
-                Text("×$it", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
-            }
-        }
-        c.rationale?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 14.sp, lineHeight = 20.sp, color = colors.muted) }
-        c.quote?.takeIf { it.isNotEmpty() }?.let {
-            Text("“$it”", fontSize = 12.sp, fontStyle = FontStyle.Italic, color = colors.faint, maxLines = 3)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            GlassButton("✓ " + stringResource(R.string.expert_confirm), busy = vm.busyKey == id, enabled = vm.busyKey == null) { vm.companionVerdict(id, true) }
-            GlassButton("✕ " + stringResource(R.string.expert_reject), busy = false, enabled = vm.busyKey == null, accent = false) { vm.companionVerdict(id, false) }
         }
     }
 }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.workis.jowi.R
 import ai.workis.jowi.data.ApplicationRow
+import ai.workis.jowi.data.JowiAnswered
 import ai.workis.jowi.data.QuestionTopic
 import ai.workis.jowi.ui.components.WorkisMark
 import ai.workis.jowi.ui.theme.Beige
@@ -55,10 +57,11 @@ import ai.workis.jowi.ui.theme.WorkisTheme
 sealed interface ConsoleDest {
     data object Home : ConsoleDest
     data object Pipeline : ConsoleDest
-    data object Questions : ConsoleDest
+    /** The Panel's "Jowi answered" chips land here with the lane open and a filter preselected. */
+    data class Questions(val openJowi: Boolean = false, val source: String? = null, val topic: String? = null) : ConsoleDest
     data object Partners : ConsoleDest
     data object Conversations : ConsoleDest
-    data class Thread(val id: String, val partner: String?) : ConsoleDest
+    data class Thread(val id: String, val partner: String?, val back: ConsoleDest = Conversations) : ConsoleDest
     data class Detail(val row: ApplicationRow) : ConsoleDest
 }
 
@@ -67,8 +70,8 @@ fun ConsoleRoot(vm: ConsoleViewModel = viewModel()) {
     var dest by remember { mutableStateOf<ConsoleDest>(ConsoleDest.Home) }
 
     BackHandler(enabled = dest != ConsoleDest.Home) {
-        dest = when (dest) {
-            is ConsoleDest.Thread -> ConsoleDest.Conversations
+        dest = when (val d = dest) {
+            is ConsoleDest.Thread -> d.back
             is ConsoleDest.Detail -> ConsoleDest.Pipeline
             else -> ConsoleDest.Home
         }
@@ -81,7 +84,9 @@ fun ConsoleRoot(vm: ConsoleViewModel = viewModel()) {
         }
         is ConsoleDest.Detail -> ApplicationDetailScreen(vm, d.row) { dest = ConsoleDest.Pipeline }
         is ConsoleDest.Questions -> ConsoleSub(stringResource(R.string.questions_title), { dest = ConsoleDest.Home }) {
-            ConsoleQuestionsScreen(vm)
+            ConsoleQuestionsScreen(vm, openJowi = d.openJowi, jowiSource = d.source, jowiTopic = d.topic) { id, partner ->
+                dest = ConsoleDest.Thread(id, partner, back = d)
+            }
         }
         is ConsoleDest.Partners -> ConsoleSub(stringResource(R.string.partners_title), { dest = ConsoleDest.Home }) {
             ConsolePartnersScreen(vm)
@@ -89,7 +94,7 @@ fun ConsoleRoot(vm: ConsoleViewModel = viewModel()) {
         is ConsoleDest.Conversations -> ConsoleSub(stringResource(R.string.conversations_title), { dest = ConsoleDest.Home }) {
             ConsoleConversationsScreen(vm) { id, partner -> dest = ConsoleDest.Thread(id, partner) }
         }
-        is ConsoleDest.Thread -> ConsoleSub(d.partner ?: "", { dest = ConsoleDest.Conversations }) {
+        is ConsoleDest.Thread -> ConsoleSub(d.partner ?: "", { dest = d.back }) {
             ConversationThreadScreen(vm, d.id)
         }
     }
@@ -227,7 +232,7 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
                 .fillMaxWidth()
                 .background(colors.surface, RoundedCornerShape(20.dp))
                 .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-                .clickable { onOpen(ConsoleDest.Questions) }
+                .clickable { onOpen(ConsoleDest.Questions()) }
                 .padding(16.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -287,11 +292,95 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
             }
         }
 
+        s?.jowiAnswered?.takeIf { (it.total ?: 0) > 0 }?.let { ja ->
+            Spacer(Modifier.height(14.dp))
+            JowiAnsweredBlock(ja) { source, topic -> onOpen(ConsoleDest.Questions(openJowi = true, source = source, topic = topic)) }
+        }
+
         vm.error?.let {
             Spacer(Modifier.height(12.dp))
             Text(it, color = colors.danger, fontSize = 13.sp)
         }
         Spacer(Modifier.height(30.dp))
+    }
+}
+
+/**
+ * "Jowi yanıtladı · son 30 gün" — the web lane's compact block: source pills
+ * with 👍/👎, topic chips, the "awaiting expert" badge for generative answers
+ * with an unreviewed 👎. Chips deep-link into the Sorular lane, filtered.
+ */
+@Composable
+private fun JowiAnsweredBlock(ja: JowiAnswered, onFilter: (source: String?, topic: String?) -> Unit) {
+    val colors = WorkisTheme.colors
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.surface, RoundedCornerShape(20.dp))
+            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(WorkisIcons.Sparkle, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("${ja.total ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 24.sp, color = colors.ink)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                stringResource(R.string.jowi_answered_title) + " · " + stringResource(R.string.jowi_answered_last) +
+                    " ${ja.days ?: 30} " + stringResource(R.string.days_word),
+                fontSize = 14.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            ja.dislikedOpen?.takeIf { it > 0 }?.let { n ->
+                Text(
+                    "$n " + stringResource(R.string.jowi_awaiting_expert),
+                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.5.sp,
+                    color = Beige,
+                    modifier = Modifier.background(BeigeBg, CircleShape).padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+        }
+        val sources = ja.sources.orEmpty().filter { it.source != null }
+        if (sources.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                sources.forEach { src ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier
+                            .background(colors.ink.copy(alpha = 0.06f), CircleShape)
+                            .clickable { onFilter(src.source, null) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Text((src.label ?: src.source.orEmpty()).uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.muted, maxLines = 1)
+                        Text("${src.count ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
+                        if ((src.up ?: 0) + (src.down ?: 0) > 0) {
+                            Text("👍${src.up ?: 0} 👎${src.down ?: 0}", fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint)
+                        }
+                    }
+                }
+            }
+        }
+        val topics = ja.topics.orEmpty().filter { !it.topic.isNullOrEmpty() }.take(8)
+        if (topics.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                topics.forEach { tp ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        modifier = Modifier
+                            .background(colors.ink.copy(alpha = 0.05f), CircleShape)
+                            .clickable { onFilter(null, tp.topic) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Text(tp.topic.orEmpty(), fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.accentText, maxLines = 1)
+                        Text("×${tp.count ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+                        tp.down?.takeIf { it > 0 }?.let { Text("👎$it", fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint) }
+                    }
+                }
+            }
+        }
     }
 }
 

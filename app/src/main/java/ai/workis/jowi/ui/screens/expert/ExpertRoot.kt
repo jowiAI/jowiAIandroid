@@ -149,7 +149,7 @@ private fun Board(s: ExpertSummary, onOpen: (ExpertDest) -> Unit) {
             ) { onOpen(ExpertDest.Questions) }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 CapsuleTile(
-                    count = (w?.reviews ?: 0) + (w?.companions ?: 0),
+                    count = w?.reviews ?: 0, // pairs moved to staff — the capsule counts reviews only
                     label = stringResource(R.string.expert_tile_reviews),
                     icon = WorkisIcons.ThumbsDown,
                     modifier = Modifier.weight(1f),
