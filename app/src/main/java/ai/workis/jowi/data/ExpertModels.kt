@@ -1,6 +1,7 @@
 package ai.workis.jowi.data
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 // Expert seat (role 5) — /workis/expert/* slice 1 (API_CONTRACT.md → "Expert seat").
 // Optional-decode discipline: every field nullable; ids through FlexString.
@@ -100,10 +101,17 @@ data class ExpertReviews(
 data class KnowledgeUnit(
     @Serializable(with = FlexString::class) val id: String? = null,
     val text: String? = null,
-    val status: String? = null, // "active" | "retired"
+    val status: String? = null, // "active" | "retired" | "draft"
     val useCount: Int? = null,
     val likeCount: Int? = null,
+    // console extras (2026-09-11)
+    val dislikeCount: Int? = null,
+    val authorRole: String? = null, // expert | lead | coordinator
+    val novelty: String? = null,
 )
+
+@Serializable
+data class KnowledgeAuthor(val role: String? = null, val name: String? = null)
 
 @Serializable
 data class KnowledgeNote(
@@ -113,11 +121,24 @@ data class KnowledgeNote(
     val unitTotal: Int? = null,
     val useTotal: Int? = null,
     val likeTotal: Int? = null,
+    val dislikeTotal: Int? = null,
+    val author: KnowledgeAuthor? = null,
     val units: List<KnowledgeUnit>? = null,
 )
 
 @Serializable
-data class ExpertKnowledge(val unitCount: Int? = null, val notes: List<KnowledgeNote>? = null)
+data class ExpertKnowledge(
+    val unitCount: Int? = null,
+    val notes: List<KnowledgeNote>? = null,
+    /** Only with q + semantic=1 (console): the retrieval hits (unit ids). */
+    val semanticUnitIds: List<@Serializable(with = FlexString::class) String>? = null,
+)
+
+@Serializable
+data class ConsoleKnowledgeBody(val text: String, @Serializable(with = FlexString::class) val queryId: String? = null)
+
+@Serializable
+data class ConsoleCompanions(val cards: List<CompanionPair>? = null)
 
 @Serializable
 data class KnowledgeConflict(
@@ -198,6 +219,98 @@ data class TextBody(val text: String)
 
 @Serializable
 data class UnavailableBody(val note: String? = null)
+
+// Expert slice 2 (earnings · profile · payout · departure)
+
+@Serializable
+data class EarningsNovelty(val novel: Int? = null, val refinement: Int? = null, val redundant: Int? = null, val unjudged: Int? = null)
+
+@Serializable
+data class EarningsContrib(
+    val units: Int? = null,
+    val uses: Int? = null,
+    val likes: Int? = null,
+    val dislikes: Int? = null,
+    val answered: Int? = null,
+    val reviews: Int? = null,
+    val novelty: EarningsNovelty? = null,
+)
+
+@Serializable
+data class EarningsMonth(val points: Map<String, Int>? = null)
+
+/** Money is decimal-as-string — shown verbatim, never parsed to a double. */
+@Serializable
+data class Statement(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val period: String? = null,
+    val points: Map<String, Int>? = null,
+    val poolUsd: String? = null,
+    val shareUsd: String? = null,
+    val adjustedShareUsd: String? = null,
+    val payableUsd: String? = null,
+    val status: String? = null, // accrued | objected | resolved | paid
+    val paidAt: String? = null,
+    val payoutRef: String? = null,
+    val canObject: Boolean? = null,
+    val objection: String? = null,
+    val objectedAt: String? = null,
+    val resolutionNote: String? = null,
+    val resolvedAt: String? = null,
+)
+
+@Serializable
+data class ExpertEarnings(
+    val contrib: EarningsContrib? = null,
+    val month: EarningsMonth? = null,
+    val withholdingPct: Int? = null,
+    val payoutReady: Boolean? = null,
+    val statements: List<Statement>? = null,
+)
+
+@Serializable
+data class ExpertProfile(
+    val showName: Boolean? = null,
+    val title: String? = null,
+    val bio: String? = null,
+    val affiliations: List<String>? = null,
+    val sectors: List<String>? = null,
+    val verified: Boolean? = null,
+    val publicProfileUrl: String? = null,
+    val left: String? = null,
+)
+
+@Serializable
+data class TaxStatusOption(val value: String? = null, val label: String? = null)
+
+@Serializable
+data class ExpertPayout(
+    val payoutReady: Boolean? = null,
+    val iban: String? = null,
+    val holder: String? = null,
+    val taxStatus: String? = null,
+    val taxId: String? = null,
+    val taxOffice: String? = null,
+    val billingAddress: String? = null,
+    val withholdingPct: Int? = null,
+    val taxStatusOptions: List<TaxStatusOption>? = null,
+)
+
+@Serializable
+data class PayoutBody(
+    val iban: String,
+    val holder: String,
+    val taxStatus: String,
+    val taxId: String,
+    val taxOffice: String,
+    val billingAddress: String,
+)
+
+@Serializable
+data class DepartureBody(val confirm: String)
+
+@Serializable
+data class DepartureResult(val success: Boolean = false, val withdrawn: Int? = null, val message: String? = null, val error: String? = null)
 
 // §10.2 re-acceptance (every seat): GET /workis/agreement/pending/ → the paper once per launch.
 

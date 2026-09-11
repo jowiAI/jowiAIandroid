@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.ui.Alignment
+import ai.workis.jowi.ui.screens.expert.ExpertAccountSections
 import ai.workis.jowi.ui.theme.Beige
 import ai.workis.jowi.ui.theme.BeigeBg
 import ai.workis.jowi.ui.theme.WorkisIcons
@@ -45,7 +46,7 @@ import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.launch
 
 @Composable
-fun AccountScreen(onReaccept: () -> Unit = {}) {
+fun AccountScreen(onReaccept: () -> Unit = {}, onDeparture: () -> Unit = {}) {
     val colors = WorkisTheme.colors
     val scope = rememberCoroutineScope()
     val lang by Graph.language.collectAsState()
@@ -134,6 +135,12 @@ fun AccountScreen(onReaccept: () -> Unit = {}) {
                     ) { Text(label, fontSize = 13.sp) }
                 }
             }
+        }
+
+        // Expert seat: the web Profil page as sections (slice 2)
+        if (Graph.auth.isExpert()) {
+            Spacer(Modifier.height(16.dp))
+            ExpertAccountSections(onDeparture = onDeparture)
         }
 
         // §10.2 reminder — stays until the seat re-accepts

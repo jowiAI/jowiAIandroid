@@ -170,6 +170,49 @@ interface WorkisApi {
     @POST("workis/expert/consults/{id}/unavailable/")
     suspend fun expertConsultUnavailable(@Path("id") id: String, @Body body: UnavailableBody): SimpleResult
 
+    // --- expert slice 2: earnings · profile · payout · departure ---
+    @GET("workis/expert/earnings/")
+    suspend fun expertEarnings(): ExpertEarnings
+
+    @POST("workis/expert/statements/{id}/object/")
+    suspend fun expertObjectStatement(@Path("id") id: String, @Body body: TextBody): SimpleResult
+
+    @GET("workis/expert/profile/")
+    suspend fun expertProfile(): ExpertProfile
+
+    /** Partial update — only the given keys; the door answers with the record, not {success}. */
+    @POST("workis/expert/profile/")
+    suspend fun expertProfileUpdate(@Body body: kotlinx.serialization.json.JsonObject): ExpertProfile
+
+    @GET("workis/payout/")
+    suspend fun payout(): ExpertPayout
+
+    @POST("workis/payout/")
+    suspend fun payoutSave(@Body body: PayoutBody): ExpertPayout
+
+    @POST("workis/expert/departure/")
+    suspend fun expertDeparture(@Body body: DepartureBody): DepartureResult
+
+    @POST("workis/expert/rejoin/")
+    suspend fun expertRejoin(): SimpleResult
+
+    // --- coordinator Bilgi (roles 3|4): the expert knowledge screen on the console door ---
+    @GET("workis/console/knowledge/")
+    suspend fun consoleKnowledge(@Query("q") q: String? = null, @Query("semantic") semantic: Int? = null): ExpertKnowledge
+
+    @POST("workis/console/knowledge/")
+    suspend fun consoleAddKnowledge(@Body body: ConsoleKnowledgeBody): KnowledgeSaveResult
+
+    @POST("workis/console/knowledge/units/{id}/toggle/")
+    suspend fun consoleToggleUnit(@Path("id") id: String): ToggleResult
+
+    /** Product pairs (role 3; a lead gets 403 → the section stays hidden). */
+    @GET("workis/console/companions/")
+    suspend fun consoleCompanions(): ConsoleCompanions
+
+    @POST("workis/console/companions/{id}/")
+    suspend fun consoleCompanionVerdict(@Path("id") id: String, @Body body: VerdictBody): SimpleResult
+
     // --- §10.2 agreement re-acceptance (every seat) ---
     @GET("workis/agreement/pending/")
     suspend fun agreementPending(): AgreementPending

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,6 +31,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,16 +39,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.workis.jowi.R
+import ai.workis.jowi.data.CompanionPair
 import ai.workis.jowi.data.KnowledgeNote
 import ai.workis.jowi.data.KnowledgeUnit
 import ai.workis.jowi.ui.components.WorkisMark
@@ -66,13 +71,15 @@ import ai.workis.jowi.ui.theme.WorkisTheme
  * swipe → retire / restore (retired = struck through + RETIRED tag).
  */
 @Composable
-fun ExpertKnowledgeScreen(vm: ExpertViewModel) {
+fun ExpertKnowledgeScreen(seat: KnowledgeSeat = KnowledgeSeat.Expert, onSaved: () -> Unit = {}) {
+    val vm: KnowledgeViewModel = viewModel(key = "knowledge-$seat")
     val colors = WorkisTheme.colors
     val focus = LocalFocusManager.current
     var draft by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(Unit) { vm.loadKnowledge(query) }
-    val data = vm.knowledge
+    LaunchedEffect(Unit) { vm.bind(seat); vm.load(query) }
+    val data = vm.data
+    val console = seat == KnowledgeSeat.Console
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border,
@@ -100,7 +107,7 @@ fun ExpertKnowledgeScreen(vm: ExpertViewModel) {
                     )
                     vm.saveNote?.let { Text(it, fontSize = 13.sp, color = Beige) }
                     Button(
-                        onClick = { focus.clearFocus(); vm.addKnowledge(draft.trim(), query) { draft = "" } },
+                        onClick = { focus.clearFocus(); vm.add(draft.trim(), query) { draft = ""; onSaved() } },
                         enabled = draft.isNotBlank() && !vm.saving,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Kiremit400, contentColor = OnKiremitFill,
@@ -113,6 +120,14 @@ fun ExpertKnowledgeScreen(vm: ExpertViewModel) {
                     }
                 }
                 Text(stringResource(R.string.expert_teach_sub), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted, modifier = Modifier.padding(horizontal = 4.dp))
+            }
+        }
+        // console: the product pairs awaiting a staff verdict ("Ürün eşleri")
+        if (console && vm.companions.isNotEmpty()) item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.pairs_title), fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = colors.ink)
+                vm.companions.forEach { c -> PairCard(c, vm) }
+                Text(stringResource(R.string.pairs_sub), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted, modifier = Modifier.padding(horizontal = 4.dp))
             }
         }
         // conflicts
@@ -133,12 +148,13 @@ fun ExpertKnowledgeScreen(vm: ExpertViewModel) {
         // filter (server ?q=)
         item {
             OutlinedTextField(
-                value = query, onValueChange = { query = it; if (it.isEmpty()) vm.loadKnowledge("") },
+                value = query, onValueChange = { query = it; if (it.isEmpty()) { vm.semantic = false; vm.load("") } },
                 placeholder = { Text(stringResource(R.string.expert_knowledge_filter), color = colors.faint, fontSize = 14.sp) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = colors.muted) },
                 singleLine = true, shape = RoundedCornerShape(30.dp), colors = fieldColors,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { focus.clearFocus(); vm.loadKnowledge(query) }),
+                // Enter = the web's semantic search on the console; plain filter otherwise
+                keyboardActions = KeyboardActions(onSearch = { focus.clearFocus(); vm.semantic = console; vm.load(query) }),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -148,11 +164,12 @@ fun ExpertKnowledgeScreen(vm: ExpertViewModel) {
                 if (notes.isEmpty()) item {
                     Text(stringResource(R.string.expert_knowledge_empty), fontSize = 13.sp, color = colors.faint)
                 }
+                val hits = data.semanticUnitIds.orEmpty().toSet()
                 notes.forEach { note ->
-                    item(key = "note-" + (note.id ?: note.hashCode())) { NoteSection(note, vm, query) }
+                    item(key = "note-" + (note.id ?: note.hashCode())) { NoteSection(note, vm, query, console, hits) }
                 }
             }
-            vm.knowledgeError != null -> item { Text(vm.knowledgeError.orEmpty(), color = colors.danger, fontSize = 13.sp) }
+            vm.error != null -> item { Text(vm.error.orEmpty(), color = colors.danger, fontSize = 13.sp) }
             else -> item { Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) { WorkisMark(size = 26, breathing = true) } }
         }
         item { Spacer(Modifier.height(30.dp)) }
@@ -160,16 +177,62 @@ fun ExpertKnowledgeScreen(vm: ExpertViewModel) {
 }
 
 @Composable
-private fun NoteSection(note: KnowledgeNote, vm: ExpertViewModel, query: String) {
+private fun roleTag(role: String?): String? = when (role) {
+    "expert" -> "🎓 " + stringResource(R.string.role_expert)
+    "lead" -> "📍 " + stringResource(R.string.role_lead)
+    "coordinator" -> stringResource(R.string.role_coordinator)
+    else -> null
+}
+
+/** A "bought together" pair mined from orders/knowledge — staff confirms or rejects; price-blind. */
+@Composable
+private fun PairCard(c: CompanionPair, vm: KnowledgeViewModel) {
+    val colors = WorkisTheme.colors
+    val id = c.id ?: return
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(colors.surface, RoundedCornerShape(20.dp))
+            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(c.a.orEmpty(), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
+            Text("⇄", fontSize = 12.sp, color = colors.faint)
+            Text(c.b ?: "?", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            c.relation?.takeIf { it.isNotEmpty() }?.let { Text(it.uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.accentText) }
+            c.count?.takeIf { it > 0 }?.let { Text("×$it", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
+        }
+        c.rationale?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 14.sp, lineHeight = 20.sp, color = colors.muted) }
+        c.quote?.takeIf { it.isNotEmpty() }?.let { Text("“$it”", fontSize = 12.sp, fontStyle = FontStyle.Italic, color = colors.faint, maxLines = 3) }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TextButton(onClick = { vm.pairVerdict(id, true) }, enabled = vm.busyPair == null, modifier = Modifier.height(36.dp).border(1.dp, colors.border, CircleShape)) {
+                if (vm.busyPair == id) CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Kiremit500)
+                else Text("✓ " + stringResource(R.string.pair_confirm), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = colors.accentText)
+            }
+            TextButton(onClick = { vm.pairVerdict(id, false) }, enabled = vm.busyPair == null, modifier = Modifier.height(36.dp).border(1.dp, colors.border, CircleShape)) {
+                Text("✕ " + stringResource(R.string.pair_reject), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = colors.muted)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NoteSection(note: KnowledgeNote, vm: KnowledgeViewModel, query: String, console: Boolean, hits: Set<String>) {
     val colors = WorkisTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(note.textPreview.orEmpty(), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted, maxLines = 2)
         Text(
             listOfNotNull(
                 note.createdAt?.take(10),
+                if (console) (note.author?.name?.takeIf { it.isNotEmpty() } ?: roleTag(note.author?.role)) else null,
                 note.unitTotal?.let { "$it " + stringResource(R.string.expert_units_short) },
                 note.useTotal?.let { "$it " + stringResource(R.string.expert_uses_short) },
                 note.likeTotal?.let { "👍 $it" },
+                note.dislikeTotal?.takeIf { it > 0 }?.let { "👎 $it" },
             ).joinToString(" · "),
             fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint,
         )
@@ -180,7 +243,7 @@ private fun NoteSection(note: KnowledgeNote, vm: ExpertViewModel, query: String)
                 .border(1.dp, colors.border, RoundedCornerShape(14.dp)),
         ) {
             note.units.orEmpty().forEachIndexed { i, u ->
-                UnitRow(u) { u.id?.let { vm.toggleUnit(it, query) } }
+                UnitRow(u, console, hits.contains(u.id)) { u.id?.let { vm.toggle(it, query) } }
                 if (i < note.units.orEmpty().lastIndex) {
                     Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
                 }
@@ -192,9 +255,10 @@ private fun NoteSection(note: KnowledgeNote, vm: ExpertViewModel, query: String)
 /** Swipe from the end → retire (kiremit) or restore (success green); the box snaps back, the list reloads. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun UnitRow(u: KnowledgeUnit, onToggle: () -> Unit) {
+private fun UnitRow(u: KnowledgeUnit, console: Boolean, hit: Boolean, onToggle: () -> Unit) {
     val colors = WorkisTheme.colors
     val retired = u.status == "retired"
+    val draftUnit = u.status == "draft"
     val state = rememberSwipeToDismissBoxState(
         confirmValueChange = { v -> if (v == SwipeToDismissBoxValue.EndToStart) onToggle(); false },
     )
@@ -217,17 +281,28 @@ private fun UnitRow(u: KnowledgeUnit, onToggle: () -> Unit) {
             verticalAlignment = Alignment.Top,
             modifier = Modifier.fillMaxWidth().background(colors.surface).padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
-            Text(
-                u.text.orEmpty(),
-                fontSize = 14.sp, lineHeight = 20.sp,
-                color = if (retired) colors.faint else colors.ink,
-                textDecoration = if (retired) TextDecoration.LineThrough else null,
-                modifier = Modifier.weight(1f),
-            )
+            if (hit) {
+                // a retrieval hit for the typed question (console semantic search)
+                Text("✦", fontSize = 12.sp, color = colors.accentText, modifier = Modifier.padding(end = 6.dp, top = 2.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    u.text.orEmpty(),
+                    fontSize = 14.sp, lineHeight = 20.sp,
+                    color = if (retired) colors.faint else colors.ink,
+                    textDecoration = if (retired) TextDecoration.LineThrough else null,
+                )
+                if (console) roleTag(u.authorRole)?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.faint) }
+            }
             Spacer(Modifier.width(6.dp))
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 if (retired) {
                     Text(stringResource(R.string.expert_unit_retired), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.faint)
+                } else if (draftUnit) {
+                    Text(stringResource(R.string.unit_draft), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = Beige)
+                }
+                u.dislikeCount?.takeIf { it > 0 }?.let {
+                    Text("👎 $it", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
                 }
                 u.useCount?.takeIf { it > 0 }?.let {
                     Text("$it " + stringResource(R.string.expert_uses_short), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)

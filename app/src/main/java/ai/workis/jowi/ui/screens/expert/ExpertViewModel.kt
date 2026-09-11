@@ -12,11 +12,8 @@ import ai.workis.jowi.data.ConsoleQuestion
 import ai.workis.jowi.data.ExpertAnswerBody
 import ai.workis.jowi.data.ExpertConsult
 import ai.workis.jowi.data.ExpertConsultDetail
-import ai.workis.jowi.data.ExpertKnowledge
 import ai.workis.jowi.data.ExpertReviews
 import ai.workis.jowi.data.ExpertSummary
-import ai.workis.jowi.data.KnowledgeBody
-import ai.workis.jowi.data.KnowledgeConflict
 import ai.workis.jowi.data.TextBody
 import ai.workis.jowi.data.UnavailableBody
 import ai.workis.jowi.data.messageFromBody
@@ -41,12 +38,6 @@ class ExpertViewModel : ViewModel() {
 
     var reviews by mutableStateOf<ExpertReviews?>(null)
     var reviewsError by mutableStateOf<String?>(null)
-
-    var knowledge by mutableStateOf<ExpertKnowledge?>(null)
-    var knowledgeError by mutableStateOf<String?>(null)
-    var conflicts by mutableStateOf<List<KnowledgeConflict>>(emptyList())
-    var saveNote by mutableStateOf<String?>(null)
-    var saving by mutableStateOf(false)
 
     var consults by mutableStateOf<List<ExpertConsult>?>(null)
     var consultsError by mutableStateOf<String?>(null)
@@ -77,9 +68,6 @@ class ExpertViewModel : ViewModel() {
         fetch({ questionsError = it }, { questions = it.questions.orEmpty() }) { Graph.api.expertQuestions() }
 
     fun loadReviews() = fetch({ reviewsError = it }, { reviews = it }) { Graph.api.expertReviews() }
-
-    fun loadKnowledge(q: String = "") =
-        fetch({ knowledgeError = it }, { knowledge = it }) { Graph.api.expertKnowledge(q.ifBlank { null }) }
 
     fun loadConsults() =
         fetch({ consultsError = it }, { consults = it.consults.orEmpty() }) { Graph.api.expertConsults() }
@@ -119,29 +107,6 @@ class ExpertViewModel : ViewModel() {
             Graph.api.expertCloseReview(sessionKey, CloseReviewBody(retire, correction.ifBlank { null }))
                 .let { it.success to (it.message ?: it.error) }
         }
-
-    fun addKnowledge(text: String, query: String, onSaved: () -> Unit) {
-        if (saving) return
-        saving = true
-        saveNote = null
-        viewModelScope.launch {
-            val (ok, msg) = post {
-                val r = Graph.api.expertAddKnowledge(KnowledgeBody(text))
-                if (r.success) conflicts = r.conflicts.orEmpty()
-                r.success to (r.message ?: r.error)
-            }
-            saving = false
-            saveNote = msg
-            if (ok) { onSaved(); loadKnowledge(query); loadSummary() }
-        }
-    }
-
-    fun toggleUnit(id: String, query: String) {
-        viewModelScope.launch {
-            post { Graph.api.expertToggleUnit(id).let { it.success to (it.message ?: it.error) } }
-            loadKnowledge(query)
-        }
-    }
 
     fun reply(consultId: String, text: String, onDone: () -> Unit) =
         action(consultId, { ok, _ -> if (ok) { loadThread(consultId); onDone() } }) {

@@ -26,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
+import ai.workis.jowi.ui.screens.expert.ExpertDepartureScreen
 import ai.workis.jowi.ui.screens.expert.ExpertRoot
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.WorkisIcons
@@ -82,6 +83,11 @@ fun MainScreen() {
         AgreementReacceptScreen(onClose = { showReaccept = false })
         return
     }
+    var showDeparture by rememberSaveable { mutableStateOf(false) }
+    if (showDeparture) {
+        ExpertDepartureScreen(onClose = { showDeparture = false }, onLeft = {})
+        return
+    }
 
     Scaffold(
         containerColor = colors.canvas,
@@ -109,7 +115,7 @@ fun MainScreen() {
             when (current) {
                 MainTab.Panel -> if (isExpert) ExpertRoot() else ai.workis.jowi.ui.screens.console.ConsoleRoot()
                 MainTab.Cases -> CasesScreen()
-                MainTab.Account -> AccountScreen(onReaccept = { showReaccept = true })
+                MainTab.Account -> AccountScreen(onReaccept = { showReaccept = true }, onDeparture = { showDeparture = true })
                 MainTab.Jowi -> JowiScreen()
             }
         }

@@ -23,6 +23,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +49,8 @@ import ai.workis.jowi.data.JowiAnswered
 import ai.workis.jowi.data.JowiTopic
 import ai.workis.jowi.data.QuestionTopic
 import ai.workis.jowi.ui.components.WorkisMark
+import ai.workis.jowi.ui.screens.expert.ExpertKnowledgeScreen
+import ai.workis.jowi.ui.screens.expert.KnowledgeSeat
 import ai.workis.jowi.ui.theme.Beige
 import ai.workis.jowi.ui.theme.BeigeBg
 import ai.workis.jowi.ui.theme.Kiremit500
@@ -65,6 +68,7 @@ sealed interface ConsoleDest {
     data object Conversations : ConsoleDest
     data class Thread(val id: String, val partner: String?, val back: ConsoleDest = Conversations) : ConsoleDest
     data class Detail(val row: ApplicationRow) : ConsoleDest
+    data object Knowledge : ConsoleDest
 }
 
 @Composable
@@ -85,6 +89,9 @@ fun ConsoleRoot(vm: ConsoleViewModel = viewModel()) {
             ConsolePipeline(vm) { dest = ConsoleDest.Detail(it) }
         }
         is ConsoleDest.Detail -> ApplicationDetailScreen(vm, d.row) { dest = ConsoleDest.Pipeline }
+        ConsoleDest.Knowledge -> ConsoleSub(stringResource(R.string.expert_knowledge_title), { dest = ConsoleDest.Home }) {
+            ExpertKnowledgeScreen(KnowledgeSeat.Console)
+        }
         is ConsoleDest.Questions -> ConsoleSub(stringResource(R.string.questions_title), { dest = ConsoleDest.Home }) {
             ConsoleQuestionsScreen(vm, openJowi = d.openJowi, jowiSource = d.source, jowiTopic = d.topic) { id, partner ->
                 dest = ConsoleDest.Thread(id, partner, back = d)
@@ -228,7 +235,24 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
         }
         Spacer(Modifier.height(14.dp))
 
-        // web order: tiles → Jowi answered → question topics
+        // Bilgi — the expert knowledge screen on the console door (roles 3|4)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(colors.surface, RoundedCornerShape(20.dp))
+                .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+                .clickable { onOpen(ConsoleDest.Knowledge) }
+                .padding(horizontal = 16.dp, vertical = 18.dp),
+        ) {
+            Icon(WorkisIcons.Pencil, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(stringResource(R.string.expert_knowledge_title), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink, modifier = Modifier.weight(1f))
+            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint)
+        }
+        Spacer(Modifier.height(14.dp))
+
+        // web order: tiles → Bilgi → Jowi answered → question topics
         s?.jowiAnswered?.takeIf { (it.total ?: 0) > 0 }?.let { ja ->
             JowiAnsweredBlock(ja) { source, topic -> onOpen(ConsoleDest.Questions(openJowi = true, source = source, topic = topic)) }
             Spacer(Modifier.height(14.dp))

@@ -71,6 +71,7 @@ sealed interface ExpertDest {
     data object Consults : ExpertDest
     data class Thread(val id: String, val title: String) : ExpertDest
     data object Guide : ExpertDest
+    data object Earnings : ExpertDest
 }
 
 @Composable
@@ -84,7 +85,10 @@ fun ExpertRoot(vm: ExpertViewModel = viewModel()) {
         ExpertDest.Home -> ExpertHome(vm) { dest = it }
         ExpertDest.Questions -> ConsoleSub(stringResource(R.string.expert_questions_title), home) { ExpertQuestionsScreen(vm) }
         ExpertDest.Reviews -> ConsoleSub(stringResource(R.string.expert_reviews_title), home) { ExpertReviewsScreen(vm) }
-        ExpertDest.Knowledge -> ConsoleSub(stringResource(R.string.expert_knowledge_title), home) { ExpertKnowledgeScreen(vm) }
+        ExpertDest.Knowledge -> ConsoleSub(stringResource(R.string.expert_knowledge_title), home) {
+            ExpertKnowledgeScreen(KnowledgeSeat.Expert, onSaved = { vm.loadSummary() })
+        }
+        ExpertDest.Earnings -> ConsoleSub(stringResource(R.string.earnings_title), home) { ExpertEarningsScreen() }
         ExpertDest.Consults -> ConsoleSub(stringResource(R.string.expert_consults_title), home) {
             ExpertConsultsScreen(vm) { id, title -> dest = ExpertDest.Thread(id, title) }
         }
@@ -182,7 +186,8 @@ private fun Board(s: ExpertSummary, onOpen: (ExpertDest) -> Unit) {
         }
 
         SectionHeader(stringResource(R.string.expert_month), WorkisIcons.ChartBars)
-        MonthCard(s.month)
+        // the "Bu ay" card is the Kazanç door (slice 2)
+        MonthCard(s.month) { onOpen(ExpertDest.Earnings) }
 
         SectionHeader(stringResource(R.string.expert_setup), WorkisIcons.Checklist)
         SetupCard(s.setup)
@@ -248,7 +253,7 @@ private fun CapsuleTile(count: Int, label: String, icon: ImageVector, modifier: 
 
 /** "Bu ay" — live points as mono data chips; the Kazanç door joins with slice 2. */
 @Composable
-private fun MonthCard(m: ExpertMonth?) {
+private fun MonthCard(m: ExpertMonth?, onClick: () -> Unit) {
     val colors = WorkisTheme.colors
     val chips = buildList {
         val p = m?.points
@@ -266,7 +271,7 @@ private fun MonthCard(m: ExpertMonth?) {
             add("$$it " + stringResource(R.string.expert_share))
         }
     }
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), onClick) {
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
