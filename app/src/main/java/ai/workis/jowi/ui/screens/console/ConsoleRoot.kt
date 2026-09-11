@@ -228,6 +228,12 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
         }
         Spacer(Modifier.height(14.dp))
 
+        // web order: tiles → Jowi answered → question topics
+        s?.jowiAnswered?.takeIf { (it.total ?: 0) > 0 }?.let { ja ->
+            JowiAnsweredBlock(ja) { source, topic -> onOpen(ConsoleDest.Questions(openJowi = true, source = source, topic = topic)) }
+            Spacer(Modifier.height(14.dp))
+        }
+
         // Sorular widget: envelope + big count + oldest; topic mosaic with counts
         Column(
             modifier = Modifier
@@ -292,11 +298,6 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
                     }
                 }
             }
-        }
-
-        s?.jowiAnswered?.takeIf { (it.total ?: 0) > 0 }?.let { ja ->
-            Spacer(Modifier.height(14.dp))
-            JowiAnsweredBlock(ja) { source, topic -> onOpen(ConsoleDest.Questions(openJowi = true, source = source, topic = topic)) }
         }
 
         vm.error?.let {
