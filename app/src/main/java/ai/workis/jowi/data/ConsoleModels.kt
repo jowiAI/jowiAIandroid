@@ -271,7 +271,9 @@ data class ConsoleMessage(
 
 @Serializable
 data class ConversationDetail(
-    val partner: String? = null,
+    val partner: String? = null, // "uzman" for an expert-seat thread
+    /** "partner" | "expert" (2026-09-11) — expert threads open with the lane's wall; no internal notes there. */
+    val seat: String? = null,
     val open: Boolean? = null,
     val canInternal: Boolean? = null,
     val messages: List<ConsoleMessage>? = null,
