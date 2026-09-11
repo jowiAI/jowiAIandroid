@@ -69,14 +69,18 @@ fun AccountScreen(onReaccept: () -> Unit = {}) {
         Spacer(Modifier.height(16.dp))
 
         SettingsCard {
-            InfoRow(stringResource(R.string.email_label), Graph.auth.email() ?: "—")
+            InfoRow(stringResource(R.string.account_email), Graph.auth.email() ?: "—")
             RowDivider()
-            // role_display when the payload carries it, else the seat label for the code
-            val roleLabel = Graph.auth.roleDisplay() ?: when (Graph.auth.roleCode()) {
-                1 -> stringResource(R.string.seat_partner)
-                5 -> stringResource(R.string.seat_expert)
-                else -> Graph.auth.roleCode()?.toString()
-            } ?: "—"
+            // the seat name in the app's language — the server's role_display is
+            // English-only and stops at role 3 (a lead read "Region Lead" under Türkçe)
+            val roleLabel = when (Graph.auth.roleCode()) {
+                1 -> stringResource(R.string.account_role_partner)
+                2 -> stringResource(R.string.account_role_guest)
+                3 -> stringResource(R.string.account_role_coordinator)
+                4 -> stringResource(R.string.account_role_lead)
+                5 -> stringResource(R.string.account_role_expert)
+                else -> Graph.auth.roleDisplay() ?: Graph.auth.roleCode()?.toString() ?: "—"
+            }
             InfoRow(stringResource(R.string.account_role), roleLabel)
         }
 

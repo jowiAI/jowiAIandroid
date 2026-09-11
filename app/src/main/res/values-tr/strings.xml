@@ -3,7 +3,6 @@
     <string name="jowi_tab">Jowi</string>
     <string name="lang_tr">Türkçe</string>
     <string name="lang_en">English</string>
-    <string name="account_role">Rol</string>
     <string name="apply_sector_hint">Sektör (isteğe bağlı)</string>
     <string name="bio_title">Jowi kilidini aç</string>
     <string name="age_minutes">%d dk</string>

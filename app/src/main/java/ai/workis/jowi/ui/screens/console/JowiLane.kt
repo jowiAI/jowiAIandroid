@@ -6,7 +6,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -135,17 +136,25 @@ private fun Chip(selected: Boolean, onClick: () -> Unit, content: @Composable ()
     ) { content() }
 }
 
+/** Count faint, open 👎 in danger, reviewed "✓n" in success — the same marks as the Panel cells. */
+@Composable
+private fun ChipMarks(count: Int, downOpen: Int, downReviewed: Int) {
+    val colors = WorkisTheme.colors
+    Text("$count", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
+    if (downOpen > 0) Text("👎$downOpen", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.danger)
+    if (downReviewed > 0) Text("✓$downReviewed", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = SuccessGreen)
+}
+
 @Composable
 private fun SourceChips(sources: List<JowiSource>, selected: String?, onTap: (String) -> Unit) {
     val colors = WorkisTheme.colors
     val items = sources.filter { it.source != null }
     if (items.isEmpty()) return
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
         items.forEach { src ->
             Chip(selected = selected == src.source, onClick = { onTap(src.source!!) }) {
                 Text((src.label ?: src.source.orEmpty()).uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.muted, maxLines = 1)
-                Text("${src.count ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = colors.ink)
-                src.down?.takeIf { it > 0 }?.let { Text("👎$it", fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint) }
+                ChipMarks(src.count ?: 0, src.downOpen ?: src.down ?: 0, src.downReviewed ?: 0)
             }
         }
     }
@@ -156,12 +165,11 @@ private fun TopicChips(topics: List<JowiTopic>, selected: String?, onTap: (Strin
     val colors = WorkisTheme.colors
     val items = topics.filter { !it.topic.isNullOrEmpty() }
     if (items.isEmpty()) return
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
         items.forEach { tp ->
             Chip(selected = selected == tp.topic, onClick = { onTap(tp.topic!!) }) {
                 Text(tp.topic.orEmpty(), fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.accentText, maxLines = 1)
-                Text("${tp.count ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = colors.ink)
-                tp.down?.takeIf { it > 0 }?.let { Text("👎$it", fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint) }
+                ChipMarks(tp.count ?: 0, tp.downOpen ?: tp.down ?: 0, tp.downReviewed ?: 0)
             }
         }
     }
@@ -194,7 +202,12 @@ private fun LaneRow(row: JowiAnsweredRow, onOpenThread: (id: String, partner: St
                 Text(it.uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             }
             Spacer(Modifier.weight(1f))
-            Text(when (row.verdict) { "up" -> "👍"; "down" -> "👎"; else -> "—" }, fontFamily = WorkisMono, fontSize = 11.sp, color = colors.faint)
+            // web parity: a reviewed 👎 wears a check (green); an open one stands alone
+            val reviewedDown = row.verdict == "down" && row.review != null
+            Text(
+                when (row.verdict) { "up" -> "👍"; "down" -> if (reviewedDown) "👎 ✓" else "👎"; else -> "—" },
+                fontFamily = WorkisMono, fontSize = 11.sp, color = if (reviewedDown) SuccessGreen else colors.faint,
+            )
             Text(relativeAge(row.askedAt), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
         }
         Text("“${row.question.orEmpty()}”", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)

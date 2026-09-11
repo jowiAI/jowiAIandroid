@@ -52,6 +52,8 @@ data class ConsoleSummary(
     val jowiAnswered: JowiAnswered? = null,
 )
 
+// downOpen = 👎 nobody has closed yet (either lane); downReviewed = down − downOpen
+// (confirmed or corrected). Shipped 2026-09-11; `down` stays as the fallback.
 @Serializable
 data class JowiSource(
     val source: String? = null,
@@ -59,10 +61,19 @@ data class JowiSource(
     val count: Int? = null,
     val up: Int? = null,
     val down: Int? = null,
+    val downOpen: Int? = null,
+    val downReviewed: Int? = null,
 )
 
 @Serializable
-data class JowiTopic(val topic: String? = null, val count: Int? = null, val down: Int? = null)
+data class JowiTopic(
+    val topic: String? = null,
+    val count: Int? = null,
+    val up: Int? = null,
+    val down: Int? = null,
+    val downOpen: Int? = null,
+    val downReviewed: Int? = null,
+)
 
 @Serializable
 data class JowiAnswered(
@@ -70,7 +81,8 @@ data class JowiAnswered(
     val total: Int? = null,
     val sources: List<JowiSource>? = null,
     val topics: List<JowiTopic>? = null,
-    val dislikedOpen: Int? = null,
+    val dislikedOpen: Int? = null, // experts' lane
+    val reviewOpen: Int? = null, // staff lane
 )
 
 /** GET /workis/console/jowi-answered/ — the web Sorular page's second tab as rows; walls are the server's. */

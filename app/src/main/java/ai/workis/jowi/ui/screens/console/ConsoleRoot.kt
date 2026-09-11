@@ -6,11 +6,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -45,11 +45,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.workis.jowi.R
 import ai.workis.jowi.data.ApplicationRow
 import ai.workis.jowi.data.JowiAnswered
+import ai.workis.jowi.data.JowiTopic
 import ai.workis.jowi.data.QuestionTopic
 import ai.workis.jowi.ui.components.WorkisMark
 import ai.workis.jowi.ui.theme.Beige
 import ai.workis.jowi.ui.theme.BeigeBg
 import ai.workis.jowi.ui.theme.Kiremit500
+import ai.workis.jowi.ui.theme.SuccessGreen
 import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
@@ -306,9 +308,11 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
 }
 
 /**
- * "Jowi yanıtladı · son 30 gün" — the web lane's compact block: source pills
- * with 👍/👎, topic chips, the "awaiting expert" badge for generative answers
- * with an unreviewed 👎. Chips deep-link into the Sorular lane, filtered.
+ * "Jowi yanıtladı · son 7 gün" — the web lane's block: source cells and the
+ * topic bento whose headline is the VERDICT line "👍 n · 👎 m · ✓ r" (open
+ * dislikes in danger, reviewed in success green); the question count is the
+ * small caption. Two awaiting badges in the header. Cells deep-link into the
+ * Sorular lane, filtered.
  */
 @Composable
 private fun JowiAnsweredBlock(ja: JowiAnswered, onFilter: (source: String?, topic: String?) -> Unit) {
@@ -332,55 +336,132 @@ private fun JowiAnsweredBlock(ja: JowiAnswered, onFilter: (source: String?, topi
                 fontSize = 14.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            ja.dislikedOpen?.takeIf { it > 0 }?.let { n ->
-                Text(
-                    "$n " + stringResource(R.string.jowi_awaiting_expert),
-                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.5.sp,
-                    color = Beige,
-                    modifier = Modifier.background(BeigeBg, CircleShape).padding(horizontal = 8.dp, vertical = 4.dp),
-                )
+        }
+        val staffOpen = ja.reviewOpen ?: 0
+        val expertOpen = ja.dislikedOpen ?: 0
+        if (staffOpen > 0 || expertOpen > 0) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (staffOpen > 0) AwaitingBadge("$staffOpen " + stringResource(R.string.jowi_awaiting_staff))
+                if (expertOpen > 0) AwaitingBadge("$expertOpen " + stringResource(R.string.jowi_awaiting_expert))
             }
         }
-        val sources = ja.sources.orEmpty().filter { it.source != null }
+        // source cells: up to four, equal width, sorted by count
+        val sources = ja.sources.orEmpty().filter { it.source != null && (it.count ?: 0) > 0 }
+            .sortedByDescending { it.count ?: 0 }.take(4)
         if (sources.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(96.dp)) {
                 sources.forEach { src ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    Column(
                         modifier = Modifier
-                            .background(colors.ink.copy(alpha = 0.06f), CircleShape)
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(colors.ink.copy(alpha = 0.07f), RoundedCornerShape(14.dp))
                             .clickable { onFilter(src.source, null) }
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                            .padding(10.dp),
                     ) {
-                        Text((src.label ?: src.source.orEmpty()).uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.muted, maxLines = 1)
-                        Text("${src.count ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
-                        if ((src.up ?: 0) + (src.down ?: 0) > 0) {
-                            Text("👍${src.up ?: 0} 👎${src.down ?: 0}", fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint)
-                        }
+                        Text(
+                            (src.label ?: src.source.orEmpty()).uppercase(),
+                            fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp,
+                            lineHeight = 12.sp, color = colors.accentText, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        VerdictLine(src.up ?: 0, src.downOpen ?: src.down ?: 0, src.downReviewed ?: 0, size = 18.sp, tint = colors.ink)
+                        Text("${src.count ?: 0} " + stringResource(R.string.question_unit), fontSize = 11.sp, color = colors.faint)
                     }
                 }
             }
         }
-        val topics = ja.topics.orEmpty().filter { !it.topic.isNullOrEmpty() }.take(8)
+        // topics via the bento: hero + two runners-up + three small
+        val topics = ja.topics.orEmpty().filter { !it.topic.isNullOrEmpty() && (it.count ?: 0) > 0 }
+            .sortedByDescending { it.count ?: 0 }
         if (topics.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                topics.forEach { tp ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        modifier = Modifier
-                            .background(colors.ink.copy(alpha = 0.05f), CircleShape)
-                            .clickable { onFilter(null, tp.topic) }
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                    ) {
-                        Text(tp.topic.orEmpty(), fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.accentText, maxLines = 1)
-                        Text("×${tp.count ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
-                        tp.down?.takeIf { it > 0 }?.let { Text("👎$it", fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint) }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(160.dp)) {
+                LaneCell(topics[0], BentoStyle.Hero, Modifier.weight(1f).fillMaxHeight()) { onFilter(null, topics[0].topic) }
+                if (topics.size > 1) {
+                    Column(Modifier.width(136.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        LaneCell(topics[1], BentoStyle.Medium, Modifier.weight(1f)) { onFilter(null, topics[1].topic) }
+                        if (topics.size > 2) LaneCell(topics[2], BentoStyle.Medium, Modifier.weight(1f)) { onFilter(null, topics[2].topic) }
+                    }
+                }
+            }
+            if (topics.size > 3) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(76.dp)) {
+                    topics.drop(3).take(3).forEach { tp ->
+                        LaneCell(tp, BentoStyle.Small, Modifier.weight(1f).fillMaxHeight()) { onFilter(null, tp.topic) }
                     }
                 }
             }
         }
+    }
+}
+
+private enum class BentoStyle { Hero, Medium, Small }
+
+@Composable
+private fun AwaitingBadge(text: String) {
+    Text(
+        text,
+        fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.5.sp, color = Beige,
+        modifier = Modifier.background(BeigeBg, CircleShape).padding(horizontal = 8.dp, vertical = 4.dp),
+    )
+}
+
+/**
+ * "👍 n · 👎 m · ✓ r" in mono digits — the cell's headline. The big 👎 is the
+ * OPEN count (danger when > 0; the glyph and the "✓ r" caption keep it
+ * readable without the colour); ✓ r = reviewed, hidden at 0.
+ */
+@Composable
+fun VerdictLine(up: Int?, downOpen: Int, downReviewed: Int, size: androidx.compose.ui.unit.TextUnit, tint: androidx.compose.ui.graphics.Color) {
+    val colors = WorkisTheme.colors
+    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (up != null) {
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("👍", fontSize = size * 0.7f)
+                Text("$up", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = size, color = tint)
+            }
+        }
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text("👎", fontSize = size * 0.7f)
+            Text("$downOpen", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = size, color = if (downOpen > 0) colors.danger else tint)
+        }
+        if (downReviewed > 0) {
+            Text("✓ $downReviewed", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = maxOf(10f, size.value * 0.55f).sp, color = SuccessGreen)
+        }
+    }
+}
+
+@Composable
+private fun LaneCell(item: JowiTopic, style: BentoStyle, modifier: Modifier, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    val hero = style == BentoStyle.Hero
+    Column(
+        modifier = modifier
+            .background(
+                if (hero) BeigeBg else colors.ink.copy(alpha = if (style == BentoStyle.Medium) 0.07f else 0.05f),
+                RoundedCornerShape(14.dp),
+            )
+            .clickable(onClick = onClick)
+            .padding(if (hero) 14.dp else 10.dp),
+    ) {
+        Text(
+            item.topic.orEmpty(),
+            fontWeight = FontWeight.SemiBold,
+            fontSize = when (style) { BentoStyle.Hero -> 15.sp; BentoStyle.Medium -> 13.sp; BentoStyle.Small -> 12.sp },
+            color = if (hero) Beige else colors.accentText,
+            maxLines = if (hero) 2 else 1, overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.weight(1f))
+        VerdictLine(
+            item.up, item.downOpen ?: item.down ?: 0, item.downReviewed ?: 0,
+            size = when (style) { BentoStyle.Hero -> 24.sp; BentoStyle.Medium -> 15.sp; BentoStyle.Small -> 13.sp },
+            tint = if (hero) Beige else colors.ink,
+        )
+        Text(
+            "${item.count ?: 0} " + stringResource(R.string.question_unit),
+            fontSize = if (hero) 12.sp else 10.sp,
+            color = if (hero) Beige.copy(alpha = 0.8f) else colors.faint,
+        )
     }
 }
 
