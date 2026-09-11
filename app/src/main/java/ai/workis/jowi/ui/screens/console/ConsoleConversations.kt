@@ -117,6 +117,23 @@ fun ConversationThreadScreen(vm: ConsoleViewModel, convId: String) {
     var internal by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().imePadding()) {
+        // an expert-seat thread (2026-09-11): the seat badge under the title; no internal notes there
+        if (detail?.seat == "expert") {
+            Text(
+                "🎓 " + stringResource(R.string.seat_expert),
+                fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, letterSpacing = 1.sp,
+                color = colors.blue, modifier = Modifier.padding(bottom = 10.dp),
+            )
+        }
+        if (vm.threadMissing) {
+            // a real 404 only — the thread isn't there or isn't open to this seat
+            Text(
+                stringResource(R.string.conversation_missing),
+                fontSize = 14.sp, lineHeight = 20.sp, color = colors.muted,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+            )
+            return@Column
+        }
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.weight(1f),

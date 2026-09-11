@@ -103,6 +103,7 @@
     <string name="contract_load_fail">Sözleşme yüklenemedi — bağlantınızı kontrol edin.</string>
     <string name="conv_closed">kapalı</string>
     <string name="conv_empty">Henüz partner sohbeti yok — partnerler Jowi\'yi kullanmaya başlayınca burası dolacak.</string>
+    <string name="conversation_missing">Bu konuşma bulunamadı ya da bu koltuğa kapalı.</string>
     <string name="conversations_pill">Yazışmalar</string>
     <string name="conversations_section">KONUŞMALAR</string>
     <string name="conversations_title">Konuşmalar</string>

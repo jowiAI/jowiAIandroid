@@ -103,6 +103,7 @@
     <string name="contract_load_fail">Couldn\'t load the agreement — check your connection.</string>
     <string name="conv_closed">closed</string>
     <string name="conv_empty">No partner conversations yet — this fills up once partners start using Ask Jowi.</string>
+    <string name="conversation_missing">This conversation wasn\'t found or isn\'t open to this seat.</string>
     <string name="conversations_pill">Messages</string>
     <string name="conversations_section">CONVERSATIONS</string>
     <string name="conversations_title">Conversations</string>

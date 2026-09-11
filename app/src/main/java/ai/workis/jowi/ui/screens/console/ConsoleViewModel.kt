@@ -59,7 +59,20 @@ class ConsoleViewModel : ViewModel() {
     fun loadQuestions() = fetch({ questions = it }) { Graph.api.consoleQuestions() }
     fun loadPartners() = fetch({ partners = it }) { Graph.api.consolePartners() }
     fun loadConversations() = fetch({ conversations = it }) { Graph.api.consoleConversations() }
-    fun loadThread(id: String) = fetch({ thread = it }) { Graph.api.conversationDetail(id) }
+    /** True only on a real 404 — the thread isn't there or isn't open to this seat. */
+    var threadMissing by mutableStateOf(false)
+
+    fun loadThread(id: String) {
+        thread = null
+        threadMissing = false
+        error = null
+        viewModelScope.launch {
+            when (val r = safeCall(lang) { Graph.api.conversationDetail(id) }) {
+                is ApiResult.Ok -> thread = r.value
+                is ApiResult.Err -> if (r.status == 404) threadMissing = true else error = r.message
+            }
+        }
+    }
 
     fun loadLane() {
         laneError = null
