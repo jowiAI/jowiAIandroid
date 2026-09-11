@@ -106,7 +106,9 @@ fun LazyListScope.jowiLane(vm: ConsoleViewModel, onOpenThread: (id: String, part
             if (rows.isEmpty()) item {
                 Text(stringResource(R.string.jowi_lane_empty), fontSize = 13.sp, color = WorkisTheme.colors.faint)
             }
-            items(rows.size, key = { rows[it].id ?: it }) { i -> LaneRow(rows[i], onOpenThread) }
+            // a row's label can come back empty — fall back to the source strip's label for that key
+            val labels = data.sources.orEmpty().filter { it.source != null }.associate { it.source!! to (it.label ?: it.source!!) }
+            items(rows.size, key = { rows[it].id ?: it }) { i -> LaneRow(rows[i], labels, onOpenThread) }
             data.closedCount?.takeIf { it > 0 }?.let { n ->
                 item {
                     Text(
@@ -177,9 +179,10 @@ private fun TopicChips(topics: List<JowiTopic>, selected: String?, onTap: (Strin
 
 /** One answered row: source pill (success verified / accent when "model" / faint off-topic), topic, verdict, age, question, excerpt, company, awaiting badge, thread link, review box. */
 @Composable
-private fun LaneRow(row: JowiAnsweredRow, onOpenThread: (id: String, partner: String?) -> Unit) {
+private fun LaneRow(row: JowiAnsweredRow, labels: Map<String, String>, onOpenThread: (id: String, partner: String?) -> Unit) {
     val colors = WorkisTheme.colors
     val source = row.source.orEmpty()
+    val pill = row.label?.takeIf { it.isNotEmpty() } ?: labels[source] ?: source
     val mixed = source.contains("model")
     val off = source == "offtopic"
     Column(
@@ -192,7 +195,7 @@ private fun LaneRow(row: JowiAnsweredRow, onOpenThread: (id: String, partner: St
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                (row.label ?: source).uppercase(),
+                pill.uppercase(),
                 fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp,
                 color = if (off) colors.faint else if (mixed) colors.accentText else SuccessGreen,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,

@@ -160,7 +160,13 @@ fun ConversationThreadScreen(vm: ConsoleViewModel, convId: String) {
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    placeholder = { Text(stringResource(R.string.reply_placeholder), color = colors.faint) },
+                    // an expert-seat thread gets its own line (2026-09-11)
+                    placeholder = {
+                        Text(
+                            stringResource(if (detail?.seat == "expert") R.string.reply_placeholder_expert else R.string.reply_placeholder),
+                            color = colors.faint,
+                        )
+                    },
                     shape = RoundedCornerShape(26.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Kiremit500,

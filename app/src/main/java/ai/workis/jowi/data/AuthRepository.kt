@@ -2,6 +2,7 @@ package ai.workis.jowi.data
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.intOrNull
@@ -74,18 +75,28 @@ class AuthRepository(
     suspend fun loginWithPassword(email: String, password: String): ApiResult<Unit> =
         safeCall(lang()) { applyAuth(api.login(LoginBody(email, password))) }
 
-    /** Launch check: token exists → validate; 401 kills the token. */
+    /**
+     * Launch check — a three-way decision: only the server's "no" (401/403 or
+     * success:false) wipes the token; a timeout (15 s), offline or a 5xx keeps
+     * the stored session and lets the user in. (The 8 s answers were cold
+     * gunicorn workers after deploys — fixed server-side 2026-09-11.)
+     */
     suspend fun validate(): Boolean {
         if (store.token == null) return false
-        return when (val r = safeCall(lang()) { api.validateToken() }) {
+        val r = withTimeoutOrNull(15_000) { safeCall(lang()) { api.validateToken() } }
+            ?: return true // unreachable in time → keep the session
+        return when (r) {
             is ApiResult.Ok -> {
-                applyAuth(r.value)
-                true
+                if (r.value.success || r.value.token != null || r.value.user != null) {
+                    applyAuth(r.value)
+                    true
+                } else {
+                    signOutLocally() // the server said no
+                    false
+                }
             }
             is ApiResult.Err -> {
-                if (r.status == 401) signOutLocally()
-                // network error → keep token, still let the user in
-                r.status == null
+                if (r.status == 401 || r.status == 403) { signOutLocally(); false } else true
             }
         }
     }

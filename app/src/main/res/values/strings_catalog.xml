@@ -304,6 +304,7 @@
     <string name="rejoin_row">Come back</string>
     <string name="rejoin_sub">You have left — if you come back, the coordinator re-verifies you before new shares accrue.</string>
     <string name="reply_placeholder">Reply — the partner sees it in their Jowi chat…</string>
+    <string name="reply_placeholder_expert">Reply — the expert sees it in their Jowi chat…</string>
     <string name="resend">Resend e-mail</string>
     <string name="resend_invite">Send invite</string>
     <string name="retry">Try again</string>

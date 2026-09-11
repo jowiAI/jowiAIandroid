@@ -304,6 +304,7 @@
     <string name="rejoin_row">Geri dön</string>
     <string name="rejoin_sub">Ayrıldınız — geri dönerseniz yeni pay birikmeden önce koordinatör sizi yeniden doğrular.</string>
     <string name="reply_placeholder">Yanıtla — partner Jowi sohbetinde görür…</string>
+    <string name="reply_placeholder_expert">Yanıtla — uzman Jowi sohbetinde görür…</string>
     <string name="resend">E-postayı yeniden gönder</string>
     <string name="resend_invite">Daveti gönder</string>
     <string name="retry">Tekrar dene</string>
