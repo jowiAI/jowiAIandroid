@@ -381,12 +381,12 @@ private fun applyFieldColors() = OutlinedTextFieldDefaults.colors(
 )
 
 @Composable
+/** Placeholder only (iOS parity): a resting M3 label inside the field read like a prefilled value. */
 private fun ApplyField(value: String, onChange: (String) -> Unit, hintRes: Int, minLines: Int = 1) {
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         placeholder = { Text(stringResource(hintRes), color = WorkisTheme.colors.faint) },
-        label = { Text(stringResource(hintRes), color = WorkisTheme.colors.muted, fontSize = 12.sp) },
         singleLine = minLines == 1,
         minLines = minLines,
         shape = RoundedCornerShape(20.dp),
