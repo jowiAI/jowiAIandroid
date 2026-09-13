@@ -213,6 +213,81 @@ interface WorkisApi {
     @POST("workis/console/companions/{id}/")
     suspend fun consoleCompanionVerdict(@Path("id") id: String, @Body body: VerdictBody): SimpleResult
 
+    // --- partner seat (role 1): Firma · lists (buyer) · quotes (seller) — Django docs/WORKIS_PARTNER_API.md ---
+    @GET("workis/company/")
+    suspend fun company(): PartnerCompany
+
+    @POST("workis/company/")
+    suspend fun companySave(@Body body: kotlinx.serialization.json.JsonObject): CompanySaveResult
+
+    @POST("workis/company/autonomy/")
+    suspend fun companyAutonomy(@Body body: kotlinx.serialization.json.JsonObject): AutonomyResult
+
+    @Streaming
+    @GET("workis/company/tax-file/")
+    suspend fun companyTaxFile(): retrofit2.Response<okhttp3.ResponseBody>
+
+    @Multipart
+    @POST("workis/company/tax-file/")
+    suspend fun companyTaxFileUpload(@Part file: okhttp3.MultipartBody.Part): SimpleResult
+
+    @GET("workis/geo/provinces/")
+    suspend fun geoProvinces(): GeoProvinces
+
+    @GET("workis/lists/")
+    suspend fun lists(): PurchaseListIndex
+
+    @Multipart
+    @POST("workis/lists/upload/")
+    suspend fun listUpload(@Part file: okhttp3.MultipartBody.Part): ListCreated
+
+    @POST("workis/lists/sample/")
+    suspend fun listSample(): ListCreated
+
+    @GET("workis/lists/{id}/")
+    suspend fun listDetail(@Path("id") id: String): PurchaseListDetail
+
+    @POST("workis/lists/{id}/items/")
+    suspend fun listAddItem(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
+    @POST("workis/lists/items/{id}/bind/")
+    suspend fun listItemBind(@Path("id") id: String, @Body body: BindBody): SimpleResult
+
+    @POST("workis/lists/items/{id}/delete/")
+    suspend fun listItemDelete(@Path("id") id: String): SimpleResult
+
+    @GET("workis/lists/items/{id}/search/")
+    suspend fun listItemSearch(@Path("id") id: String, @Query("q") q: String): PLSearchResults
+
+    @POST("workis/lists/{id}/note/")
+    suspend fun listNote(@Path("id") id: String, @Body body: NoteBody): SimpleResult
+
+    @POST("workis/lists/{id}/request-quotes/")
+    suspend fun listRequestQuotes(@Path("id") id: String, @Body body: RequestQuotesBody): RequestQuotesResult
+
+    @POST("workis/lists/{id}/chase/")
+    suspend fun listChase(@Path("id") id: String): SimpleResult
+
+    @POST("workis/lists/{id}/award/")
+    suspend fun listAward(@Path("id") id: String): AwardResult
+
+    @GET("workis/seller/invitations/")
+    suspend fun sellerInvitations(): SellerInvitations
+
+    @POST("workis/seller/invitations/{id}/quote/")
+    suspend fun sellerQuote(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): QuoteSubmitResult
+
+    @Streaming
+    @POST("workis/seller/invitations/{id}/quote/preview/")
+    suspend fun sellerQuotePreview(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): okhttp3.ResponseBody
+
+    @POST("workis/seller/invitations/{id}/quote/revise/")
+    suspend fun sellerQuoteRevise(@Path("id") id: String): SimpleResult
+
+    /** Jowi's rewrite of a note / letter — a suggestion the user applies or ignores (never automatic). */
+    @POST("workis/text/polish/")
+    suspend fun textPolish(@Body body: TextBody): PolishResult
+
     // --- §10.2 agreement re-acceptance (every seat) ---
     @GET("workis/agreement/pending/")
     suspend fun agreementPending(): AgreementPending

@@ -235,6 +235,21 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
         }
         Spacer(Modifier.height(14.dp))
 
+        // Seat activity (2026-09-13): the web's two pills under the tiles
+        s?.activeSeats?.let { a ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ActivityPill("${a.activeSeats ?: 0}/${a.totalSeats ?: 0}", stringResource(R.string.active_seats_pill), Modifier.weight(1f))
+                ActivityPill("${a.activePartners ?: 0}/${a.totalPartners ?: 0}", stringResource(R.string.active_partners_pill), Modifier.weight(1f))
+            }
+            Text(
+                stringResource(R.string.jowi_answered_last) + " ${a.days ?: 7} " + stringResource(R.string.days_word) +
+                    " · ${a.lists ?: 0} " + stringResource(R.string.lists_unit) + " · ${a.quotes ?: 0} " + stringResource(R.string.quotes_unit) + " · ${a.orders ?: 0} " + stringResource(R.string.orders_unit),
+                fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+            )
+            Spacer(Modifier.height(6.dp))
+        }
+
         // Bilgi — the expert knowledge screen on the console door (roles 3|4)
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -487,6 +502,19 @@ private fun LaneCell(item: JowiTopic, style: BentoStyle, modifier: Modifier, onC
             fontSize = if (hero) 12.sp else 10.sp,
             color = if (hero) Beige.copy(alpha = 0.8f) else colors.faint,
         )
+    }
+}
+
+@Composable
+private fun ActivityPill(value: String, label: String, modifier: Modifier) {
+    val colors = WorkisTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.background(colors.ink.copy(alpha = 0.06f), CircleShape).padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Text(value, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
+        Spacer(Modifier.width(8.dp))
+        Text(label, fontSize = 12.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.ui.Alignment
 import ai.workis.jowi.ui.screens.expert.ExpertAccountSections
+import ai.workis.jowi.ui.screens.partner.CompanySections
 import ai.workis.jowi.ui.theme.Beige
 import ai.workis.jowi.ui.theme.BeigeBg
 import ai.workis.jowi.ui.theme.WorkisIcons
@@ -141,6 +142,13 @@ fun AccountScreen(onReaccept: () -> Unit = {}, onDeparture: () -> Unit = {}) {
         if (Graph.auth.isExpert()) {
             Spacer(Modifier.height(16.dp))
             ExpertAccountSections(onDeparture = onDeparture)
+        }
+
+        // Partner seat: the web Firma page as sections (slice 1)
+        val seatState by Graph.partner.seat.collectAsState()
+        if (seatState is ai.workis.jowi.data.PartnerSeatState.Seat) {
+            Spacer(Modifier.height(16.dp))
+            CompanySections()
         }
 
         // §10.2 reminder — stays until the seat re-accepts

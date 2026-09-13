@@ -50,6 +50,34 @@ data class ConsoleSummary(
     val questionTopics: List<QuestionTopic>? = null,
     /** "Jowi answered" lane (2026-09-10): what Jowi answered in the window, by source and topic. */
     val jowiAnswered: JowiAnswered? = null,
+    /** Seat activity over the window (2026-09-13): sign-ins + lists / quotes / orders — two Panel pills. */
+    val activeSeats: ConsoleActiveSeats? = null,
+)
+
+@Serializable
+data class ConsoleActiveSeats(
+    val days: Int? = null,
+    val activeSeats: Int? = null,
+    val totalSeats: Int? = null,
+    val activePartners: Int? = null,
+    val totalPartners: Int? = null,
+    val lists: Int? = null,
+    val quotes: Int? = null,
+    val orders: Int? = null,
+)
+
+@Serializable
+data class PartnerSeatActivity(val name: String? = null, val email: String? = null, val active: Boolean? = null, val lastLogin: String? = null)
+
+/** Per-partner seat line on Ortaklar (2026-09-13). */
+@Serializable
+data class PartnerActivity(
+    val seats: List<PartnerSeatActivity>? = null,
+    val activeSeats: Int? = null,
+    val lists: Int? = null,
+    val quotes: Int? = null,
+    val orders: Int? = null,
+    val lastAt: String? = null,
 )
 
 // downOpen = 👎 nobody has closed yet (either lane); downReviewed = down − downOpen
@@ -242,6 +270,7 @@ data class PartnerRow(
     val openConversations: Int? = null,
     val openQuestions: Int? = null,
     val lastActivityDays: Int? = null,
+    val activity: PartnerActivity? = null,
 )
 
 @Serializable

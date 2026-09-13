@@ -32,6 +32,12 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   because answers are model calls.
 - Server Markdown (expert guide) renders through `MarkdownDocument` (ui/components/) — the dialect in
   API_CONTRACT (##/###, > quote box, GFM tables, lists, `code` chips). Never re-author guide text.
+- Partner seat (role 1) lives in `ui/screens/partner/` (Django `docs/WORKIS_PARTNER_API.md`): `PartnerStore`
+  (Graph.partner) holds the `company/` verdict — 2xx = Pazar tab (Listeler / Teklifler by seat), 403
+  `seat:"none"` = Başvuru tab (SeatlessScreen), `"operator"` = no partner tab. Hesap shows `CompanySections`
+  whenever a firm answered. MONEY ON THIS SURFACE IS A JSON NUMBER → `WorkisMoney.text()` (2 fraction digits,
+  app locale), never a decimal string. `text/polish/` only suggests — applied on the user's tap, never automatically.
+- Tab sets: role 3/4 and 5 → Panel · Hesap · Jowi; others → Pazar|Başvuru · Hesap · Jowi. Talepler (`cases/`) is retired.
 - Knowledge (Bilgi) is ONE screen behind a seat: `ExpertKnowledgeScreen(seat = Expert | Console)` with
   `KnowledgeViewModel` (expert/* vs console/* doors; console adds semantic search, author tags, pairs).
 - Expert slice 2: `ExpertEarnings.kt` (door = the Panel's "Bu ay" card) and `ExpertAccountSections.kt`
@@ -77,6 +83,6 @@ never duplicate a catalog key there.
 ## Scope
 
 Port only Workis-era screens: Splash → OTP Login (TR/EN tabs + public Jowi ask) → Apply wizard →
-Main tabs (Panel [role 3/4 console · role 5 expert] · Talepler · Hesap · Jowi) + console/expert screens.
+Main tabs (Panel [role 3/4 console · role 5 expert] | Pazar/Başvuru [partner] · Hesap · Jowi) + console/expert/partner screens.
 Do NOT port legacy jowi/Decora screens (ContentView, ChatView, Dashboard…) or `/api/ask-question/`.
 `/workis/console/sistem/` stays web-only. Localization via `strings.xml` + `values-tr/` (not a hand-rolled struct).

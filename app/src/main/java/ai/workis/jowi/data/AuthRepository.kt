@@ -113,6 +113,7 @@ class AuthRepository(
         store.clear()
         _user.value = null
         _agreementPending.value = null
+        runCatching { ai.workis.jowi.Graph.partner.clear() }
         _isAuthenticated.value = false
     }
 }

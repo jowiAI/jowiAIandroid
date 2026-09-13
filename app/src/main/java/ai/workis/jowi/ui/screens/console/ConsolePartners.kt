@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import ai.workis.jowi.R
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.SuccessGreen
+import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 
 @Composable
@@ -123,6 +124,17 @@ fun ConsolePartnersScreen(vm: ConsoleViewModel) {
                                 fontSize = 11.sp,
                             )
                         }
+                    }
+                    // the seats line (2026-09-13): who signs in, what moved
+                    p.activity?.takeIf { !it.seats.isNullOrEmpty() }?.let { a ->
+                        val seats = a.seats.orEmpty()
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "👥 ${a.activeSeats ?: 0}/${seats.size} " + stringResource(R.string.active_seats_pill) + " · " +
+                                seats.take(3).joinToString(", ") { (it.name ?: it.email.orEmpty()) + (if (it.active == true) " ✓" else "") } +
+                                " · ${a.lists ?: 0} " + stringResource(R.string.lists_unit) + " · ${a.quotes ?: 0} " + stringResource(R.string.quotes_unit) + " · ${a.orders ?: 0} " + stringResource(R.string.orders_unit),
+                            fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp, color = colors.faint, maxLines = 2,
+                        )
                     }
                 }
             }
