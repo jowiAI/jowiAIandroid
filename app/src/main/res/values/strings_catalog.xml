@@ -299,7 +299,7 @@
     <string name="maps_link">Maps link</string>
     <string name="maps_link_hint">Paste a Google Maps link to pin the location; your pin outranks the address lookup.</string>
     <string name="market_empty">No marketplace doors for this seat yet.</string>
-    <string name="market_tab">Market</string>
+    <string name="market_tab">Panel</string>
     <string name="match_header">Purchase request</string>
     <string name="match_offers">offers</string>
     <string name="matched_word">matched</string>
@@ -433,7 +433,7 @@
     <string name="seatless_none">This account holds no company seat yet. Apply to join the marketplace as a buyer, seller or carrier.</string>
     <string name="seatless_other_email">The sign-in link and the seat go to this address, not to this account:</string>
     <string name="seatless_review">Your application is under review</string>
-    <string name="seatless_sub">Once approved, the Market tab opens here.</string>
+    <string name="seatless_sub">Once approved, the Panel opens here.</string>
     <string name="seatless_switch_hint">Sign out and sign in with it once the e-mail arrives.</string>
     <string name="seatless_title">Application</string>
     <string name="see_all">all</string>

@@ -299,7 +299,7 @@
     <string name="maps_link">Harita bağlantısı</string>
     <string name="maps_link_hint">Konumu sabitlemek için bir Google Maps bağlantısı yapıştırın; sizin işaretiniz adres aramasından önce gelir.</string>
     <string name="market_empty">Bu koltuk için henüz pazar kapısı yok.</string>
-    <string name="market_tab">Pazar</string>
+    <string name="market_tab">Panel</string>
     <string name="match_header">Satın alma talebi</string>
     <string name="match_offers">teklif</string>
     <string name="matched_word">eşleşti</string>
@@ -433,7 +433,7 @@
     <string name="seatless_none">Bu hesabın henüz bir firma koltuğu yok. Pazaryerine alıcı, satıcı ya da taşıyıcı olarak katılmak için başvurun.</string>
     <string name="seatless_other_email">Giriş bağlantısı ve koltuk şu adrese gider, bu hesaba değil:</string>
     <string name="seatless_review">Başvurunuz inceleniyor</string>
-    <string name="seatless_sub">Onaylanınca Pazar sekmesi burada açılır.</string>
+    <string name="seatless_sub">Onaylanınca Panel burada açılır.</string>
     <string name="seatless_switch_hint">E-posta gelince çıkış yapıp o adresle girin.</string>
     <string name="seatless_title">Başvuru</string>
     <string name="see_all">tümü</string>
