@@ -253,7 +253,8 @@ fun LoginScreen(onApply: () -> Unit = {}) {
                 fontFamily = WorkisSans,
                 fontSize = 13.sp,
                 color = colors.faint,
-                modifier = Modifier.clickable { openInApp(context, "https://workis.ai/gizlilik/") },
+                // the web footer's page, by language (/gizlilik/ alone is a 404)
+                modifier = Modifier.clickable { openInApp(context, if (lang == "en") "https://workis.ai/legal/privacy/" else "https://workis.ai/yasal/gizlilik/") },
             )
         }
         Spacer(Modifier.height(14.dp))
