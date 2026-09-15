@@ -243,6 +243,7 @@
     <string name="expert_units_short">bilgi</string>
     <string name="expert_uses_short">kullanım</string>
     <string name="expert_you">Siz</string>
+    <string name="experts_pill">onaylı uzman</string>
     <string name="f_address">Adres</string>
     <string name="f_catalog_formats">Katalog formatları</string>
     <string name="f_city">Şehir</string>

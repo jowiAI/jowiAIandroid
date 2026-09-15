@@ -243,6 +243,7 @@
     <string name="expert_units_short">facts</string>
     <string name="expert_uses_short">uses</string>
     <string name="expert_you">You</string>
+    <string name="experts_pill">approved experts</string>
     <string name="f_address">Address</string>
     <string name="f_catalog_formats">Catalog formats</string>
     <string name="f_city">City</string>

@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
+import ai.workis.jowi.ui.components.WorkisMark
+import androidx.compose.foundation.layout.Box
 import ai.workis.jowi.data.PartnerSeatState
 import ai.workis.jowi.ui.screens.console.ConsoleSub
 import ai.workis.jowi.ui.theme.WorkisIcons
@@ -88,7 +90,13 @@ private fun MarketHome(listsVm: ListsViewModel, quotesVm: QuotesViewModel, onOpe
         Spacer(Modifier.height(24.dp))
         Text(stringResource(R.string.market_tab), style = MaterialTheme.typography.headlineMedium, color = colors.ink)
         Spacer(Modifier.height(14.dp))
-        if (c == null) return@Column
+        if (c == null) {
+            // verdict pending (company/ not yet answered): the loading idiom, not an empty door
+            if (seat is PartnerSeatState.Unknown) {
+                Box(Modifier.fillMaxWidth().padding(top = 40.dp), contentAlignment = Alignment.Center) { WorkisMark(size = 28, breathing = true) }
+            }
+            return@Column
+        }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(c.shortLabel, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
             if (c.isBuyer) StatusPill(stringResource(R.string.seat_buyer))

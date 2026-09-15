@@ -64,7 +64,7 @@ sealed interface ConsoleDest {
     data object Pipeline : ConsoleDest
     /** The Panel's "Jowi answered" chips land here with the lane open and a filter preselected. */
     data class Questions(val openJowi: Boolean = false, val source: String? = null, val topic: String? = null) : ConsoleDest
-    data object Partners : ConsoleDest
+    data class Partners(val initialSeat: String = "partner") : ConsoleDest
     data object Conversations : ConsoleDest
     data class Thread(val id: String, val partner: String?, val back: ConsoleDest = Conversations) : ConsoleDest
     data class Detail(val row: ApplicationRow) : ConsoleDest
@@ -98,7 +98,7 @@ fun ConsoleRoot(vm: ConsoleViewModel = viewModel()) {
             }
         }
         is ConsoleDest.Partners -> ConsoleSub(stringResource(R.string.partners_title), { dest = ConsoleDest.Home }) {
-            ConsolePartnersScreen(vm)
+            ConsolePartnersScreen(vm, initialSeat = d.initialSeat)
         }
         is ConsoleDest.Conversations -> ConsoleSub(stringResource(R.string.conversations_title), { dest = ConsoleDest.Home }) {
             ConsoleConversationsScreen(vm) { id, partner -> dest = ConsoleDest.Thread(id, partner) }
@@ -225,7 +225,7 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
                     icon = WorkisIcons.Building,
                     title = stringResource(R.string.partners_title),
                     count = s?.activePartners,
-                ) { onOpen(ConsoleDest.Partners) }
+                ) { onOpen(ConsoleDest.Partners()) }
                 CapsuleTile(
                     icon = WorkisIcons.Bubble,
                     title = stringResource(R.string.conversations_title),
@@ -240,6 +240,11 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 ActivityPill("${a.activeSeats ?: 0}/${a.totalSeats ?: 0}", stringResource(R.string.active_seats_pill), Modifier.weight(1f))
                 ActivityPill("${a.activePartners ?: 0}/${a.totalPartners ?: 0}", stringResource(R.string.active_partners_pill), Modifier.weight(1f))
+            }
+            // the experts pill (2026-09-14, coordinator only — null for a lead) opens Ortaklar on the 🎓 segment
+            s.experts?.let { n ->
+                Spacer(Modifier.height(10.dp))
+                ActivityPill("$n", stringResource(R.string.experts_pill), Modifier.fillMaxWidth().clickable { onOpen(ConsoleDest.Partners(initialSeat = "expert")) }, icon = WorkisIcons.GraduationCap)
             }
             Text(
                 stringResource(R.string.jowi_answered_last) + " ${a.days ?: 7} " + stringResource(R.string.days_word) +
@@ -373,7 +378,7 @@ private fun JowiAnsweredBlock(ja: JowiAnswered, onFilter: (source: String?, topi
             Text(
                 stringResource(R.string.jowi_answered_title) + " · " + stringResource(R.string.jowi_answered_last) +
                     " ${ja.days ?: 30} " + stringResource(R.string.days_word),
-                fontSize = 14.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                fontSize = 14.sp, lineHeight = 18.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -389,24 +394,30 @@ private fun JowiAnsweredBlock(ja: JowiAnswered, onFilter: (source: String?, topi
         val sources = ja.sources.orEmpty().filter { it.source != null && (it.count ?: 0) > 0 }
             .sortedByDescending { it.count ?: 0 }.take(4)
         if (sources.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(96.dp)) {
-                sources.forEach { src ->
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .background(colors.ink.copy(alpha = 0.07f), RoundedCornerShape(14.dp))
-                            .clickable { onFilter(src.source, null) }
-                            .padding(10.dp),
-                    ) {
-                        Text(
-                            (src.label ?: src.source.orEmpty()).uppercase(),
-                            fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp,
-                            lineHeight = 12.sp, color = colors.accentText, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        )
-                        Spacer(Modifier.weight(1f))
-                        VerdictLine(src.up ?: 0, src.downOpen ?: src.down ?: 0, src.downReviewed ?: 0, size = 18.sp, tint = colors.ink)
-                        Text("${src.count ?: 0} " + stringResource(R.string.question_unit), fontSize = 11.sp, color = colors.faint)
+            // ≤3 share one row; four lay out 2×2 (a fourth in one row clipped the verdict digits)
+            val rows = if (sources.size == 4) sources.chunked(2) else listOf(sources)
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                rows.forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(96.dp)) {
+                        row.forEach { src ->
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .background(colors.ink.copy(alpha = 0.07f), RoundedCornerShape(14.dp))
+                                    .clickable { onFilter(src.source, null) }
+                                    .padding(10.dp),
+                            ) {
+                                Text(
+                                    (src.label ?: src.source.orEmpty()).uppercase(),
+                                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp,
+                                    lineHeight = 12.sp, color = colors.accentText, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                )
+                                Spacer(Modifier.weight(1f))
+                                VerdictLine(src.up ?: 0, src.downOpen ?: src.down ?: 0, src.downReviewed ?: 0, size = 18.sp, tint = colors.ink)
+                                Text("${src.count ?: 0} " + stringResource(R.string.question_unit), fontSize = 11.sp, color = colors.faint)
+                            }
+                        }
                     }
                 }
             }
@@ -506,12 +517,16 @@ private fun LaneCell(item: JowiTopic, style: BentoStyle, modifier: Modifier, onC
 }
 
 @Composable
-private fun ActivityPill(value: String, label: String, modifier: Modifier) {
+private fun ActivityPill(value: String, label: String, modifier: Modifier, icon: ImageVector? = null) {
     val colors = WorkisTheme.colors
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier.background(colors.ink.copy(alpha = 0.06f), CircleShape).padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+        }
         Text(value, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
         Spacer(Modifier.width(8.dp))
         Text(label, fontSize = 12.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -65,11 +65,18 @@ class AuthRepository(
         _isAuthenticated.value = store.token != null
     }
 
+    /**
+     * Addresses go out trimmed and lower-cased (2026-09-13): a mixed-case address
+     * once produced a twin account beside the seat's; Django is case-insensitive
+     * too, but the client must not feed the difference.
+     */
+    private fun normalizedEmail(email: String) = email.trim().lowercase()
+
     suspend fun requestOtp(email: String): ApiResult<Unit> =
-        safeCall(lang()) { api.otpRequest(OtpRequestBody(email)); Unit }
+        safeCall(lang()) { api.otpRequest(OtpRequestBody(normalizedEmail(email))); Unit }
 
     suspend fun verifyOtp(email: String, code: String): ApiResult<Unit> =
-        safeCall(lang()) { applyAuth(api.otpVerify(OtpVerifyBody(email, code))) }
+        safeCall(lang()) { applyAuth(api.otpVerify(OtpVerifyBody(normalizedEmail(email), code.trim()))) }
 
     /** Legacy password login — kept for testing while the OTP backend gap is open. */
     suspend fun loginWithPassword(email: String, password: String): ApiResult<Unit> =

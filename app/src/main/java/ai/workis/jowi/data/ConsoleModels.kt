@@ -52,6 +52,8 @@ data class ConsoleSummary(
     val jowiAnswered: JowiAnswered? = null,
     /** Seat activity over the window (2026-09-13): sign-ins + lists / quotes / orders — two Panel pills. */
     val activeSeats: ConsoleActiveSeats? = null,
+    /** Approved expert accounts (2026-09-14): coordinator only, null for a lead → 🎓 pill. */
+    val experts: Int? = null,
 )
 
 @Serializable

@@ -36,11 +36,11 @@ import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 
 @Composable
-fun ConsolePartnersScreen(vm: ConsoleViewModel) {
+fun ConsolePartnersScreen(vm: ConsoleViewModel, initialSeat: String = "partner") {
     val colors = WorkisTheme.colors
     LaunchedEffect(Unit) { if (vm.partners == null) vm.loadPartners() }
 
-    var seat by remember { mutableStateOf("partner") }
+    var seat by remember { mutableStateOf(initialSeat) }
     var query by remember { mutableStateOf("") }
 
     val all = vm.partners?.partners.orEmpty()

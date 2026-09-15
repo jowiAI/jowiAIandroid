@@ -58,11 +58,13 @@ fun MainScreen() {
     val seat by Graph.partner.seat.collectAsState()
     LaunchedEffect(Unit) { if (!isCoordinator && !isExpert) Graph.partner.refresh() }
 
+    // Until company/ answers, the partner Panel tab stays (with its spinner) — never the
+    // Başvuru tab, which is only for a 403 `seat:"none"` (2026-09-14: a stale verdict flashed it).
     val partnerTab: MainTab? = when {
         isCoordinator || isExpert -> null
-        seat is PartnerSeatState.Seat -> MainTab.Market
         seat is PartnerSeatState.None -> MainTab.Seatless
-        else -> null // unknown / operator
+        seat is PartnerSeatState.Operator -> null
+        else -> MainTab.Market // Seat, or Unknown while the verdict is pending
     }
     val tabs = buildList {
         if (isCoordinator || isExpert) add(MainTab.Panel)

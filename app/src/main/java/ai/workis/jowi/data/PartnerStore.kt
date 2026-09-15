@@ -1,5 +1,6 @@
 package ai.workis.jowi.data
 
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.serialization.json.JsonObject
@@ -22,9 +23,10 @@ class PartnerStore(private val api: WorkisApi) {
             _seat.value = PartnerSeatState.Seat(api.company())
         } catch (e: HttpException) {
             if (e.code() == 403) {
-                val v = runCatching {
-                    WorkisJson.decodeFromString<SeatVerdict>(e.response()?.errorBody()?.string().orEmpty())
-                }.getOrNull()
+                val body = e.response()?.errorBody()?.string().orEmpty()
+                val v = runCatching { WorkisJson.decodeFromString<SeatVerdict>(body) }.getOrNull()
+                // diagnosis (2026-09-14): which door the server picked and why
+                Log.i("PartnerSeat", "company/ 403 seat=${v?.seat} application=${v?.application?.id}/${v?.application?.stage} filedWith=${v?.application?.filedWith} emailConflict=${v?.emailConflict} body=$body")
                 _seat.value = if (v?.seat == "operator") PartnerSeatState.Operator
                 else PartnerSeatState.None(v?.application, v?.applyUrl, v?.emailConflict == true)
             }
