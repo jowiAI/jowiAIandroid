@@ -3,6 +3,12 @@ package ai.workis.jowi
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.Modifier
+import ai.workis.jowi.ui.theme.WorkisTheme
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
@@ -30,7 +36,12 @@ class MainActivity : AppCompatActivity() {
                 else -> isSystemInDarkTheme()
             }
             JowiTheme(darkTheme = darkTheme) {
-                JowiRoot()
+                // Edge-to-edge: the canvas paints under the system bars, the content stays
+                // above the navigation bar (a 3-button bar hid the login tabs and the
+                // consent row, 2026-09-14). Screens add statusBarsPadding/imePadding themselves.
+                Box(Modifier.fillMaxSize().background(WorkisTheme.colors.canvas).navigationBarsPadding()) {
+                    JowiRoot()
+                }
             }
         }
     }
