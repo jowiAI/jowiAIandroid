@@ -573,7 +573,7 @@ private fun ConsoleCatalogSellersScreen(onPick: (ai.workis.jowi.data.CatalogSell
                     Text(s.name ?: s.partnerId.orEmpty(), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(10.dp))
                     Column(horizontalAlignment = Alignment.End) {
-                        Text("${s.nProposed ?: 0} " + stringResource(R.string.catalog_proposed_short), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.accentText)
+                        Text("${s.nProposed ?: 0} " + stringResource(R.string.catalog_proposed_short), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = if ((s.nProposed ?: 0) > 0) colors.accentText else colors.faint)
                         Text("${s.nOffers ?: 0} " + stringResource(R.string.catalog_live_offers), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
                     }
                     Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint)
