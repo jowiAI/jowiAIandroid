@@ -110,6 +110,8 @@
     <string name="catalog_helper_toggle">My field lead may work in my catalogue</string>
     <string name="catalog_live_offers">live offers</string>
     <string name="catalog_proposed">product families awaiting review</string>
+    <string name="catalog_proposed_short">awaiting review</string>
+    <string name="catalog_sellers_empty">No seller has opened its catalogue to you yet.</string>
     <string name="catalog_title">Products</string>
     <string name="category_field">Category</string>
     <string name="chase_silent">Remind silent sellers</string>

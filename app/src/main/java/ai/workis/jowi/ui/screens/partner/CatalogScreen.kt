@@ -104,6 +104,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * Chips: an icon + two to four words, no emoji.
  */
 class CatalogViewModel : ViewModel() {
+    /** A coordinator / granted lead opens another seller's catalogue (`?seller=`); null = the seat's own. */
+    var seller: String? = null
     var page by mutableStateOf<CatalogPage?>(null)
         private set
     var loadError by mutableStateOf<String?>(null)
@@ -118,7 +120,7 @@ class CatalogViewModel : ViewModel() {
 
     fun load() {
         viewModelScope.launch {
-            val (p, err) = partnerCall(lang) { Graph.api.catalog() }
+            val (p, err) = partnerCall(lang) { Graph.api.catalog(seller) }
             if (p != null) { page = p; loadError = null } else if (page == null) loadError = err
         }
     }
@@ -134,17 +136,17 @@ class CatalogViewModel : ViewModel() {
     }
 
     fun reject(id: String) = act {
-        val (r, err) = partnerCall(lang) { Graph.api.catalogFamilyReject(id) }
+        val (r, err) = partnerCall(lang) { Graph.api.catalogFamilyReject(id, seller) }
         (r?.success == true) to (r?.error ?: r?.message ?: err)
     }
 
     fun withdraw(familyId: String) = act {
-        val (r, err) = partnerCall(lang) { Graph.api.catalogFamilyWithdraw(familyId) }
+        val (r, err) = partnerCall(lang) { Graph.api.catalogFamilyWithdraw(familyId, seller) }
         (r?.success == true) to (r?.error ?: r?.message ?: err)
     }
 
     fun webFetch(ingestionId: String, resume: Boolean) = act {
-        val (r, err) = partnerCall(lang) { Graph.api.catalogIngestionWebStart(ingestionId, jsonBody("resume" to (if (resume) true else null))) }
+        val (r, err) = partnerCall(lang) { Graph.api.catalogIngestionWebStart(ingestionId, jsonBody("resume" to (if (resume) true else null)), seller) }
         (r != null && r.success != false) to (r?.error ?: err)
     }
 
@@ -155,14 +157,14 @@ class CatalogViewModel : ViewModel() {
             if (brand.isNotBlank()) put("brand", brand.trim().toRequestBody("text/plain".toMediaType()))
         }
         val part = MultipartBody.Part.createFormData("file", name, bytes.toRequestBody("application/pdf".toMediaType()))
-        val (r, err) = partnerCall(lang) { Graph.api.catalogUpload(part, fields) }
+        val (r, err) = partnerCall(lang) { Graph.api.catalogUpload(part, fields, seller) }
         (r != null && r.success != false) to (r?.error ?: r?.message ?: err)
     }
 
     /** → the error sentence, or null when created. */
     suspend fun createFamily(name: String, brand: String, category: String): String? {
         val (r, err) = partnerCall(lang) {
-            Graph.api.catalogFamilyCreate(jsonBody("name" to name, "brand" to brand.ifBlank { null }, "category" to category.ifBlank { null }))
+            Graph.api.catalogFamilyCreate(jsonBody("name" to name, "brand" to brand.ifBlank { null }, "category" to category.ifBlank { null }), seller)
         }
         if (r == null) return err
         val e = jsonError(r)
@@ -173,7 +175,7 @@ class CatalogViewModel : ViewModel() {
 
     /** One live cell → the error sentence, or null. */
     suspend fun offerCell(offerId: String, field: String, value: Any): String? {
-        val (r, err) = partnerCall(lang) { Graph.api.catalogOfferCell(offerId, jsonBody("field" to field, "value" to value)) }
+        val (r, err) = partnerCall(lang) { Graph.api.catalogOfferCell(offerId, jsonBody("field" to field, "value" to value), seller) }
         return if (r?.success == true) null else (r?.error ?: r?.message ?: err)
     }
 }
@@ -341,7 +343,7 @@ private fun ReviewSections(page: CatalogPage, vm: CatalogViewModel, onOpenFamily
                         verticalAlignment = Alignment.Top,
                         modifier = Modifier.fillMaxWidth().background(colors.surface).clickable { f.id?.let(onOpenFamily) }.padding(vertical = 8.dp),
                     ) {
-                        AuthImage(catalogImageUrl(f.img, "thumb"), Modifier.size(44.dp))
+                        AuthImage(catalogImageUrl(f.img, "thumb", vm.seller), Modifier.size(44.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text(f.name ?: f.code ?: "—", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -406,7 +408,7 @@ private fun LiveSections(page: CatalogPage, vm: CatalogViewModel) {
                         verticalAlignment = Alignment.Top,
                         modifier = Modifier.fillMaxWidth().background(colors.surface).clickable { editTarget = r }.padding(vertical = 8.dp),
                     ) {
-                        AuthImage(catalogImageUrl(r.img, "thumb"), Modifier.size(40.dp))
+                        AuthImage(catalogImageUrl(r.img, "thumb", vm.seller), Modifier.size(40.dp))
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.Top) {
@@ -589,7 +591,7 @@ private fun UploadSections(page: CatalogPage, vm: CatalogViewModel) {
         SectionHeader(stringResource(R.string.ingestions_title).uppercase())
         SurfaceCard {
             ings.forEachIndexed { i, ing ->
-                IngestionRow(ing, vm) { p -> ing.id?.let { sourceUrl = catalogSourceUrl(it, p) } }
+                IngestionRow(ing, vm) { p -> ing.id?.let { sourceUrl = catalogSourceUrl(it, p, vm.seller) } }
                 if (i < ings.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
             }
         }

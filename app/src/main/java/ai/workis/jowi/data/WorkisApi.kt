@@ -239,6 +239,10 @@ interface WorkisApi {
     suspend fun geoProvinces(): GeoProvinces
 
     // --- seller catalogue (Django docs/WORKIS_PARTNER_API.md §4, Phases A + B) — `?seller=` for a coordinator / granted lead ---
+    /** Phase C: the seller picker for the console Ürünler door. */
+    @GET("workis/console/catalog/sellers/")
+    suspend fun consoleCatalogSellers(): CatalogSellers
+
     @GET("workis/seller/catalog/")
     suspend fun catalog(@Query("seller") seller: String? = null): CatalogPage
 

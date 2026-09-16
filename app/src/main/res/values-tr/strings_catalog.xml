@@ -110,6 +110,8 @@
     <string name="catalog_helper_toggle">Saha sorumlum kataloğumda çalışabilir</string>
     <string name="catalog_live_offers">yayındaki teklif</string>
     <string name="catalog_proposed">inceleme bekleyen ürün ailesi</string>
+    <string name="catalog_proposed_short">inceleme bekliyor</string>
+    <string name="catalog_sellers_empty">Size kataloğunu açan satıcı henüz yok.</string>
     <string name="catalog_title">Ürünler</string>
     <string name="category_field">Kategori</string>
     <string name="chase_silent">Sessiz satıcıları hatırlat</string>

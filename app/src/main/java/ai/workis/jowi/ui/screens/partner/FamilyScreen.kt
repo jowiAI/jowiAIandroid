@@ -115,12 +115,15 @@ class FamilyViewModel : ViewModel() {
     var done by mutableStateOf(false)
         private set
     private var id = ""
+    var seller: String? = null
+        private set
     private val lang get() = Graph.language.value
 
-    fun load(familyId: String) {
+    fun load(familyId: String, seller: String? = null) {
         id = familyId
+        this.seller = seller
         viewModelScope.launch {
-            val (r, err) = partnerCall(lang) { Graph.api.catalogFamily(familyId) }
+            val (r, err) = partnerCall(lang) { Graph.api.catalogFamily(familyId, seller) }
             val fam = r?.let { decodeFamily(it) }
             if (fam != null) { detail = fam; name = fam.name.orEmpty(); description = fam.description.orEmpty(); loadError = null }
             else loadError = err ?: jsonError(r) ?: ai.workis.jowi.data.statusMessage(-1, lang)
@@ -132,7 +135,7 @@ class FamilyViewModel : ViewModel() {
     /** One cell → the full family back (re-render without a second call); returns the error sentence. */
     suspend fun cell(body: JsonObject, tickKey: String? = null): String? {
         busy = true; note = null
-        val (r, err) = partnerCall(lang) { Graph.api.catalogFamilyCell(id, body) }
+        val (r, err) = partnerCall(lang) { Graph.api.catalogFamilyCell(id, body, seller) }
         busy = false
         val fam = r?.let { decodeFamily(it) }
         return if (fam != null) { detail = fam; tickKey?.let { flash(it) }; null }
@@ -149,24 +152,24 @@ class FamilyViewModel : ViewModel() {
         viewModelScope.launch {
             val (r, err) = partnerCall(lang, block)
             busy = false
-            if (r?.success == true) { if (leave) done = true else load(id) } else note = r?.error ?: r?.message ?: err
+            if (r?.success == true) { if (leave) done = true else load(id, seller) } else note = r?.error ?: r?.message ?: err
         }
     }
 
-    fun approve() = simple({ Graph.api.catalogFamilyApprove(id) }, leave = true)
-    fun reject() = simple({ Graph.api.catalogFamilyReject(id) }, leave = true)
-    fun withdraw() = simple({ Graph.api.catalogFamilyWithdraw(id) }, leave = true)
+    fun approve() = simple({ Graph.api.catalogFamilyApprove(id, seller) }, leave = true)
+    fun reject() = simple({ Graph.api.catalogFamilyReject(id, seller) }, leave = true)
+    fun withdraw() = simple({ Graph.api.catalogFamilyWithdraw(id, seller) }, leave = true)
 
-    fun resolveWeb() = simple({ Graph.api.catalogFamilyWeb(id, jsonBody("url" to webUrl.trim().ifBlank { null })) }, leave = false)
+    fun resolveWeb() = simple({ Graph.api.catalogFamilyWeb(id, jsonBody("url" to webUrl.trim().ifBlank { null }), seller) }, leave = false)
 
     fun teachNow(unitsWord: String) {
         val text = teach.trim()
         if (text.length < 10) return
         busy = true; note = null
         viewModelScope.launch {
-            val (r, err) = partnerCall(lang) { Graph.api.catalogFamilyTeach(id, jsonBody("text" to text)) }
+            val (r, err) = partnerCall(lang) { Graph.api.catalogFamilyTeach(id, jsonBody("text" to text), seller) }
             busy = false
-            if (r?.count != null) { teach = ""; note = "+${r.count} $unitsWord"; load(id) }
+            if (r?.count != null) { teach = ""; note = "+${r.count} $unitsWord"; load(id, seller) }
             else note = r?.error ?: err
         }
     }
@@ -177,7 +180,7 @@ class FamilyViewModel : ViewModel() {
             val jpeg = withContext(Dispatchers.IO) { normalizedJpeg(bytes) }
             if (jpeg == null) { busy = false; note = ai.workis.jowi.data.applyErrorMessage("bad_file", lang); return@launch }
             val part = MultipartBody.Part.createFormData("image", "photo.jpg", jpeg.toRequestBody("image/jpeg".toMediaType()))
-            val (r, err) = partnerCall(lang) { Graph.api.catalogFamilyImage(id, part) }
+            val (r, err) = partnerCall(lang) { Graph.api.catalogFamilyImage(id, part, seller) }
             busy = false
             if (r?.success == true) load(id) else note = r?.error ?: r?.message ?: err
         }
@@ -199,12 +202,12 @@ fun normalizedJpeg(bytes: ByteArray): ByteArray? {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FamilyScreen(familyId: String, onBack: () -> Unit) {
-    val vm: FamilyViewModel = viewModel(key = "family-$familyId")
+fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
+    val vm: FamilyViewModel = viewModel(key = "family-$familyId-${seller ?: ""}")
     val colors = WorkisTheme.colors
     val context = LocalContext.current
     val lang by Graph.language.collectAsState()
-    LaunchedEffect(familyId) { vm.load(familyId) }
+    LaunchedEffect(familyId, seller) { vm.load(familyId, seller) }
     LaunchedEffect(vm.done) { if (vm.done) onBack() }
     var confirm by remember { mutableStateOf<String?>(null) } // approve | reject | withdraw
     var editVariant by remember { mutableStateOf<CatalogVariant?>(null) }
@@ -239,7 +242,7 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit) {
                 // header: photo · status · name · brand · code · photo replace · description · reject
                 SurfaceCard {
                     Row(verticalAlignment = Alignment.Top) {
-                        AuthImage(catalogImageUrl(d.imageKey, "card"), Modifier.size(96.dp).clickable { fullImage = catalogImageUrl(d.imageKey, "card") }, corner = 12.dp)
+                        AuthImage(catalogImageUrl(d.imageKey, "card", seller), Modifier.size(96.dp).clickable { fullImage = catalogImageUrl(d.imageKey, "card", seller) }, corner = 12.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -339,7 +342,7 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit) {
                                 }
                             } else {
                                 Box(Modifier.size(72.dp)) {
-                                    AuthImage(catalogImageUrl(m.key, "thumb"), Modifier.size(72.dp).clickable { fullImage = catalogImageUrl(m.key, "card") })
+                                    AuthImage(catalogImageUrl(m.key, "thumb", seller), Modifier.size(72.dp).clickable { fullImage = catalogImageUrl(m.key, "card", seller) })
                                     if (m.isPrimary == true) Text("★", fontSize = 10.sp, color = Beige, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp))
                                 }
                             }

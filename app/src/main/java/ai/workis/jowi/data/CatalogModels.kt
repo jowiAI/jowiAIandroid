@@ -246,6 +246,18 @@ data class CatalogTeachResult(val success: Boolean? = null, val error: String? =
 @Serializable
 data class CatalogUploadResult(val success: Boolean? = null, val error: String? = null, val message: String? = null, @Serializable(with = FlexString::class) val ingestionId: String? = null)
 
+/** GET console/catalog/sellers/ (Phase C, 2026-09-16): role 3 every seller with a seat, role 4 only the sellers with an active helper grant. */
+@Serializable
+data class CatalogSeller(
+    @Serializable(with = FlexString::class) val partnerId: String? = null,
+    val name: String? = null,
+    val nProposed: Int? = null,
+    val nOffers: Int? = null,
+)
+
+@Serializable
+data class CatalogSellers(val success: Boolean? = null, val sellers: List<CatalogSeller>? = null)
+
 /** GET company/ → `catalogHelper` (2026-09-15): the seller opens its catalogue to its field lead. */
 @Serializable
 data class CatalogHelper(
@@ -290,11 +302,11 @@ fun shortDate(iso: String?): String {
 }
 
 /** Catalogue image keys are percent-encoded on the query (`+` would read as a space). */
-fun catalogImageUrl(key: String?, rendition: String = "thumb"): String? {
+fun catalogImageUrl(key: String?, rendition: String = "thumb", seller: String? = null): String? {
     if (key.isNullOrEmpty()) return null
     val k = java.net.URLEncoder.encode(key, "UTF-8")
-    return "$WORKIS_ORIGIN/api/v1/workis/image/?k=$k&r=$rendition"
+    return "$WORKIS_ORIGIN/api/v1/workis/image/?k=$k&r=$rendition" + (seller?.let { "&seller=$it" } ?: "")
 }
 
-fun catalogSourceUrl(ingestionId: String, page: Int): String =
-    "$WORKIS_ORIGIN/api/v1/workis/seller/catalog/source/$ingestionId/$page/"
+fun catalogSourceUrl(ingestionId: String, page: Int, seller: String? = null): String =
+    "$WORKIS_ORIGIN/api/v1/workis/seller/catalog/source/$ingestionId/$page/" + (seller?.let { "?seller=$it" } ?: "")

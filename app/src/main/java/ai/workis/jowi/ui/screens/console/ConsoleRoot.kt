@@ -55,6 +55,9 @@ import ai.workis.jowi.ui.theme.Beige
 import ai.workis.jowi.ui.theme.BeigeBg
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.SuccessGreen
+import ai.workis.jowi.Graph
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.collectAsState
 import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
@@ -69,6 +72,10 @@ sealed interface ConsoleDest {
     data class Thread(val id: String, val partner: String?, val back: ConsoleDest = Conversations) : ConsoleDest
     data class Detail(val row: ApplicationRow) : ConsoleDest
     data object Knowledge : ConsoleDest
+    /** Ürünler (Phase C, 2026-09-16): the seller picker, then a seller's catalogue with `?seller=`. */
+    data object CatalogSellers : ConsoleDest
+    data class Catalog(val seller: String, val name: String?) : ConsoleDest
+    data class Family(val seller: String, val name: String?, val id: String) : ConsoleDest
 }
 
 @Composable
@@ -89,6 +96,15 @@ fun ConsoleRoot(vm: ConsoleViewModel = viewModel()) {
             ConsolePipeline(vm) { dest = ConsoleDest.Detail(it) }
         }
         is ConsoleDest.Detail -> ApplicationDetailScreen(vm, d.row) { dest = ConsoleDest.Pipeline }
+        ConsoleDest.CatalogSellers -> ConsoleSub(stringResource(R.string.catalog_title), { dest = ConsoleDest.Home }) {
+            ConsoleCatalogSellersScreen { s -> dest = ConsoleDest.Catalog(s.partnerId.orEmpty(), s.name) }
+        }
+        is ConsoleDest.Catalog -> {
+            val catalogVm: ai.workis.jowi.ui.screens.partner.CatalogViewModel = androidx.lifecycle.viewmodel.compose.viewModel(key = "console-catalog-${d.seller}")
+            catalogVm.seller = d.seller
+            ai.workis.jowi.ui.screens.partner.CatalogScreen(catalogVm, onBack = { dest = ConsoleDest.CatalogSellers }, onOpenFamily = { dest = ConsoleDest.Family(d.seller, d.name, it) })
+        }
+        is ConsoleDest.Family -> ai.workis.jowi.ui.screens.partner.FamilyScreen(d.id, onBack = { dest = ConsoleDest.Catalog(d.seller, d.name) }, seller = d.seller)
         ConsoleDest.Knowledge -> ConsoleSub(stringResource(R.string.expert_knowledge_title), { dest = ConsoleDest.Home }) {
             ExpertKnowledgeScreen(KnowledgeSeat.Console)
         }
@@ -255,20 +271,12 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
             Spacer(Modifier.height(6.dp))
         }
 
-        // Bilgi — the expert knowledge screen on the console door (roles 3|4)
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(colors.surface, RoundedCornerShape(20.dp))
-                .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-                .clickable { onOpen(ConsoleDest.Knowledge) }
-                .padding(horizontal = 16.dp, vertical = 18.dp),
-        ) {
-            Icon(WorkisIcons.Pencil, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(10.dp))
-            Text(stringResource(R.string.expert_knowledge_title), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink, modifier = Modifier.weight(1f))
-            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint)
+        // Bilgi — the expert knowledge screen on the console door (roles 3|4) and
+        // Ürünler — the seller picker (Phase C, 2026-09-16; a lead sees only the
+        // sellers that opened their catalogue to it)
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            CapsuleDoor(WorkisIcons.Pencil, stringResource(R.string.expert_knowledge_title), Modifier.weight(1f)) { onOpen(ConsoleDest.Knowledge) }
+            CapsuleDoor(WorkisIcons.ShippingBox, stringResource(R.string.catalog_title), Modifier.weight(1f)) { onOpen(ConsoleDest.CatalogSellers) }
         }
         Spacer(Modifier.height(14.dp))
 
@@ -513,6 +521,66 @@ private fun LaneCell(item: JowiTopic, style: BentoStyle, modifier: Modifier, onC
             fontSize = if (hero) 12.sp else 10.sp,
             color = if (hero) Beige.copy(alpha = 0.8f) else colors.faint,
         )
+    }
+}
+
+@Composable
+private fun CapsuleDoor(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .background(colors.surface, RoundedCornerShape(20.dp))
+            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 18.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint)
+    }
+}
+
+/** The seller picker: name; right "N inceleme bekliyor" accent, "N yayındaki teklif" faint. */
+@Composable
+private fun ConsoleCatalogSellersScreen(onPick: (ai.workis.jowi.data.CatalogSeller) -> Unit) {
+    val colors = WorkisTheme.colors
+    val lang by Graph.language.collectAsState()
+    var sellers by remember { mutableStateOf<List<ai.workis.jowi.data.CatalogSeller>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        val (r, err) = ai.workis.jowi.data.partnerCall(lang) { Graph.api.consoleCatalogSellers() }
+        if (r != null) sellers = r.sellers.orEmpty() else error = err
+    }
+    when {
+        error != null -> Text(error.orEmpty(), fontSize = 13.sp, color = colors.danger)
+        sellers == null -> Box(Modifier.fillMaxWidth().padding(top = 30.dp), contentAlignment = Alignment.Center) { WorkisMark(size = 24, breathing = true) }
+        sellers.orEmpty().isEmpty() -> Text(stringResource(R.string.catalog_sellers_empty), fontSize = 14.sp, lineHeight = 20.sp, color = colors.muted, modifier = Modifier.padding(4.dp))
+        else -> Column(
+            Modifier
+                .fillMaxWidth()
+                .background(colors.surface, RoundedCornerShape(20.dp))
+                .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+                .padding(horizontal = 14.dp),
+        ) {
+            val rows = sellers.orEmpty()
+            rows.forEachIndexed { i, s ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clickable { onPick(s) }.padding(vertical = 12.dp),
+                ) {
+                    Text(s.name ?: s.partnerId.orEmpty(), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Spacer(Modifier.width(10.dp))
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("${s.nProposed ?: 0} " + stringResource(R.string.catalog_proposed_short), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.accentText)
+                        Text("${s.nOffers ?: 0} " + stringResource(R.string.catalog_live_offers), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+                    }
+                    Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint)
+                }
+                if (i < rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+            }
+        }
     }
 }
 
