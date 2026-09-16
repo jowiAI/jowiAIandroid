@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -560,8 +561,8 @@ private fun UploadSections(page: CatalogPage, vm: CatalogViewModel) {
             }
         }
         Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
-        FormRow(stringResource(R.string.upload_pages), pages, { pages = it }, {}, false, placeholder = stringResource(R.string.upload_pages), mono = true, stacked = true)
-        FormRow(stringResource(R.string.upload_brand), brand, { brand = it }, {}, false, placeholder = stringResource(R.string.upload_brand), stacked = true)
+        FormRow("", pages, { pages = it }, {}, false, placeholder = stringResource(R.string.upload_pages), mono = true, stacked = true)
+        FormRow("", brand, { brand = it }, {}, false, placeholder = stringResource(R.string.upload_brand), stacked = true)
         Row(
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
             modifier = Modifier.fillMaxWidth().clickable(enabled = !vm.busy) { picker.launch(arrayOf("application/pdf")) }.padding(vertical = 12.dp),
@@ -664,8 +665,8 @@ fun SourcePageDialog(url: String, title: String, onDismiss: () -> Unit) {
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.done), color = Color(0xFF1A1A1F), fontWeight = FontWeight.SemiBold) }
                 Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color(0xFF1A1A1F), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(8.dp)) {
-                AuthImage(url, Modifier.size(width = 720.dp, height = 1000.dp), corner = 0.dp)
+            Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp)) {
+                AuthImage(url, Modifier.fillMaxWidth().aspectRatio(0.7f), corner = 0.dp)
             }
         }
     }
@@ -696,9 +697,9 @@ private fun NewProductSheet(vm: CatalogViewModel, onClose: () -> Unit) {
                 }) { Text(stringResource(R.string.create), color = if (name.isBlank()) colors.faint else colors.accentText, fontWeight = FontWeight.SemiBold) }
             }
             FormSection(null) {
-                FormRow(stringResource(R.string.product_name), name, { name = it }, {}, false, placeholder = stringResource(R.string.product_name), stacked = true)
-                FormRow(stringResource(R.string.brand_field), brand, { brand = it }, {}, false, placeholder = stringResource(R.string.brand_field), stacked = true)
-                FormRow(stringResource(R.string.category_field), category, { category = it }, {}, false, placeholder = stringResource(R.string.category_field), stacked = true)
+                FormRow("", name, { name = it }, {}, false, placeholder = stringResource(R.string.product_name), stacked = true)
+                FormRow("", brand, { brand = it }, {}, false, placeholder = stringResource(R.string.brand_field), stacked = true)
+                FormRow("", category, { category = it }, {}, false, placeholder = stringResource(R.string.category_field), stacked = true)
             }
             Text(errorText ?: stringResource(R.string.new_product_sub), fontSize = 12.sp, lineHeight = 16.sp, color = if (errorText == null) colors.faint else colors.danger)
         }

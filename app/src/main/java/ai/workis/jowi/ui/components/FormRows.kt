@@ -162,11 +162,13 @@ fun FormRow(
     ) {
         if (stacked) {
             Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(label, fontFamily = WorkisSans, fontSize = 13.sp, color = colors.muted, modifier = Modifier.weight(1f))
-                    SavedTick(tick)
+                if (label.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(label, fontFamily = WorkisSans, fontSize = 13.sp, color = colors.muted, modifier = Modifier.weight(1f))
+                        SavedTick(tick)
+                    }
+                    Spacer(Modifier.height(4.dp))
                 }
-                Spacer(Modifier.height(4.dp))
                 field(Modifier.fillMaxWidth())
             }
         } else {

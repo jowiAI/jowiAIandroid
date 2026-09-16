@@ -225,7 +225,7 @@ fun CompanySections(mode: CompanyMode = CompanyMode.Company, vm: CompanyViewMode
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
                             Icon(Icons.Filled.Place, contentDescription = null, tint = colors.muted, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.region_lead_label) + ": $it" + (lead.region?.let { r -> " · $r" } ?: ""), fontSize = 13.sp, color = colors.muted)
+                            Text(stringResource(R.string.region_lead_label) + ": " + lead.line, fontSize = 13.sp, color = colors.muted)
                         }
                     }
                     val h = c.catalogHelper
@@ -275,7 +275,7 @@ fun CompanySections(mode: CompanyMode = CompanyMode.Company, vm: CompanyViewMode
                     }
                 }
                 Text(listOfNotNull(c.company?.vkn?.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.vkn_label) + " $it" }, c.company?.taxOffice?.takeIf { it.isNotEmpty() }).joinToString("   "), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
-                c.regionLead?.name?.takeIf { it.isNotEmpty() }?.let { Text("📍 " + stringResource(R.string.region_lead_label) + ": $it" + (c.regionLead.region?.let { r -> " · $r" } ?: ""), fontSize = 12.sp, color = colors.muted) }
+                c.regionLead?.name?.takeIf { it.isNotEmpty() }?.let { Text("📍 " + stringResource(R.string.region_lead_label) + ": " + c.regionLead.line, fontSize = 12.sp, color = colors.muted) }
             }
             Text(stringResource(R.string.company_legal_note), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
         }

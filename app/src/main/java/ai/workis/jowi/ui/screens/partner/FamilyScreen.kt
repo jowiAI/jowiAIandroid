@@ -320,7 +320,7 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit) {
                         Text("↗ $url", fontSize = 12.sp, color = colors.blue, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth().clickable { openInApp(context, url) }.padding(horizontal = 14.dp, vertical = 6.dp))
                         Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
                     }
-                    FormRow(stringResource(R.string.web_url_field), vm.webUrl, { vm.webUrl = it }, {}, false, placeholder = stringResource(R.string.web_url_field), stacked = true, keyboardType = KeyboardType.Uri)
+                    FormRow("", vm.webUrl, { vm.webUrl = it }, {}, false, placeholder = stringResource(R.string.web_url_field), stacked = true, keyboardType = KeyboardType.Uri)
                     Text(
                         stringResource(R.string.web_resolve), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (vm.busy) colors.faint else colors.accentText,
                         modifier = Modifier.clickable(enabled = !vm.busy) { vm.resolveWeb() }.padding(horizontal = 14.dp, vertical = 12.dp),
@@ -348,17 +348,21 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit) {
                 }
 
                 // what Jowi learned
-                val knowledge = d.knowledge.orEmpty()
+                // the server sends "" (not null) for the missing language — fall through to the other one
+                val knowledge = d.knowledge.orEmpty().mapNotNull { u ->
+                    val en = u.textEn?.takeIf { it.isNotBlank() }; val tr = u.textTr?.takeIf { it.isNotBlank() }
+                    if (lang == "en") en ?: tr else tr ?: en
+                }
                 if (knowledge.isNotEmpty()) FormSection(stringResource(R.string.knowledge_title).uppercase() + " · ${knowledge.size}") {
-                    knowledge.forEachIndexed { i, u ->
-                        Text((if (lang == "en") u.textEn ?: u.textTr else u.textTr ?: u.textEn).orEmpty(), fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+                    knowledge.forEachIndexed { i, text ->
+                        Text(text, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
                         if (i < knowledge.lastIndex) Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
                     }
                 }
 
                 // teach
                 FormSection(stringResource(R.string.teach_title).uppercase()) {
-                    FormRow(stringResource(R.string.teach_title), vm.teach, { vm.teach = it }, {}, false, placeholder = stringResource(R.string.teach_placeholder), stacked = true, minLines = 2, maxLines = 6)
+                    FormRow("", vm.teach, { vm.teach = it }, {}, false, placeholder = stringResource(R.string.teach_placeholder), stacked = true, minLines = 2, maxLines = 6)
                     val can = !vm.busy && vm.teach.trim().length >= 10
                     val unitsWord = stringResource(R.string.units_word)
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(enabled = can) { vm.teachNow(unitsWord) }.padding(horizontal = 14.dp, vertical = 12.dp)) {
@@ -440,7 +444,7 @@ private fun VariantSheet(vm: FamilyViewModel, variant: CatalogVariant?, onClose:
             }
             FormSection(null) {
                 FormRow(stringResource(R.string.code_field), code, { code = it }, {}, false, placeholder = stringResource(R.string.code_field), mono = true, locked = variant != null)
-                FormRow(stringResource(R.string.label_field), label, { label = it }, {}, false, placeholder = stringResource(R.string.label_field), stacked = true, maxLines = 3)
+                FormRow("", label, { label = it }, {}, false, placeholder = stringResource(R.string.label_field), stacked = true, maxLines = 3)
                 FormRow(stringResource(R.string.unit_price_field), price, { price = it }, {}, false, placeholder = stringResource(R.string.price_on_request), mono = true, keyboardType = KeyboardType.Decimal)
                 PickerRowSimple("CUR", currency, listOf("TRY", "USD", "EUR")) { currency = it }
             }
