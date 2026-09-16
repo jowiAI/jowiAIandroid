@@ -11,7 +11,16 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.ui.Alignment
 import ai.workis.jowi.ui.screens.expert.ExpertAccountSections
+import ai.workis.jowi.ui.screens.partner.CompanyMode
 import ai.workis.jowi.ui.screens.partner.CompanySections
+import ai.workis.jowi.ui.screens.console.ConsoleSub
+import ai.workis.jowi.ui.theme.Kiremit500
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.style.TextOverflow
 import ai.workis.jowi.ui.theme.Beige
 import ai.workis.jowi.ui.theme.BeigeBg
 import ai.workis.jowi.ui.theme.WorkisIcons
@@ -46,8 +55,38 @@ import ai.workis.jowi.R
 import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.launch
 
+/** Hesap's own doors: Firma bilgileri · Ayarlar (partner) / Sözleşmem (other seats). */
+private sealed interface AccountDest {
+    data object Home : AccountDest
+    data object Company : AccountDest
+    data object Settings : AccountDest
+    data class Agreement(val key: String) : AccountDest
+}
+
 @Composable
 fun AccountScreen(onReaccept: () -> Unit = {}, onDeparture: () -> Unit = {}) {
+    var dest by remember { mutableStateOf<AccountDest>(AccountDest.Home) }
+    BackHandler(enabled = dest != AccountDest.Home) { dest = AccountDest.Home }
+    when (val d = dest) {
+        AccountDest.Home -> AccountHome(onReaccept, onDeparture) { dest = it }
+        AccountDest.Company -> ConsoleSub(stringResource(R.string.company_title), { dest = AccountDest.Home }) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                Spacer(Modifier.height(8.dp)); CompanySections(CompanyMode.Company); Spacer(Modifier.height(30.dp))
+            }
+        }
+        AccountDest.Settings -> ConsoleSub(stringResource(R.string.settings_title), { dest = AccountDest.Home }) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                Spacer(Modifier.height(8.dp)); CompanySections(CompanyMode.Settings); Spacer(Modifier.height(30.dp))
+            }
+        }
+        is AccountDest.Agreement -> ConsoleSub(stringResource(R.string.my_agreement), { dest = AccountDest.Home }) {
+            AgreementScreen(d.key)
+        }
+    }
+}
+
+@Composable
+private fun AccountHome(onReaccept: () -> Unit, onDeparture: () -> Unit, onOpen: (AccountDest) -> Unit) {
     val colors = WorkisTheme.colors
     val scope = rememberCoroutineScope()
     val lang by Graph.language.collectAsState()
@@ -144,11 +183,24 @@ fun AccountScreen(onReaccept: () -> Unit = {}, onDeparture: () -> Unit = {}) {
             ExpertAccountSections(onDeparture = onDeparture)
         }
 
-        // Partner seat: the web Firma page as sections (slice 1)
+        // Partner seat: the web "Company info" page and Ayarlar on their own screens
+        // (2026-09-15: Hesap is daily, Firma is rare); other seats get "Sözleşmem"
+        // — the accepted paper with the signature cards (2026-09-16)
         val seatState by Graph.partner.seat.collectAsState()
-        if (seatState is ai.workis.jowi.data.PartnerSeatState.Seat) {
+        val company = (seatState as? ai.workis.jowi.data.PartnerSeatState.Seat)?.company
+        val agreementKey = pending?.key?.takeIf { it.isNotEmpty() && pending?.pending != true }
+        if (company != null) {
             Spacer(Modifier.height(16.dp))
-            CompanySections()
+            SettingsCard {
+                DoorRow(WorkisIcons.Building, stringResource(R.string.company_title), company.shortLabel) { onOpen(AccountDest.Company) }
+                RowDivider()
+                DoorRow(Icons.Filled.Settings, stringResource(R.string.settings_title), null) { onOpen(AccountDest.Settings) }
+            }
+        } else if (agreementKey != null) {
+            Spacer(Modifier.height(16.dp))
+            SettingsCard {
+                DoorRow(WorkisIcons.DocText, stringResource(R.string.my_agreement), null) { onOpen(AccountDest.Agreement(agreementKey)) }
+            }
         }
 
         // §10.2 reminder — stays until the seat re-accepts
@@ -207,6 +259,19 @@ private fun SettingsCard(content: @Composable () -> Unit) {
             .border(1.dp, colors.border, RoundedCornerShape(20.dp))
             .padding(16.dp),
     ) { content() }
+}
+
+@Composable
+private fun DoorRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String?, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(label, color = colors.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.weight(1f))
+        value?.let { Text(it, color = colors.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)) }
+        Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint)
+    }
 }
 
 @Composable

@@ -22,6 +22,68 @@ private fun stroked(
 
 object WorkisIcons {
 
+    val Photo: ImageVector = stroked("Photo") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(4f, 5f); lineTo(20f, 5f); lineTo(20f, 19f); lineTo(4f, 19f); close()
+            moveTo(4f, 16f); lineTo(9f, 11f); lineTo(13f, 15f); lineTo(16f, 12f); lineTo(20f, 16f)
+            moveTo(15f, 9f); arcToRelative(1f, 1f, 0f, true, false, 2f, 0f); arcToRelative(1f, 1f, 0f, true, false, -2f, 0f)
+        }
+    }
+
+    val Camera: ImageVector = stroked("Camera") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(3f, 8f); lineTo(7f, 8f); lineTo(9f, 5f); lineTo(15f, 5f); lineTo(17f, 8f); lineTo(21f, 8f); lineTo(21f, 19f); lineTo(3f, 19f); close()
+            moveTo(8.5f, 13f); arcToRelative(3.5f, 3.5f, 0f, true, false, 7f, 0f); arcToRelative(3.5f, 3.5f, 0f, true, false, -7f, 0f)
+        }
+    }
+
+    val Link: ImageVector = stroked("Link") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(10f, 14f); lineTo(14f, 10f)
+            moveTo(8.5f, 17.5f); lineTo(6.5f, 19.5f); arcToRelative(3f, 3f, 0f, true, true, -4.2f, -4.2f); lineTo(6.5f, 11f)
+            moveTo(15.5f, 6.5f); lineTo(17.5f, 4.5f); arcToRelative(3f, 3f, 0f, true, true, 4.2f, 4.2f); lineTo(17.5f, 13f)
+        }
+    }
+
+    val ShippingBox: ImageVector = stroked("ShippingBox") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(12f, 3f); lineTo(20f, 7.5f); lineTo(20f, 16.5f); lineTo(12f, 21f); lineTo(4f, 16.5f); lineTo(4f, 7.5f); close()
+            moveTo(4f, 7.5f); lineTo(12f, 12f); lineTo(20f, 7.5f)
+            moveTo(12f, 12f); lineTo(12f, 21f)
+        }
+    }
+
+    val PersonKey: ImageVector = stroked("PersonKey") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(6f, 8f); arcToRelative(4f, 4f, 0f, true, false, 8f, 0f); arcToRelative(4f, 4f, 0f, true, false, -8f, 0f)
+            moveTo(3f, 20f); curveTo(3f, 16f, 6f, 14f, 10f, 14f); curveTo(11.5f, 14f, 12.5f, 14.2f, 13.5f, 14.6f)
+            moveTo(16f, 17f); arcToRelative(2f, 2f, 0f, true, false, 4f, 0f); arcToRelative(2f, 2f, 0f, true, false, -4f, 0f)
+            moveTo(20f, 17f); lineTo(23f, 17f)
+        }
+    }
+
+    val DocText: ImageVector = stroked("DocText") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(6f, 3f); lineTo(14f, 3f); lineTo(19f, 8f); lineTo(19f, 21f); lineTo(6f, 21f); close()
+            moveTo(14f, 3f); lineTo(14f, 8f); lineTo(19f, 8f)
+            moveTo(9f, 12f); lineTo(16f, 12f); moveTo(9f, 15.5f); lineTo(16f, 15.5f); moveTo(9f, 19f); lineTo(13f, 19f)
+        }
+    }
+
+    val Table: ImageVector = stroked("Table") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(3f, 5f); lineTo(21f, 5f); lineTo(21f, 19f); lineTo(3f, 19f); close()
+            moveTo(3f, 10f); lineTo(21f, 10f); moveTo(3f, 14.5f); lineTo(21f, 14.5f); moveTo(10f, 5f); lineTo(10f, 19f)
+        }
+    }
+
+    val Play: ImageVector = stroked("Play") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(3f, 6f); lineTo(21f, 6f); lineTo(21f, 18f); lineTo(3f, 18f); close()
+            moveTo(10f, 9f); lineTo(15f, 12f); lineTo(10f, 15f); close()
+        }
+    }
+
     val Globe: ImageVector = stroked("Globe") {
         path(
             fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,

@@ -231,8 +231,67 @@ interface WorkisApi {
     @POST("workis/company/tax-file/")
     suspend fun companyTaxFileUpload(@Part file: okhttp3.MultipartBody.Part): SimpleResult
 
+    /** The seller opens its catalogue to its field lead — `{enabled}` (2026-09-15). */
+    @POST("workis/company/catalog-helper/")
+    suspend fun companyCatalogHelper(@Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
     @GET("workis/geo/provinces/")
     suspend fun geoProvinces(): GeoProvinces
+
+    // --- seller catalogue (Django docs/WORKIS_PARTNER_API.md §4, Phases A + B) — `?seller=` for a coordinator / granted lead ---
+    @GET("workis/seller/catalog/")
+    suspend fun catalog(@Query("seller") seller: String? = null): CatalogPage
+
+    @Multipart
+    @POST("workis/seller/catalog/upload/")
+    suspend fun catalogUpload(
+        @Part file: okhttp3.MultipartBody.Part,
+        @PartMap fields: Map<String, @JvmSuppressWildcards okhttp3.RequestBody>,
+        @Query("seller") seller: String? = null,
+    ): CatalogUploadResult
+
+    @GET("workis/seller/catalog/ingestions/{id}/")
+    suspend fun catalogIngestion(@Path("id") id: String, @Query("seller") seller: String? = null): CatalogIngestion
+
+    @GET("workis/seller/catalog/ingestions/{id}/web/")
+    suspend fun catalogIngestionWeb(@Path("id") id: String, @Query("seller") seller: String? = null): CatalogWebProgress
+
+    @POST("workis/seller/catalog/ingestions/{id}/web/")
+    suspend fun catalogIngestionWebStart(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject, @Query("seller") seller: String? = null): CatalogWebProgress
+
+    /** `{success, family:{…}}` on prod — decoded by `decodeFamily`. */
+    @GET("workis/seller/catalog/families/{id}/")
+    suspend fun catalogFamily(@Path("id") id: String, @Query("seller") seller: String? = null): kotlinx.serialization.json.JsonObject
+
+    @POST("workis/seller/catalog/families/{id}/approve/")
+    suspend fun catalogFamilyApprove(@Path("id") id: String, @Query("seller") seller: String? = null): SimpleResult
+
+    @POST("workis/seller/catalog/families/{id}/reject/")
+    suspend fun catalogFamilyReject(@Path("id") id: String, @Query("seller") seller: String? = null): SimpleResult
+
+    @POST("workis/seller/catalog/families/{id}/withdraw/")
+    suspend fun catalogFamilyWithdraw(@Path("id") id: String, @Query("seller") seller: String? = null): SimpleResult
+
+    /** name · description · specDel · variantAdd · per-row label/price/currency/delete → the full family. */
+    @POST("workis/seller/catalog/families/{id}/cell/")
+    suspend fun catalogFamilyCell(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject, @Query("seller") seller: String? = null): kotlinx.serialization.json.JsonObject
+
+    @Multipart
+    @POST("workis/seller/catalog/families/{id}/image/")
+    suspend fun catalogFamilyImage(@Path("id") id: String, @Part image: okhttp3.MultipartBody.Part, @Query("seller") seller: String? = null): SimpleResult
+
+    @POST("workis/seller/catalog/families/{id}/web/")
+    suspend fun catalogFamilyWeb(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject, @Query("seller") seller: String? = null): SimpleResult
+
+    @POST("workis/seller/catalog/families/{id}/teach/")
+    suspend fun catalogFamilyTeach(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject, @Query("seller") seller: String? = null): CatalogTeachResult
+
+    /** A product with no catalogue → `{family}`. */
+    @POST("workis/seller/catalog/families/")
+    suspend fun catalogFamilyCreate(@Body body: kotlinx.serialization.json.JsonObject, @Query("seller") seller: String? = null): kotlinx.serialization.json.JsonObject
+
+    @POST("workis/seller/catalog/offers/{id}/cell/")
+    suspend fun catalogOfferCell(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject, @Query("seller") seller: String? = null): SimpleResult
 
     @GET("workis/lists/")
     suspend fun lists(): PurchaseListIndex

@@ -99,6 +99,8 @@ data class AgreementMeta(
     val createdAt: String? = null,
     val pageUrl: String? = null,
     val pdfUrl: String? = null,
+    /** The two signature cards under the text (2026-09-16). */
+    val signatures: AgreementSignatures? = null,
 )
 
 @Serializable
@@ -125,6 +127,8 @@ data class AskBody(
     val page: String? = null,
     val ctxList: String? = null,
     val voice: Boolean? = null,
+    /** "Teklif topla": the same question again opens the chat-born list (2026-09-15). */
+    val createList: Boolean? = null,
 )
 
 /** One catalogue seller in a match — snake_case from the web payload. Price-blind here. */
@@ -157,6 +161,8 @@ data class AskResponse(
     // answer policy B: a stamp under the bubble; `kb` present → 👍/👎
     val label: String? = null,
     val kb: String? = null,
+    /** The step after a technical answer (2026-09-15). */
+    val next: AskNext? = null,
 )
 
 /** One row of the Jowi thread (GET /workis/ask/history/) — the SAME thread the web drawer keeps. */
@@ -176,6 +182,7 @@ data class AskLine(
     val kb: String? = null,
     val source: String? = null,
     val surface: String? = null,
+    val next: AskNext? = null,
 )
 
 @Serializable

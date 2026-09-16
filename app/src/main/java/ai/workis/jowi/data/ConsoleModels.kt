@@ -273,6 +273,8 @@ data class PartnerRow(
     val openQuestions: Int? = null,
     val lastActivityDays: Int? = null,
     val activity: PartnerActivity? = null,
+    /** The seller opened its catalogue to its lead (2026-09-15) → a line on the row. */
+    val catalogHelper: PartnerCatalogHelper? = null,
 )
 
 @Serializable

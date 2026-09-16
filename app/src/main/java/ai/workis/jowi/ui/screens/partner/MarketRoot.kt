@@ -52,6 +52,8 @@ sealed interface MarketDest {
     data class ListDetail(val id: String) : MarketDest
     data object Quotes : MarketDest
     data class Compose(val invitationId: String) : MarketDest
+    data object Catalog : MarketDest
+    data class Family(val id: String) : MarketDest
 }
 
 @Composable
@@ -59,11 +61,14 @@ fun MarketRoot() {
     var dest by remember { mutableStateOf<MarketDest>(MarketDest.Home) }
     val listsVm: ListsViewModel = viewModel()
     val quotesVm: QuotesViewModel = viewModel()
+    val catalogVm: CatalogViewModel = viewModel()
     BackHandler(enabled = dest != MarketDest.Home) {
-        dest = when (dest) { is MarketDest.ListDetail -> MarketDest.Lists; is MarketDest.Compose -> MarketDest.Quotes; else -> MarketDest.Home }
+        dest = when (dest) { is MarketDest.ListDetail -> MarketDest.Lists; is MarketDest.Compose -> MarketDest.Quotes; is MarketDest.Family -> MarketDest.Catalog; else -> MarketDest.Home }
     }
     when (val d = dest) {
-        MarketDest.Home -> MarketHome(listsVm, quotesVm) { dest = it }
+        MarketDest.Home -> MarketHome(listsVm, quotesVm, catalogVm) { dest = it }
+        MarketDest.Catalog -> CatalogScreen(catalogVm, onBack = { dest = MarketDest.Home }, onOpenFamily = { dest = MarketDest.Family(it) })
+        is MarketDest.Family -> FamilyScreen(d.id, onBack = { dest = MarketDest.Catalog; catalogVm.load() })
         MarketDest.Lists -> ConsoleSub(stringResource(R.string.lists_title), { dest = MarketDest.Home }, trailing = { ListsMenu(listsVm) }) {
             ListsScreen(listsVm) { dest = MarketDest.ListDetail(it) }
         }
@@ -76,13 +81,13 @@ fun MarketRoot() {
 }
 
 @Composable
-private fun MarketHome(listsVm: ListsViewModel, quotesVm: QuotesViewModel, onOpen: (MarketDest) -> Unit) {
+private fun MarketHome(listsVm: ListsViewModel, quotesVm: QuotesViewModel, catalogVm: CatalogViewModel, onOpen: (MarketDest) -> Unit) {
     val colors = WorkisTheme.colors
     val seat by Graph.partner.seat.collectAsState()
     val c = (seat as? PartnerSeatState.Seat)?.company
     LaunchedEffect(c?.isBuyer, c?.isSeller) {
         if (c?.isBuyer == true) listsVm.load()
-        if (c?.isSeller == true) quotesVm.load()
+        if (c?.isSeller == true) { quotesVm.load(); catalogVm.load() }
     }
     Column(
         Modifier.fillMaxSize().background(colors.canvas).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
@@ -115,6 +120,15 @@ private fun MarketHome(listsVm: ListsViewModel, quotesVm: QuotesViewModel, onOpe
             Spacer(Modifier.height(14.dp))
         }
         if (c.isSeller) {
+            // Ürünler (2026-09-15): families awaiting review, live offers under
+            val cat = catalogVm.page
+            BigTile(
+                number = cat?.counts?.proposed,
+                label = stringResource(R.string.catalog_title),
+                sub = cat?.let { "${it.counts?.liveOffers ?: 0} " + stringResource(R.string.catalog_live_offers) },
+                icon = WorkisIcons.ShippingBox,
+            ) { onOpen(MarketDest.Catalog) }
+            Spacer(Modifier.height(14.dp))
             val inv = quotesVm.invitations
             BigTile(
                 number = inv?.count { it.isOpen },

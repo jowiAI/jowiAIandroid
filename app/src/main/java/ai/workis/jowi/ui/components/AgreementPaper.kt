@@ -42,7 +42,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
+import ai.workis.jowi.data.AgreementSignatures
 import ai.workis.jowi.data.absoluteWorkisUrl
+import ai.workis.jowi.data.shortDate
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.WorkisMono
 import kotlinx.coroutines.CancellationException
@@ -69,6 +71,8 @@ class AgreementLoader(private val scope: CoroutineScope) {
         val createdAt: String,
         val pdfUrl: String,
         val pageUrl: String,
+        /** The signature cards (2026-09-16): who signed for the Platform, the party's acceptance or null. */
+        val signatures: AgreementSignatures? = null,
     ) {
         /** "v1 · 07.09.2026 · #c6e20ca0a828" — the web letterhead's line. */
         val line: String
@@ -126,6 +130,7 @@ class AgreementLoader(private val scope: CoroutineScope) {
                     createdAt = m.createdAt.orEmpty(),
                     pdfUrl = pdfUrl,
                     pageUrl = absoluteWorkisUrl(m.pageUrl ?: pdfPath),
+                    signatures = m.signatures,
                 )
                 val bytes = withContext(Dispatchers.IO) { Graph.api.download(pdfUrl).use { it.bytes() } }
                 if (looksLikePdf(bytes)) pdf = bytes else failed = true
@@ -157,6 +162,8 @@ fun AgreementPaper(
     signerName: String,
     onSignerChange: (String) -> Unit,
     onSignerCommit: () -> Unit = {},
+    /** Hesap → Sözleşmem: the accepted paper, nothing to type. */
+    readOnly: Boolean = false,
 ) {
     Column(
         modifier = Modifier
@@ -211,8 +218,81 @@ fun AgreementPaper(
             }
         }
 
-        SignBand(signerName, onSignerChange, onSignerCommit, Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 14.dp))
+        SignatureCards(loader.meta?.signatures, signerName, onSignerChange, onSignerCommit, readOnly)
     }
+}
+
+/**
+ * The two cards under the text, like the web page (2026-09-16): the
+ * Platform's electronic signature and the party's acceptance — or, while
+ * signing, the Sign-Here band inside the party card.
+ */
+@Composable
+private fun SignatureCards(
+    sig: AgreementSignatures?,
+    signerName: String,
+    onSignerChange: (String) -> Unit,
+    onSignerCommit: () -> Unit,
+    readOnly: Boolean,
+) {
+    val cardShape = RoundedCornerShape(8.dp)
+    val faint = PaperInk.copy(alpha = 0.55f)
+    Column(
+        Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        sig?.platform?.let { p ->
+            Column(
+                Modifier.fillMaxWidth().border(1.dp, PaperInk.copy(alpha = 0.18f), cardShape).padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                CardLabel(stringResource(R.string.sig_platform))
+                Text(stringResource(R.string.sig_platform_signed), fontSize = 11.sp, color = PaperInk.copy(alpha = 0.6f))
+                Text(
+                    p.name.orEmpty(),
+                    fontFamily = FontFamily.Cursive, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Bold,
+                    fontSize = 26.sp, color = PaperInk,
+                )
+                p.title?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 11.sp, lineHeight = 15.sp, color = PaperInk.copy(alpha = 0.7f)) }
+                Text(
+                    listOf("v${p.version ?: 0}", shortDate(p.signedAt), p.sha?.takeIf { it.isNotEmpty() }?.let { "#$it" } ?: "")
+                        .filter { it.isNotEmpty() }.joinToString(" · "),
+                    fontFamily = WorkisMono, fontSize = 9.sp, color = faint,
+                )
+            }
+        }
+        Column(
+            Modifier.fillMaxWidth().border(1.dp, PaperInk.copy(alpha = 0.18f), cardShape).padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            CardLabel(sig?.party?.label?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.sign_cell_label))
+            val a = sig?.party?.acceptance
+            if (a != null && !a.signerName.isNullOrEmpty()) {
+                Text(stringResource(R.string.sig_accepted), fontSize = 11.sp, color = PaperInk.copy(alpha = 0.6f))
+                Text(
+                    a.signerName,
+                    fontFamily = FontFamily.Cursive, fontStyle = FontStyle.Italic, fontWeight = FontWeight.Bold,
+                    fontSize = 26.sp, color = PenBlue,
+                )
+                Text(
+                    listOf(shortDate(a.acceptedAt), a.ip.orEmpty(), a.sha?.takeIf { it.isNotEmpty() }?.let { "#$it v${a.version ?: 0}" } ?: "")
+                        .filter { it.isNotEmpty() }.joinToString(" · "),
+                    fontFamily = WorkisMono, fontSize = 9.sp, color = faint,
+                )
+            } else {
+                Text(stringResource(R.string.sig_awaiting), fontSize = 11.sp, color = PaperInk.copy(alpha = 0.6f))
+                SignBand(signerName, onSignerChange, onSignerCommit, Modifier.padding(top = 4.dp), readOnly)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CardLabel(text: String) {
+    Text(
+        text.uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 8.sp,
+        letterSpacing = 1.2.sp, color = PaperInk.copy(alpha = 0.55f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable
@@ -221,6 +301,7 @@ private fun SignBand(
     onSignerChange: (String) -> Unit,
     onSignerCommit: () -> Unit,
     modifier: Modifier,
+    readOnly: Boolean = false,
 ) {
     var hadFocus by remember { mutableStateOf(false) }
     Column(modifier) {
@@ -258,6 +339,7 @@ private fun SignBand(
                     value = signerName,
                     onValueChange = onSignerChange,
                     singleLine = true,
+                    readOnly = readOnly,
                     textStyle = TextStyle(
                         fontFamily = FontFamily.Cursive,
                         fontStyle = FontStyle.Italic,

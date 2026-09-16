@@ -22,6 +22,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -146,6 +149,17 @@ class CompanyViewModel : ViewModel() {
         }
     }
 
+    /** Grants the CURRENT field lead concierge rights on the catalogue, or revokes (2026-09-15). */
+    var helperOn by mutableStateOf<Boolean?>(null)
+    fun setCatalogHelper(on: Boolean) {
+        helperOn = on
+        note = null
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.companyCatalogHelper(jsonBody("enabled" to on)) }
+            if (r != null && r.success) { flash("catalogHelper"); Graph.partner.refresh() } else { helperOn = null; note = r?.error ?: r?.message ?: err }
+        }
+    }
+
     fun toggle(key: String, on: Boolean) {
         when (key) { "outwardRoutine" -> outward = on; "autoReorder" -> reorder = on; "autoFund" -> fund = on }
         autonomy(key, jsonBody(key to on))
@@ -181,8 +195,11 @@ class CompanyViewModel : ViewModel() {
     }
 }
 
+/** The web split the Firma page (2026-09-16): "Firma bilgileri" keeps identity + address + tax plate, "Ayarlar" holds Yetkiler + Otonomi. */
+enum class CompanyMode { Company, Settings }
+
 @Composable
-fun CompanySections(vm: CompanyViewModel = viewModel()) {
+fun CompanySections(mode: CompanyMode = CompanyMode.Company, vm: CompanyViewModel = viewModel()) {
     val colors = WorkisTheme.colors
     val context = LocalContext.current
     val seat by Graph.partner.seat.collectAsState()
@@ -199,6 +216,53 @@ fun CompanySections(vm: CompanyViewModel = viewModel()) {
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         NoteBand(vm.note)
+        if (mode == CompanyMode.Settings) {
+            // Yetkiler: the field-lead line + the catalogue-helper switch (only when available)
+            Column {
+                FormSection(stringResource(R.string.permissions_title).uppercase()) {
+                    val lead = c.regionLead ?: c.catalogHelper?.lead
+                    lead?.name?.takeIf { it.isNotEmpty() }?.let {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                            Icon(Icons.Filled.Place, contentDescription = null, tint = colors.muted, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.region_lead_label) + ": $it" + (lead.region?.let { r -> " · $r" } ?: ""), fontSize = 13.sp, color = colors.muted)
+                        }
+                    }
+                    val h = c.catalogHelper
+                    if (h?.available == true) {
+                        val granted = vm.helperOn ?: (h.granted == true)
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                            Column(Modifier.weight(1f)) {
+                                Text(stringResource(R.string.catalog_helper_toggle), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink)
+                                Text(
+                                    if (granted) stringResource(R.string.catalog_helper_on) + (h.grantedAt?.take(10)?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: "")
+                                    else stringResource(R.string.catalog_helper_off),
+                                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp,
+                                    color = if (granted) SuccessGreen else colors.faint,
+                                )
+                            }
+                            if (vm.tick == "catalogHelper") Text("✓ ", color = SuccessGreen, fontWeight = FontWeight.Bold)
+                            Switch(checked = granted, onCheckedChange = { vm.setCatalogHelper(it) }, colors = SwitchDefaults.colors(checkedTrackColor = colors.blue))
+                        }
+                    }
+                }
+                if (c.catalogHelper?.available == true) {
+                    Text(stringResource(R.string.catalog_helper_sub), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
+                }
+            }
+            // autonomy (moved here from the Firma page)
+            Column {
+                FormSection(stringResource(R.string.autonomy_title).uppercase()) {
+                    SwitchRow(stringResource(R.string.auto_outward), vm.outward, vm.tick == "outwardRoutine") { vm.toggle("outwardRoutine", it) }
+                    SwitchRow(stringResource(R.string.auto_reorder), vm.reorder, vm.tick == "autoReorder") { vm.toggle("autoReorder", it) }
+                    SwitchRow(stringResource(R.string.auto_fund), vm.fund, vm.tick == "autoFund") { vm.toggle("autoFund", it) }
+                    FormRow(stringResource(R.string.auto_award_cap), f["awardCap"].orEmpty(), { vm.edit("awardCap", it) }, { vm.commit("awardCap") }, vm.tick == "awardCap", placeholder = "—", mono = true, keyboardType = KeyboardType.Decimal)
+                    FormRow(stringResource(R.string.auto_release), f["releaseDays"].orEmpty(), { vm.edit("releaseDays", it) }, { vm.commit("releaseDays") }, vm.tick == "releaseDays", placeholder = "—", mono = true, keyboardType = KeyboardType.Number)
+                }
+                Text(stringResource(R.string.autonomy_sub), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
+            }
+            return@Column
+        }
         // identity — read-only (the coordinator changes it)
         Column {
             SurfaceCard {
@@ -234,17 +298,6 @@ fun CompanySections(vm: CompanyViewModel = viewModel()) {
                     Text("📌 " + stringResource(if (c.company.locationSource == "manual") R.string.pinned_manual else R.string.pinned_geocode), fontSize = 12.sp, color = colors.faint)
                 }
             }
-        }
-        // autonomy
-        Column {
-            FormSection(stringResource(R.string.autonomy_title).uppercase()) {
-                SwitchRow(stringResource(R.string.auto_outward), vm.outward, vm.tick == "outwardRoutine") { vm.toggle("outwardRoutine", it) }
-                SwitchRow(stringResource(R.string.auto_reorder), vm.reorder, vm.tick == "autoReorder") { vm.toggle("autoReorder", it) }
-                SwitchRow(stringResource(R.string.auto_fund), vm.fund, vm.tick == "autoFund") { vm.toggle("autoFund", it) }
-                FormRow(stringResource(R.string.auto_award_cap), f["awardCap"].orEmpty(), { vm.edit("awardCap", it) }, { vm.commit("awardCap") }, vm.tick == "awardCap", placeholder = "—", mono = true, keyboardType = KeyboardType.Decimal)
-                FormRow(stringResource(R.string.auto_release), f["releaseDays"].orEmpty(), { vm.edit("releaseDays", it) }, { vm.commit("releaseDays") }, vm.tick == "releaseDays", placeholder = "—", mono = true, keyboardType = KeyboardType.Number)
-            }
-            Text(stringResource(R.string.autonomy_sub), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
         }
         // tax plate
         FormSection(stringResource(R.string.tax_plate_title).uppercase()) {

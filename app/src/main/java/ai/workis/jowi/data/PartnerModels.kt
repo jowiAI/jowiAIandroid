@@ -54,6 +54,8 @@ data class PartnerCompany(
     val hasTaxFile: Boolean? = null,
     val regionLead: RegionLead? = null,
     val autonomy: CompanyAutonomy? = null,
+    /** `available:false` = no seller seat or no lead covers the firm. */
+    val catalogHelper: CatalogHelper? = null,
 ) {
     val isBuyer get() = seats?.buyer == true
     val isSeller get() = seats?.seller == true

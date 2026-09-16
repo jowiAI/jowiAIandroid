@@ -76,6 +76,8 @@ import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.OnKiremitFill
 import ai.workis.jowi.ui.theme.SuccessGreen
+import ai.workis.jowi.data.AskNext
+import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.launch
@@ -104,6 +106,9 @@ data class JowiLine(
     val label: String? = null, // "🎓 Uzman doğrulamalı" | "Üretken model bilgisi"
     val kb: String? = null, // session key → thumbs
     val verdict: String? = null, // "thanks" | "already"
+    val listId: String? = null, // a chat-born purchase list → "Listeyi aç"
+    val next: AskNext? = null, // the step after a technical answer
+    val question: String? = null, // the asker's text this reply answers
 )
 
 class JowiViewModel : ViewModel() {
@@ -115,6 +120,9 @@ class JowiViewModel : ViewModel() {
     /** A MATERIAL rewrite waits for the asker's choice (typed, reading). */
     var clarify by mutableStateOf<Pair<String, String>?>(null)
         private set
+
+    /** A chat-born list opened from the thread — the native list detail as a cover. */
+    var openList by mutableStateOf<String?>(null)
 
     private var nextId = 1L
     private fun newId() = nextId++
@@ -128,13 +136,17 @@ class JowiViewModel : ViewModel() {
             when (val r = safeCall(lang) { Graph.api.askHistory() }) {
                 is ApiResult.Ok -> {
                     lines.clear()
+                    var lastQ: String? = null // each reply remembers the question it answers ("Teklif topla" resends it)
                     r.value.lines.orEmpty().forEach { l ->
                         val match = if (l.kind == "match") AskMatch(l.item.orEmpty(), l.qty, l.sellers.orEmpty()) else null
+                        val isUser = l.who == "user"
                         lines += JowiLine(
                             id = newId(), who = l.who ?: "jowi", text = l.text.orEmpty(),
                             original = l.qOriginal, href = l.href?.takeIf { it.isNotEmpty() },
                             match = match, source = l.source, surface = l.surface, label = l.label, kb = l.kb,
+                            listId = l.listId?.takeIf { it.isNotEmpty() }, next = l.next, question = if (isUser) null else lastQ,
                         )
+                        if (isUser) lastQ = l.text
                     }
                 }
                 is ApiResult.Err -> Unit // an unreachable history is not an error screen
@@ -177,14 +189,20 @@ class JowiViewModel : ViewModel() {
     fun chooseReading() { clarify?.let { (typed, reading) -> clarify = null; send(reading, typed) } }
     fun chooseOwn() { clarify?.let { (typed, _) -> clarify = null; send(typed, null) } }
 
-    fun send(q: String, original: String?) {
+    /** "Teklif topla": the same question again with createList — the server opens the chat-born list (pool) or records the demand gap. */
+    fun collectQuotes(line: JowiLine) {
+        val q = line.question ?: lines.lastOrNull { it.who == "user" }?.text ?: return
+        send(q, null, createList = true)
+    }
+
+    fun send(q: String, original: String?, createList: Boolean = false) {
         lines += JowiLine(id = newId(), who = "user", text = q, original = original?.takeIf { it != q })
         val pendingId = newId()
-        lines += JowiLine(id = pendingId, who = "jowi", pending = true)
+        lines += JowiLine(id = pendingId, who = "jowi", pending = true, question = q)
         viewModelScope.launch {
             val i = { lines.indexOfFirst { it.id == pendingId } }
             try {
-                val r = Graph.api.ask(AskBody(q = q, qOriginal = original?.takeIf { it != q }, page = "lists"))
+                val r = Graph.api.ask(AskBody(q = q, qOriginal = original?.takeIf { it != q }, page = "lists", createList = if (createList) true else null))
                 val match = if (r.kind == "match") AskMatch(r.item.orEmpty(), r.qty, r.sellers.orEmpty()) else null
                 val guidance = if (r.answer == null) {
                     r.message?.takeIf { it.isNotEmpty() }
@@ -193,6 +211,7 @@ class JowiViewModel : ViewModel() {
                 val idx = i(); if (idx >= 0) lines[idx] = lines[idx].copy(
                     pending = false, text = r.answer.orEmpty(), error = guidance,
                     source = r.source, surface = r.surface, match = match, label = r.label, kb = r.kb,
+                    listId = r.listId?.takeIf { it.isNotEmpty() }, next = r.next,
                 )
             } catch (e: HttpException) {
                 val idx = i(); if (idx >= 0) lines[idx] = lines[idx].copy(pending = false, error = messageFromBody(e, lang))
@@ -217,6 +236,10 @@ class JowiViewModel : ViewModel() {
 @Composable
 fun JowiScreen(vm: JowiViewModel = viewModel()) {
     val colors = WorkisTheme.colors
+    vm.openList?.let { id ->
+        ai.workis.jowi.ui.screens.partner.ListDetailScreen(id, onBack = { vm.openList = null })
+        return
+    }
     var question by remember { mutableStateOf("") }
     var menu by remember { mutableStateOf(false) }
     var askClear by remember { mutableStateOf(false) }
@@ -373,6 +396,18 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel) {
                 else -> {
                     Text(line.text, fontSize = 15.sp, lineHeight = 22.sp, color = colors.ink)
                     line.match?.takeIf { it.sellers.isNotEmpty() }?.let { MatchCard(it) }
+                    // the chat-born list opens natively; else the step after a technical answer
+                    val listId = line.listId
+                    if (listId != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { vm.openList = listId }.padding(vertical = 4.dp),
+                        ) {
+                            Icon(WorkisIcons.Checklist, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(R.string.open_list), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
+                        }
+                    } else line.next?.takeIf { !it.text.isNullOrEmpty() }?.let { NextCard(it, line, vm) }
                     line.href?.let { href ->
                         Text(
                             "↗ " + stringResource(R.string.jowi_open_link),
@@ -456,6 +491,32 @@ private fun ClarifyCard(typed: String, reading: String, vm: JowiViewModel) {
             TextButton(onClick = { vm.chooseOwn() }, modifier = Modifier.height(36.dp).border(1.dp, colors.border, CircleShape)) {
                 Text(stringResource(R.string.clarify_use_own), fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.muted)
             }
+        }
+    }
+}
+
+/** The step after a technical answer (2026-09-15): the server's line + one action. In the pool → "N satıcıda M ürün"; a gap → the demand is recorded. */
+@Composable
+private fun NextCard(n: AskNext, line: JowiLine, vm: JowiViewModel) {
+    val colors = WorkisTheme.colors
+    val busy = vm.lines.any { it.pending }
+    Column(
+        Modifier.fillMaxWidth().padding(top = 2.dp).background(colors.ink.copy(alpha = 0.05f), RoundedCornerShape(12.dp)).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(if (n.kind == "gap") WorkisIcons.QuestionCircle else WorkisIcons.ShippingBox, contentDescription = null, tint = colors.faint, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(n.item.orEmpty().uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.faint, maxLines = 1)
+        }
+        Text(n.text.orEmpty(), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable(enabled = !busy) { vm.collectQuotes(line) },
+        ) {
+            Icon(WorkisIcons.Sparkle, contentDescription = null, tint = if (busy) colors.faint else colors.accentText, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.collect_quotes), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (busy) colors.faint else colors.accentText)
         }
     }
 }

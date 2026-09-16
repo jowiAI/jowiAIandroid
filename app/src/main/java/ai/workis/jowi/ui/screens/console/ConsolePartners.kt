@@ -32,6 +32,11 @@ import androidx.compose.ui.unit.sp
 import ai.workis.jowi.R
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.SuccessGreen
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Alignment
+import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 
@@ -122,6 +127,18 @@ fun ConsolePartnersScreen(vm: ConsoleViewModel, initialSeat: String = "partner")
                                 "$it " + stringResource(R.string.days_word),
                                 color = colors.faint,
                                 fontSize = 11.sp,
+                            )
+                        }
+                    }
+                    // the seller opened its catalogue to its lead (2026-09-15)
+                    p.catalogHelper?.lead?.takeIf { it.isNotEmpty() }?.let { lead ->
+                        Spacer(Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(WorkisIcons.PersonKey, contentDescription = null, tint = colors.faint, modifier = Modifier.size(12.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                stringResource(R.string.catalog_helper_tag) + ": $lead" + (p.catalogHelper.since?.take(10)?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""),
+                                fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1,
                             )
                         }
                     }
