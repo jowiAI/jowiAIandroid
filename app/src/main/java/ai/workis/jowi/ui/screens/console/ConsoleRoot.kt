@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.workis.jowi.R
+import ai.workis.jowi.data.ScreenContext
 import ai.workis.jowi.data.ApplicationRow
 import ai.workis.jowi.data.JowiAnswered
 import ai.workis.jowi.data.JowiTopic
@@ -170,6 +171,9 @@ fun ConsoleSub(
 
 @Composable
 private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
+    // a tab root: no seller screen is open (2026-09-17)
+    LaunchedEffect(Unit) { ScreenContext.clear() }
+
     val colors = WorkisTheme.colors
     LaunchedEffect(Unit) { if (vm.summary == null) vm.loadSummary() }
     val s = vm.summary
@@ -547,6 +551,8 @@ private fun CapsuleDoor(icon: ImageVector, label: String, modifier: Modifier, on
 private fun ConsoleCatalogSellersScreen(onPick: (ai.workis.jowi.data.CatalogSeller) -> Unit) {
     val colors = WorkisTheme.colors
     val lang by Graph.language.collectAsState()
+    // the picker is a root too: the last seller's catalogue must not ride along
+    LaunchedEffect(Unit) { ai.workis.jowi.data.ScreenContext.clear() }
     var sellers by remember { mutableStateOf<List<ai.workis.jowi.data.CatalogSeller>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {

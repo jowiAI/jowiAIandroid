@@ -74,6 +74,7 @@ import ai.workis.jowi.data.CatalogIngestion
 import ai.workis.jowi.data.CatalogLiveRow
 import ai.workis.jowi.data.CatalogPage
 import ai.workis.jowi.data.CatalogWeb
+import ai.workis.jowi.data.ScreenContext
 import ai.workis.jowi.data.WorkisMoney
 import ai.workis.jowi.data.catalogImageUrl
 import ai.workis.jowi.data.catalogSourceUrl
@@ -196,7 +197,7 @@ fun webChip(w: CatalogWeb?, pasted: Boolean? = null): ChipSpec? {
         }
         "name" -> if (isPasted) ChipSpec(WorkisIcons.Link, stringResource(R.string.chip_web_link_confirmed), SuccessGreen)
         else ChipSpec(WorkisIcons.Globe, stringResource(R.string.chip_web_name), colors.muted)
-        "none" -> ChipSpec(WorkisIcons.Globe, stringResource(R.string.chip_page_not_found), colors.faint)
+        "none" -> ChipSpec(WorkisIcons.QuestionCircle, stringResource(R.string.chip_page_not_found), colors.faint)
         else -> null
     }
 }
@@ -248,6 +249,8 @@ fun CatalogScreen(vm: CatalogViewModel, onBack: () -> Unit, onOpenFamily: (Strin
     LaunchedEffect(vm.isBusyServerSide) {
         while (vm.isBusyServerSide) { delay(4_000); vm.load() }
     }
+    // Jowi's screen context: the open tab and the labels this screen draws
+    PublishCatalogContext(vm, segment)
     ConsoleSub(stringResource(R.string.catalog_title), onBack, trailing = {
         if (vm.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Kiremit500)
     }) {
@@ -285,6 +288,42 @@ fun CatalogScreen(vm: CatalogViewModel, onBack: () -> Unit, onOpenFamily: (Strin
                 Spacer(Modifier.height(30.dp))
             }
         }
+    }
+}
+
+/**
+ * Writes `seller.products` on appear, on segment change and when data lands
+ * (Django "Ask Jowi — where the user is", 2026-09-17): the tab, the tiles,
+ * the segment names and the actions / chips the open tab actually draws.
+ */
+@Composable
+private fun PublishCatalogContext(vm: CatalogViewModel, segment: Int) {
+    val tab = when (segment) { 0 -> "review"; 1 -> "live"; else -> "uploads" }
+    val labels = buildList {
+        add(stringResource(R.string.catalog_proposed)); add(stringResource(R.string.catalog_approved)); add(stringResource(R.string.catalog_live_offers))
+        add(stringResource(R.string.seg_review)); add(stringResource(R.string.seg_live)); add(stringResource(R.string.seg_uploads))
+        when (segment) {
+            0 -> {
+                add(stringResource(R.string.reject_family)); add(stringResource(R.string.source_page)); add(stringResource(R.string.variants_word))
+                vm.page?.families.orEmpty().forEach { f ->
+                    webChip(f.web)?.let { add(it.text) }
+                    photoChip(f.imgSrc, f.imgQuality)?.let { add(it.text) }
+                }
+            }
+            1 -> {
+                add(stringResource(R.string.edit_row)); add(stringResource(R.string.withdraw_family)); add(stringResource(R.string.unit_price_field))
+                add(stringResource(R.string.lead_time_field)); add(stringResource(R.string.stock_label)); add(stringResource(R.string.published_label))
+            }
+            else -> {
+                add(stringResource(R.string.upload_title)); add(stringResource(R.string.upload_kind)); add(stringResource(R.string.upload_pages))
+                add(stringResource(R.string.upload_brand)); add(stringResource(R.string.upload_action)); add(stringResource(R.string.new_product))
+                add(stringResource(R.string.ingestions_title)); add(stringResource(R.string.web_fetch_start)); add(stringResource(R.string.web_fetch_resume))
+                add(stringResource(R.string.source_page))
+            }
+        }
+    }
+    LaunchedEffect(tab, labels, vm.seller) {
+        ScreenContext.set("seller.products", jsonBody("tab" to tab), labels, vm.seller)
     }
 }
 

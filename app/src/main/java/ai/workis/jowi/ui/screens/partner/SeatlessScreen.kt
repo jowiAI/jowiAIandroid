@@ -10,12 +10,14 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import ai.workis.jowi.Graph
+import ai.workis.jowi.data.ScreenContext
 import ai.workis.jowi.R
 import ai.workis.jowi.data.PartnerSeatState
 import ai.workis.jowi.data.SeatApplication
@@ -33,6 +35,8 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun SeatlessScreen(onApply: () -> Unit) {
+    // a tab root: no seller screen is open (2026-09-17)
+    LaunchedEffect(Unit) { ScreenContext.clear() }
     val colors = WorkisTheme.colors
     val seat by Graph.partner.seat.collectAsState()
     Box(Modifier.fillMaxSize().background(colors.canvas)) {

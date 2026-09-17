@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.workis.jowi.R
+import ai.workis.jowi.data.ScreenContext
 import ai.workis.jowi.data.ExpertMonth
 import ai.workis.jowi.data.ExpertSetup
 import ai.workis.jowi.data.ExpertSummary
@@ -99,6 +100,9 @@ fun ExpertRoot(vm: ExpertViewModel = viewModel()) {
 
 @Composable
 private fun ExpertHome(vm: ExpertViewModel, onOpen: (ExpertDest) -> Unit) {
+    // a tab root: no seller screen is open (2026-09-17)
+    LaunchedEffect(Unit) { ScreenContext.clear() }
+
     val colors = WorkisTheme.colors
     LaunchedEffect(Unit) { vm.loadSummary() }
     val s = vm.summary

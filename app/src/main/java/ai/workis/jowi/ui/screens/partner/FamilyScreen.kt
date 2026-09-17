@@ -62,6 +62,7 @@ import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.CatalogFamilyDetail
 import ai.workis.jowi.data.CatalogVariant
+import ai.workis.jowi.data.ScreenContext
 import ai.workis.jowi.data.WorkisMoney
 import ai.workis.jowi.data.catalogImageUrl
 import ai.workis.jowi.data.decodeFamily
@@ -220,6 +221,33 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
     }
     val d = vm.detail
     val isLive = d?.isLive == true
+
+    // Jowi's screen context: which product is open, its warnings and web badges
+    val noticeChip = if (d?.imageQuality == "low" || d?.imageQuality == "page") photoChip(null, d?.imageQuality)?.text else null
+    val webChipText = d?.web?.let { webChip(it)?.text }
+    val screenLabels = buildList {
+        add(if (isLive) stringResource(R.string.withdraw_family) else stringResource(R.string.approve_publish))
+        add(stringResource(R.string.photo_replace)); add(stringResource(R.string.description_field)); add(stringResource(R.string.variants_title))
+        add(stringResource(R.string.add_row)); add(stringResource(R.string.edit_row)); add(stringResource(R.string.delete_row))
+        add(stringResource(R.string.price_on_request)); add(stringResource(R.string.specs_title)); add(stringResource(R.string.web_title))
+        add(stringResource(R.string.web_url_field)); add(stringResource(R.string.web_resolve)); add(stringResource(R.string.media_title))
+        add(stringResource(R.string.knowledge_title)); add(stringResource(R.string.teach_title)); add(stringResource(R.string.teach_action))
+        if (!isLive) add(stringResource(R.string.reject_family))
+        noticeChip?.let { add(it) }
+        webChipText?.let { add(it) }
+    }
+    LaunchedEffect(isLive, d?.name, d?.brand, noticeChip, webChipText, seller) {
+        ScreenContext.set(
+            if (isLive) "seller.product" else "seller.product_preview",
+            jsonBody(
+                "product" to d?.name?.takeIf { it.isNotEmpty() },
+                "brand" to d?.brand?.takeIf { it.isNotEmpty() },
+                "notices" to listOfNotNull(noticeChip).takeIf { it.isNotEmpty() },
+                "web" to listOfNotNull(webChipText).takeIf { it.isNotEmpty() },
+            ),
+            screenLabels, seller,
+        )
+    }
 
     ConsoleSub(d?.name ?: "", onBack, trailing = {
         if (d != null) {

@@ -78,6 +78,12 @@ import ai.workis.jowi.ui.theme.OnKiremitFill
 import ai.workis.jowi.ui.theme.SuccessGreen
 import ai.workis.jowi.data.AskNext
 import ai.workis.jowi.ui.theme.WorkisIcons
+import ai.workis.jowi.data.AskOption
+import ai.workis.jowi.data.ScreenContext
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.alpha
+import ai.workis.jowi.ui.components.JowiOptions
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.launch
@@ -109,6 +115,8 @@ data class JowiLine(
     val listId: String? = null, // a chat-born purchase list → "Listeyi aç"
     val next: AskNext? = null, // the step after a technical answer
     val question: String? = null, // the asker's text this reply answers
+    val options: List<AskOption>? = null, // "which one do you mean?" (2026-09-17)
+    val optionPicked: Boolean = false, // a tapped option closes the set
 )
 
 class JowiViewModel : ViewModel() {
@@ -135,6 +143,11 @@ class JowiViewModel : ViewModel() {
         viewModelScope.launch {
             when (val r = safeCall(lang) { Graph.api.askHistory() }) {
                 is ApiResult.Ok -> {
+                    // options are not in history rows: keep the ones this session
+                    // received on the reply they belong to. The clarify sentence
+                    // repeats, so the key carries the question it answers too.
+                    val kept = lines.filter { it.who != "user" && it.options != null }
+                        .associate { (it.question.orEmpty() + "\u001F" + it.text) to (it.options!! to it.optionPicked) }
                     lines.clear()
                     var lastQ: String? = null // each reply remembers the question it answers ("Teklif topla" resends it)
                     r.value.lines.orEmpty().forEach { l ->
@@ -146,6 +159,11 @@ class JowiViewModel : ViewModel() {
                             match = match, source = l.source, surface = l.surface, label = l.label, kb = l.kb,
                             listId = l.listId?.takeIf { it.isNotEmpty() }, next = l.next, question = if (isUser) null else lastQ,
                         )
+                        if (!isUser) {
+                            kept[lastQ.orEmpty() + "\u001F" + l.text.orEmpty()]?.let { (opts, picked) ->
+                                lines[lines.lastIndex] = lines.last().copy(options = opts, optionPicked = picked)
+                            }
+                        }
                         if (isUser) lastQ = l.text
                     }
                 }
@@ -202,7 +220,18 @@ class JowiViewModel : ViewModel() {
         viewModelScope.launch {
             val i = { lines.indexOfFirst { it.id == pendingId } }
             try {
-                val r = Graph.api.ask(AskBody(q = q, qOriginal = original?.takeIf { it != q }, page = "lists", createList = if (createList) true else null))
+                // where the user is (2026-09-17): the server resolves "bu ürün" /
+                // "sağ üstteki düğme" against the snapshot the screens wrote
+                val ctx = ScreenContext.current
+                val r = Graph.api.ask(
+                    AskBody(
+                        q = q, qOriginal = original?.takeIf { it != q },
+                        page = if (ctx?.screen?.startsWith("seller.product") == true) "products" else "lists",
+                        createList = if (createList) true else null,
+                        screen = ctx?.screen, state = ctx?.state, visible = ctx?.visible?.takeIf { it.isNotEmpty() },
+                        seller = ctx?.seller,
+                    ),
+                )
                 val match = if (r.kind == "match") AskMatch(r.item.orEmpty(), r.qty, r.sellers.orEmpty()) else null
                 val guidance = if (r.answer == null) {
                     r.message?.takeIf { it.isNotEmpty() }
@@ -212,6 +241,7 @@ class JowiViewModel : ViewModel() {
                     pending = false, text = r.answer.orEmpty(), error = guidance,
                     source = r.source, surface = r.surface, match = match, label = r.label, kb = r.kb,
                     listId = r.listId?.takeIf { it.isNotEmpty() }, next = r.next,
+                    options = r.options?.takeIf { it.isNotEmpty() },
                 )
             } catch (e: HttpException) {
                 val idx = i(); if (idx >= 0) lines[idx] = lines[idx].copy(pending = false, error = messageFromBody(e, lang))
@@ -219,6 +249,19 @@ class JowiViewModel : ViewModel() {
                 val idx = i(); if (idx >= 0) lines[idx] = lines[idx].copy(pending = false, error = statusMessage(null, lang))
             }
         }
+    }
+
+    /**
+     * A tapped option asks its precise follow-up with the same screen context;
+     * the open-ended one (`q == null`) hands the field back to the asker.
+     */
+    fun pick(line: JowiLine, option: AskOption): Boolean {
+        val idx = lines.indexOfFirst { it.id == line.id }
+        if (idx >= 0) lines[idx] = lines[idx].copy(optionPicked = true)
+        val q = option.q
+        if (q.isNullOrEmpty()) return false
+        send(q, null)
+        return true
     }
 
     /** 👍 / 👎 — first verdict wins; a 👎 opens a review on the expert side. */
@@ -241,6 +284,7 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
         return
     }
     var question by remember { mutableStateOf("") }
+    val askFocus = remember { FocusRequester() }
     var menu by remember { mutableStateOf(false) }
     var askClear by remember { mutableStateOf(false) }
     val listState: LazyListState = rememberLazyListState()
@@ -290,7 +334,7 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
                 }
             }
             itemsIndexed(vm.lines, key = { _, l -> l.id }) { _, line ->
-                if (line.who == "user") UserBubble(line) else ReplyBubble(line, vm)
+                if (line.who == "user") UserBubble(line) else ReplyBubble(line, vm) { askFocus.requestFocus() }
             }
             vm.clarify?.let { (typed, reading) -> item { ClarifyCard(typed, reading, vm) } }
             if (vm.previewing || (!vm.loaded && vm.lines.isEmpty())) {
@@ -310,7 +354,7 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
                     focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border,
                     focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue,
                 ),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).focusRequester(askFocus),
             )
             val canSend = question.isNotBlank() && vm.clarify == null && !vm.previewing
             IconButton(onClick = { val q = question.trim(); question = ""; vm.submit(q) }, enabled = canSend) {
@@ -363,7 +407,7 @@ private fun UserBubble(line: JowiLine) {
 
 /** Jowi's (or a human's) reply on a scheme-adaptive card with the slash as the mark; a null answer is guidance — the beige note idiom. */
 @Composable
-private fun ReplyBubble(line: JowiLine, vm: JowiViewModel) {
+private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Unit) {
     val colors = WorkisTheme.colors
     val context = LocalContext.current
     val guidance = line.error != null && !line.pending
@@ -415,9 +459,16 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel) {
                             modifier = Modifier.clickable { openInApp(context, absoluteWorkisUrl(href)) },
                         )
                     }
-                    // the stamp: verified-by-expert vs generative — text, never colour alone
+                    line.options?.takeIf { it.isNotEmpty() }?.let { opts ->
+                        JowiOptions(opts, line.optionPicked, enabled = vm.lines.none { it.pending }) { o ->
+                            if (!vm.pick(line, o)) onFocusAsk()
+                        }
+                    }
+                    // the stamp: verified-by-expert vs generative — text, never colour alone.
+                    // A "which one do you mean?" turn has no provenance to stamp.
                     val label = line.label
-                    if (!label.isNullOrEmpty()) {
+                    if (line.source == "clarify" || line.options != null) Unit
+                    else if (!label.isNullOrEmpty()) {
                         Text(label, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.5.sp, color = colors.muted)
                     } else if (line.source != null && line.surface != null) {
                         Text(

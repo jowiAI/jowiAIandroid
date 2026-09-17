@@ -114,10 +114,17 @@ data class ApplySubmitResponse(
 
 /** Anonymous applicant Jowi (login screen's Jowi tab): /workis/apply/ask/ */
 @Serializable
-data class ApplyAskBody(val q: String, val lang: String? = null)
+data class ApplyAskBody(
+    val q: String,
+    val lang: String? = null,
+    /** public.login | public.apply | public.expert_apply (2026-09-17). */
+    val screen: String? = null,
+    /** On the wizard: {step: the open step's title, as drawn}. */
+    val state: kotlinx.serialization.json.JsonObject? = null,
+)
 
 @Serializable
-data class ApplyAskResponse(val ok: Boolean = false, val text: String? = null)
+data class ApplyAskResponse(val ok: Boolean = false, val text: String? = null, val options: List<AskOption>? = null)
 
 @Serializable
 data class AskBody(
@@ -129,7 +136,18 @@ data class AskBody(
     val voice: Boolean? = null,
     /** "Teklif topla": the same question again opens the chat-born list (2026-09-15). */
     val createList: Boolean? = null,
+    // where the user is (2026-09-17): the server resolves "bu ürün" / "sağ üstteki
+    // düğme" against these and offers options drawn from `visible`
+    val screen: String? = null,
+    val state: kotlinx.serialization.json.JsonObject? = null,
+    val visible: List<String>? = null,
+    /** A console seat asking from a seller's catalogue — whose. */
+    val seller: String? = null,
 )
+
+/** "Which one do you mean?" (2026-09-17): `q` is the follow-up to send, null = type again. */
+@Serializable
+data class AskOption(val label: String = "", val q: String? = null)
 
 /** One catalogue seller in a match — snake_case from the web payload. Price-blind here. */
 @Serializable
@@ -163,6 +181,8 @@ data class AskResponse(
     val kb: String? = null,
     /** The step after a technical answer (2026-09-15). */
     val next: AskNext? = null,
+    /** `source: "clarify"` carries tappable options (2026-09-17). */
+    val options: List<AskOption>? = null,
 )
 
 /** One row of the Jowi thread (GET /workis/ask/history/) — the SAME thread the web drawer keeps. */

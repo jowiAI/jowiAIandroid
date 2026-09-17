@@ -41,6 +41,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -51,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.os.LocaleListCompat
 import ai.workis.jowi.Graph
+import ai.workis.jowi.data.ScreenContext
 import ai.workis.jowi.R
 import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.launch
@@ -87,6 +89,8 @@ fun AccountScreen(onReaccept: () -> Unit = {}, onDeparture: () -> Unit = {}) {
 
 @Composable
 private fun AccountHome(onReaccept: () -> Unit, onDeparture: () -> Unit, onOpen: (AccountDest) -> Unit) {
+    // a tab root: no seller screen is open (2026-09-17)
+    LaunchedEffect(Unit) { ScreenContext.clear() }
     val colors = WorkisTheme.colors
     val scope = rememberCoroutineScope()
     val lang by Graph.language.collectAsState()

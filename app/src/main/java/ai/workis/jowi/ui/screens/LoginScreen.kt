@@ -52,6 +52,8 @@ import androidx.core.os.LocaleListCompat
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.ApiResult
+import ai.workis.jowi.data.AskOption
+import ai.workis.jowi.ui.components.JowiOptions
 import ai.workis.jowi.data.ApplyAskBody
 import ai.workis.jowi.data.safeCall
 import ai.workis.jowi.ui.components.WorkisMark
@@ -536,19 +538,27 @@ private fun PublicAskContent() {
     val scope = rememberCoroutineScope()
     var question by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf<String?>(null) }
+    var options by remember { mutableStateOf<List<AskOption>?>(null) }
+    var optionPicked by remember { mutableStateOf(false) }
     var asking by remember { mutableStateOf(false) }
     var askError by remember { mutableStateOf<String?>(null) }
+    val askFocus = remember { FocusRequester() }
 
-    fun ask() {
-        val q = question.trim()
+    /** Where the visitor is (2026-09-17): the login screen's own Jowi tab. */
+    fun ask(text: String) {
+        val q = text.trim()
         if (q.isEmpty() || asking) return
         asking = true
         askError = null
         scope.launch {
             when (val r = safeCall(Graph.language.value) {
-                Graph.api.applyAsk(ApplyAskBody(q = q, lang = Graph.language.value))
+                Graph.api.applyAsk(ApplyAskBody(q = q, lang = Graph.language.value, screen = "public.login"))
             }) {
-                is ApiResult.Ok -> answer = r.value.text
+                is ApiResult.Ok -> {
+                    answer = r.value.text
+                    options = r.value.options?.takeIf { it.isNotEmpty() }
+                    optionPicked = false
+                }
                 is ApiResult.Err -> askError = r.message
             }
             asking = false
@@ -564,6 +574,14 @@ private fun PublicAskContent() {
                 .padding(16.dp),
         ) {
             Text(it, fontFamily = WorkisSans, fontSize = 15.sp, lineHeight = 21.sp, color = colors.ink)
+            options?.let { opts ->
+                Spacer(Modifier.height(10.dp))
+                JowiOptions(opts, optionPicked, enabled = !asking) { o ->
+                    optionPicked = true
+                    val q = o.q
+                    if (!q.isNullOrEmpty()) { question = ""; ask(q) } else askFocus.requestFocus()
+                }
+            }
         }
         Spacer(Modifier.height(14.dp))
     }
@@ -582,8 +600,9 @@ private fun PublicAskContent() {
         keyboardType = KeyboardType.Text,
         trailing = {
             if (question.isNotBlank()) {
-                CircularSubmit(loading = asking, enabled = true) { ask() }
+                CircularSubmit(loading = asking, enabled = true) { val q = question; question = ""; ask(q) }
             }
         },
+        focusRequester = askFocus,
     )
 }

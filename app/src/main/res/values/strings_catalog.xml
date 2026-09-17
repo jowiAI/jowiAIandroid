@@ -315,6 +315,7 @@
     <string name="jowi_lane_empty">Nothing in this window.</string>
     <string name="jowi_lane_sub">Questions Jowi answered on its own while people were buying and selling — verified facts, generative model text, off-topic refusals. Read-only; a 👎 on a generative answer is already in the experts\' review queue.</string>
     <string name="jowi_open_link">Open</string>
+    <string name="jowi_option_other_hint">Type it in your own words — or name the label you see.</string>
     <string name="jowi_prompt">Ask Jowi…</string>
     <string name="kind_auto">Detect automatically</string>
     <string name="kind_catalog">Catalogue</string>

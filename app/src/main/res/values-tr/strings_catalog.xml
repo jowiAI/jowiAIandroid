@@ -315,6 +315,7 @@
     <string name="jowi_lane_empty">Bu aralıkta kayıt yok.</string>
     <string name="jowi_lane_sub">Alım satım sırasında Jowi\'nin kendi başına yanıtladığı sorular — doğrulanmış bilgi, üretken model bilgisi, kapsam dışı retler. Salt okunur; üretken bir yanıta verilen 👎 zaten uzmanların inceleme kuyruğundadır.</string>
     <string name="jowi_open_link">Aç</string>
+    <string name="jowi_option_other_hint">Kendi cümlenizle yazın — ya da gördüğünüz etiketin adını verin.</string>
     <string name="jowi_prompt">Jowi\'ye sor…</string>
     <string name="kind_auto">Otomatik algıla</string>
     <string name="kind_catalog">Katalog</string>

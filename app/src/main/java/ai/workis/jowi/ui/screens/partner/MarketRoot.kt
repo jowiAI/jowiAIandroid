@@ -40,6 +40,7 @@ import ai.workis.jowi.R
 import ai.workis.jowi.ui.components.WorkisMark
 import androidx.compose.foundation.layout.Box
 import ai.workis.jowi.data.PartnerSeatState
+import ai.workis.jowi.data.ScreenContext
 import ai.workis.jowi.ui.screens.console.ConsoleSub
 import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
@@ -82,6 +83,8 @@ fun MarketRoot() {
 
 @Composable
 private fun MarketHome(listsVm: ListsViewModel, quotesVm: QuotesViewModel, catalogVm: CatalogViewModel, onOpen: (MarketDest) -> Unit) {
+    // a tab root: no seller screen is open (2026-09-17)
+    LaunchedEffect(Unit) { ScreenContext.clear() }
     val colors = WorkisTheme.colors
     val seat by Graph.partner.seat.collectAsState()
     val c = (seat as? PartnerSeatState.Seat)?.company
