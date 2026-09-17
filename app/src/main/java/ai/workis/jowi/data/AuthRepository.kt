@@ -121,6 +121,7 @@ class AuthRepository(
         _user.value = null
         _agreementPending.value = null
         runCatching { ai.workis.jowi.Graph.partner.clear() }
+        ScreenContext.clear() // no screen of the previous seat rides into the next session
         _isAuthenticated.value = false
     }
 }
