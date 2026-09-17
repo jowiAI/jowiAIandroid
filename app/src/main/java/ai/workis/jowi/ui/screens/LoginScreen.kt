@@ -54,7 +54,10 @@ import ai.workis.jowi.R
 import ai.workis.jowi.data.ApiResult
 import ai.workis.jowi.data.AskOption
 import ai.workis.jowi.ui.components.JowiOptions
+import ai.workis.jowi.data.VisStyle
+import ai.workis.jowi.data.vis
 import ai.workis.jowi.data.ApplyAskBody
+import ai.workis.jowi.ui.components.MarkdownText
 import ai.workis.jowi.data.safeCall
 import ai.workis.jowi.ui.components.WorkisMark
 import ai.workis.jowi.ui.components.openInApp
@@ -535,6 +538,16 @@ private fun LangTab(
 @Composable
 private fun PublicAskContent() {
     val colors = WorkisTheme.colors
+    // what the sign-in screen actually draws — the public door reads this too,
+    // so Jowi stops offering controls this screen has not got (2026-09-17)
+    val screenControls = listOf(
+        vis(stringResource(R.string.sign_in_title)), vis(stringResource(R.string.email_placeholder)),
+        vis(stringResource(R.string.email_hint)), vis(stringResource(R.string.new_title)),
+        vis(stringResource(R.string.new_sub)), vis(stringResource(R.string.apply), VisStyle.OUTLINE),
+        vis(stringResource(R.string.privacy), VisStyle.SECONDARY), vis(stringResource(R.string.lang_tr), VisStyle.SECONDARY),
+        vis(stringResource(R.string.lang_en), VisStyle.SECONDARY), vis(stringResource(R.string.jowi_tab), VisStyle.SECONDARY),
+        vis(stringResource(R.string.apply_ask_prompt)), vis(stringResource(R.string.appearance), VisStyle.SECONDARY),
+    )
     val scope = rememberCoroutineScope()
     var question by remember { mutableStateOf("") }
     var answer by remember { mutableStateOf<String?>(null) }
@@ -552,7 +565,9 @@ private fun PublicAskContent() {
         askError = null
         scope.launch {
             when (val r = safeCall(Graph.language.value) {
-                Graph.api.applyAsk(ApplyAskBody(q = q, lang = Graph.language.value, screen = "public.login"))
+                Graph.api.applyAsk(
+                    ApplyAskBody(q = q, lang = Graph.language.value, screen = "public.login", visible = screenControls),
+                )
             }) {
                 is ApiResult.Ok -> {
                     answer = r.value.text
@@ -573,7 +588,8 @@ private fun PublicAskContent() {
                 .border(1.dp, colors.border, RoundedCornerShape(20.dp))
                 .padding(16.dp),
         ) {
-            Text(it, fontFamily = WorkisSans, fontSize = 15.sp, lineHeight = 21.sp, color = colors.ink)
+            // the public answer carries inline markdown too
+            MarkdownText(it, color = colors.ink, fontSize = 15.sp, lineHeight = 21.sp)
             options?.let { opts ->
                 Spacer(Modifier.height(10.dp))
                 JowiOptions(opts, optionPicked, enabled = !asking) { o ->

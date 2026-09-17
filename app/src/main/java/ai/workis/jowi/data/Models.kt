@@ -121,6 +121,8 @@ data class ApplyAskBody(
     val screen: String? = null,
     /** On the wizard: {step: the open step's title, as drawn}. */
     val state: kotlinx.serialization.json.JsonObject? = null,
+    /** The public door reads the controls too (2026-09-17) — it stops offering buttons the screen has not got. */
+    val visible: List<VisibleItem>? = null,
 )
 
 @Serializable
@@ -140,7 +142,7 @@ data class AskBody(
     // düğme" against these and offers options drawn from `visible`
     val screen: String? = null,
     val state: kotlinx.serialization.json.JsonObject? = null,
-    val visible: List<String>? = null,
+    val visible: List<VisibleItem>? = null,
     /** A console seat asking from a seller's catalogue — whose. */
     val seller: String? = null,
 )

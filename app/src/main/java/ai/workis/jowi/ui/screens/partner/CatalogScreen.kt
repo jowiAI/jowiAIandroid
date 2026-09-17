@@ -75,6 +75,8 @@ import ai.workis.jowi.data.CatalogLiveRow
 import ai.workis.jowi.data.CatalogPage
 import ai.workis.jowi.data.CatalogWeb
 import ai.workis.jowi.data.ScreenContext
+import ai.workis.jowi.data.VisStyle
+import ai.workis.jowi.data.vis
 import ai.workis.jowi.data.WorkisMoney
 import ai.workis.jowi.data.catalogImageUrl
 import ai.workis.jowi.data.catalogSourceUrl
@@ -300,25 +302,29 @@ fun CatalogScreen(vm: CatalogViewModel, onBack: () -> Unit, onOpenFamily: (Strin
 private fun PublishCatalogContext(vm: CatalogViewModel, segment: Int) {
     val tab = when (segment) { 0 -> "review"; 1 -> "live"; else -> "uploads" }
     val labels = buildList {
-        add(stringResource(R.string.catalog_proposed)); add(stringResource(R.string.catalog_approved)); add(stringResource(R.string.catalog_live_offers))
-        add(stringResource(R.string.seg_review)); add(stringResource(R.string.seg_live)); add(stringResource(R.string.seg_uploads))
+        add(vis(stringResource(R.string.catalog_proposed))); add(vis(stringResource(R.string.catalog_approved))); add(vis(stringResource(R.string.catalog_live_offers)))
+        add(vis(stringResource(R.string.seg_review), VisStyle.SECONDARY)); add(vis(stringResource(R.string.seg_live), VisStyle.SECONDARY)); add(vis(stringResource(R.string.seg_uploads), VisStyle.SECONDARY))
         when (segment) {
             0 -> {
-                add(stringResource(R.string.reject_family)); add(stringResource(R.string.source_page)); add(stringResource(R.string.variants_word))
+                add(vis(stringResource(R.string.reject_family), VisStyle.DESTRUCTIVE))
+                add(vis(stringResource(R.string.source_page))); add(vis(stringResource(R.string.variants_word), VisStyle.CHIP))
                 vm.page?.families.orEmpty().forEach { f ->
-                    webChip(f.web)?.let { add(it.text) }
-                    photoChip(f.imgSrc, f.imgQuality)?.let { add(it.text) }
+                    webChip(f.web)?.let { add(vis(it.text, VisStyle.CHIP)) }
+                    photoChip(f.imgSrc, f.imgQuality)?.let { add(vis(it.text, VisStyle.CHIP)) }
                 }
             }
             1 -> {
-                add(stringResource(R.string.edit_row)); add(stringResource(R.string.withdraw_family)); add(stringResource(R.string.unit_price_field))
-                add(stringResource(R.string.lead_time_field)); add(stringResource(R.string.stock_label)); add(stringResource(R.string.published_label))
+                add(vis(stringResource(R.string.edit_row), VisStyle.SECONDARY)); add(vis(stringResource(R.string.withdraw_family), VisStyle.SECONDARY))
+                add(vis(stringResource(R.string.unit_price_field))); add(vis(stringResource(R.string.lead_time_field)))
+                add(vis(stringResource(R.string.stock_label))); add(vis(stringResource(R.string.published_label)))
             }
             else -> {
-                add(stringResource(R.string.upload_title)); add(stringResource(R.string.upload_kind)); add(stringResource(R.string.upload_pages))
-                add(stringResource(R.string.upload_brand)); add(stringResource(R.string.upload_action)); add(stringResource(R.string.new_product))
-                add(stringResource(R.string.ingestions_title)); add(stringResource(R.string.web_fetch_start)); add(stringResource(R.string.web_fetch_resume))
-                add(stringResource(R.string.source_page))
+                add(vis(stringResource(R.string.upload_title))); add(vis(stringResource(R.string.upload_kind)))
+                add(vis(stringResource(R.string.upload_pages))); add(vis(stringResource(R.string.upload_brand)))
+                add(vis(stringResource(R.string.upload_action), VisStyle.SECONDARY)); add(vis(stringResource(R.string.new_product), VisStyle.SECONDARY))
+                add(vis(stringResource(R.string.ingestions_title)))
+                add(vis(stringResource(R.string.web_fetch_start), VisStyle.SECONDARY)); add(vis(stringResource(R.string.web_fetch_resume), VisStyle.SECONDARY))
+                add(vis(stringResource(R.string.source_page)))
             }
         }
     }

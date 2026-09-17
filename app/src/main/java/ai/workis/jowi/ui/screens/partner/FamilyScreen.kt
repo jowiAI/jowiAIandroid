@@ -63,6 +63,8 @@ import ai.workis.jowi.R
 import ai.workis.jowi.data.CatalogFamilyDetail
 import ai.workis.jowi.data.CatalogVariant
 import ai.workis.jowi.data.ScreenContext
+import ai.workis.jowi.data.VisStyle
+import ai.workis.jowi.data.vis
 import ai.workis.jowi.data.WorkisMoney
 import ai.workis.jowi.data.catalogImageUrl
 import ai.workis.jowi.data.decodeFamily
@@ -226,15 +228,20 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
     val noticeChip = if (d?.imageQuality == "low" || d?.imageQuality == "page") photoChip(null, d?.imageQuality)?.text else null
     val webChipText = d?.web?.let { webChip(it)?.text }
     val screenLabels = buildList {
-        add(if (isLive) stringResource(R.string.withdraw_family) else stringResource(R.string.approve_publish))
-        add(stringResource(R.string.photo_replace)); add(stringResource(R.string.description_field)); add(stringResource(R.string.variants_title))
-        add(stringResource(R.string.add_row)); add(stringResource(R.string.edit_row)); add(stringResource(R.string.delete_row))
-        add(stringResource(R.string.price_on_request)); add(stringResource(R.string.specs_title)); add(stringResource(R.string.web_title))
-        add(stringResource(R.string.web_url_field)); add(stringResource(R.string.web_resolve)); add(stringResource(R.string.media_title))
-        add(stringResource(R.string.knowledge_title)); add(stringResource(R.string.teach_title)); add(stringResource(R.string.teach_action))
-        if (!isLive) add(stringResource(R.string.reject_family))
-        noticeChip?.let { add(it) }
-        webChipText?.let { add(it) }
+        // the one tinted action on this screen is the toolbar's approve; withdraw is a plain text action
+        if (isLive) add(vis(stringResource(R.string.withdraw_family), VisStyle.SECONDARY))
+        else add(vis(stringResource(R.string.approve_publish), VisStyle.PRIMARY))
+        add(vis(stringResource(R.string.photo_replace), VisStyle.SECONDARY)); add(vis(stringResource(R.string.description_field)))
+        add(vis(stringResource(R.string.variants_title))); add(vis(stringResource(R.string.add_row), VisStyle.SECONDARY))
+        add(vis(stringResource(R.string.edit_row), VisStyle.SECONDARY)); add(vis(stringResource(R.string.delete_row), VisStyle.DESTRUCTIVE))
+        add(vis(stringResource(R.string.price_on_request))); add(vis(stringResource(R.string.specs_title)))
+        add(vis(stringResource(R.string.web_title))); add(vis(stringResource(R.string.web_url_field)))
+        add(vis(stringResource(R.string.web_resolve), VisStyle.SECONDARY)); add(vis(stringResource(R.string.media_title)))
+        add(vis(stringResource(R.string.knowledge_title))); add(vis(stringResource(R.string.teach_title)))
+        add(vis(stringResource(R.string.teach_action), VisStyle.SECONDARY))
+        if (!isLive) add(vis(stringResource(R.string.reject_family), VisStyle.DESTRUCTIVE))
+        noticeChip?.let { add(vis(it, VisStyle.CHIP)) }
+        webChipText?.let { add(vis(it, VisStyle.CHIP)) }
     }
     LaunchedEffect(isLive, d?.name, d?.brand, noticeChip, webChipText, seller) {
         ScreenContext.set(

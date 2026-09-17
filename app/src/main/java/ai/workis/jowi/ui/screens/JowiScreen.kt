@@ -84,6 +84,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.alpha
 import ai.workis.jowi.ui.components.JowiOptions
+import ai.workis.jowi.ui.components.MarkdownText
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.launch
@@ -438,7 +439,9 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Uni
                     Text(line.error, fontSize = 14.sp, lineHeight = 20.sp, color = Beige)
                 }
                 else -> {
-                    Text(line.text, fontSize = 15.sp, lineHeight = 22.sp, color = colors.ink)
+                    // the server writes **bold** and links — render the inline
+                    // markdown, never the asterisks (2026-09-17)
+                    MarkdownText(line.text, color = colors.ink, fontSize = 15.sp, lineHeight = 22.sp)
                     line.match?.takeIf { it.sellers.isNotEmpty() }?.let { MatchCard(it) }
                     // the chat-born list opens natively; else the step after a technical answer
                     val listId = line.listId

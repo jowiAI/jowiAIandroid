@@ -56,6 +56,8 @@ import ai.workis.jowi.data.GeoProvince
 import ai.workis.jowi.data.PartnerCompany
 import ai.workis.jowi.data.PartnerSeatState
 import ai.workis.jowi.data.ScreenContext
+import ai.workis.jowi.data.VisStyle
+import ai.workis.jowi.data.vis
 import ai.workis.jowi.data.WorkisMoney
 import ai.workis.jowi.data.jsonBody
 import ai.workis.jowi.data.partnerCall
@@ -217,16 +219,17 @@ fun CompanySections(mode: CompanyMode = CompanyMode.Company, vm: CompanyViewMode
 
     // Jowi's screen context: which of the two Hesap doors is open, with its labels
     val contextLabels = if (mode == CompanyMode.Company) listOf(
-        stringResource(R.string.company_title), stringResource(R.string.company_short_name), stringResource(R.string.company_address),
-        stringResource(R.string.company_city), stringResource(R.string.company_district), stringResource(R.string.company_postal),
-        stringResource(R.string.company_phone), stringResource(R.string.maps_link), stringResource(R.string.tax_plate_title),
-        stringResource(R.string.tax_plate_view), stringResource(R.string.tax_plate_upload), stringResource(R.string.vkn_label),
-        stringResource(R.string.region_lead_label),
+        vis(stringResource(R.string.company_title)), vis(stringResource(R.string.company_short_name)), vis(stringResource(R.string.company_address)),
+        vis(stringResource(R.string.company_city)), vis(stringResource(R.string.company_district)), vis(stringResource(R.string.company_postal)),
+        vis(stringResource(R.string.company_phone)), vis(stringResource(R.string.maps_link)), vis(stringResource(R.string.tax_plate_title)),
+        vis(stringResource(R.string.tax_plate_view), VisStyle.SECONDARY), vis(stringResource(R.string.tax_plate_upload), VisStyle.SECONDARY),
+        vis(stringResource(R.string.vkn_label)), vis(stringResource(R.string.region_lead_label)),
     ) else listOf(
-        stringResource(R.string.settings_title), stringResource(R.string.permissions_title), stringResource(R.string.region_lead_label),
-        stringResource(R.string.catalog_helper_toggle), stringResource(R.string.autonomy_title), stringResource(R.string.auto_outward),
-        stringResource(R.string.auto_reorder), stringResource(R.string.auto_fund), stringResource(R.string.auto_award_cap),
-        stringResource(R.string.auto_release),
+        vis(stringResource(R.string.settings_title)), vis(stringResource(R.string.permissions_title)), vis(stringResource(R.string.region_lead_label)),
+        vis(stringResource(R.string.catalog_helper_toggle), VisStyle.SECONDARY), vis(stringResource(R.string.autonomy_title)),
+        vis(stringResource(R.string.auto_outward), VisStyle.SECONDARY), vis(stringResource(R.string.auto_reorder), VisStyle.SECONDARY),
+        vis(stringResource(R.string.auto_fund), VisStyle.SECONDARY), vis(stringResource(R.string.auto_award_cap)),
+        vis(stringResource(R.string.auto_release)),
     )
     LaunchedEffect(mode) {
         ScreenContext.set(if (mode == CompanyMode.Company) "seller.company" else "seller.settings", visible = contextLabels)
