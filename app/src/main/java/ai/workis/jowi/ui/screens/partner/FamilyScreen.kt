@@ -61,6 +61,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.CatalogFamilyDetail
+import ai.workis.jowi.data.CatalogMedia
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import ai.workis.jowi.data.CatalogVariant
 import ai.workis.jowi.data.ScreenContext
 import ai.workis.jowi.data.VisStyle
@@ -177,6 +183,36 @@ class FamilyViewModel : ViewModel() {
         }
     }
 
+    /** One gallery item: primary · retire · note — the family door serves a live family too. */
+    fun mediaAction(mediaId: String, action: String, note: String? = null, onDone: (String?) -> Unit) {
+        if (mediaId.isEmpty()) return
+        busy = true; this.note = null
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) {
+                Graph.api.catalogFamilyMediaAction(id, mediaId, action, jsonBody("note" to note), seller)
+            }
+            busy = false
+            if (r?.success == true) { load(id, seller); onDone(null) } else onDone(r?.error ?: r?.message ?: err ?: "")
+        }
+    }
+
+    /** Adds to the gallery: a photo from the device, or a YouTube link. */
+    fun addMedia(bytes: ByteArray? = null, youtubeUrl: String? = null) {
+        busy = true; note = null
+        viewModelScope.launch {
+            val (r, err) = if (bytes != null) {
+                val jpeg = withContext(Dispatchers.IO) { normalizedJpeg(bytes) }
+                if (jpeg == null) { busy = false; note = ai.workis.jowi.data.applyErrorMessage("bad_file", lang); return@launch }
+                val part = MultipartBody.Part.createFormData("image", "photo.jpg", jpeg.toRequestBody("image/jpeg".toMediaType()))
+                partnerCall(lang) { Graph.api.catalogFamilyMediaUpload(id, part, seller) }
+            } else {
+                partnerCall(lang) { Graph.api.catalogFamilyMediaLink(id, jsonBody("youtubeUrl" to youtubeUrl.orEmpty()), seller) }
+            }
+            busy = false
+            if (r?.success == true) load(id, seller) else note = r?.error ?: r?.message ?: err
+        }
+    }
+
     fun uploadPhoto(bytes: ByteArray) {
         busy = true; note = null
         viewModelScope.launch {
@@ -216,6 +252,13 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
     var editVariant by remember { mutableStateOf<CatalogVariant?>(null) }
     var showAddRow by remember { mutableStateOf(false) }
     var fullImage by remember { mutableStateOf<String?>(null) }
+    var openMedia by remember { mutableStateOf<CatalogMedia?>(null) }
+    var showAddVideo by remember { mutableStateOf(false) }
+    val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@rememberLauncherForActivityResult
+        vm.addMedia(bytes = bytes)
+    }
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@rememberLauncherForActivityResult
@@ -239,6 +282,9 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
         add(vis(stringResource(R.string.web_resolve), VisStyle.SECONDARY)); add(vis(stringResource(R.string.media_title)))
         add(vis(stringResource(R.string.knowledge_title))); add(vis(stringResource(R.string.teach_title)))
         add(vis(stringResource(R.string.teach_action), VisStyle.SECONDARY))
+        add(vis(stringResource(R.string.photo_add), VisStyle.SECONDARY)); add(vis(stringResource(R.string.media_add_video), VisStyle.SECONDARY))
+        add(vis(stringResource(R.string.media_primary), VisStyle.SECONDARY)); add(vis(stringResource(R.string.media_note), VisStyle.SECONDARY))
+        add(vis(stringResource(R.string.media_remove), VisStyle.DESTRUCTIVE))
         if (!isLive) add(vis(stringResource(R.string.reject_family), VisStyle.DESTRUCTIVE))
         noticeChip?.let { add(vis(it, VisStyle.CHIP)) }
         webChipText?.let { add(vis(it, VisStyle.CHIP)) }
@@ -367,21 +413,53 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
 
                 // gallery
                 val media = d.media.orEmpty()
-                if (media.isNotEmpty()) FormSection(stringResource(R.string.media_title).uppercase()) {
-                    Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        media.forEach { m ->
-                            val ext = m.externalUrl
-                            if (!ext.isNullOrEmpty() && m.key == null) {
-                                Box(Modifier.size(72.dp).background(colors.ink.copy(alpha = 0.06f), RoundedCornerShape(8.dp)).clickable { openInApp(context, ext) }, contentAlignment = Alignment.Center) {
-                                    Icon(WorkisIcons.Play, contentDescription = null, tint = colors.muted, modifier = Modifier.size(22.dp))
-                                }
-                            } else {
-                                Box(Modifier.size(72.dp)) {
-                                    AuthImage(catalogImageUrl(m.key, "thumb", seller), Modifier.size(72.dp).clickable { fullImage = catalogImageUrl(m.key, "card", seller) })
-                                    if (m.isPrimary == true) Text("★", fontSize = 10.sp, color = Beige, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp))
+                val mediaTitle = stringResource(R.string.media_title)
+                val primaryWord = stringResource(R.string.media_is_primary)
+                FormSection(mediaTitle.uppercase()) {
+                    if (media.isNotEmpty()) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            media.forEachIndexed { i, m ->
+                                // the badges are decoration; the button says what the item IS,
+                                // so TalkBack reads "Fotoğraf ve video 2 · Ana fotoğraf · <not>"
+                                val spoken = listOfNotNull(
+                                    "$mediaTitle ${i + 1}",
+                                    primaryWord.takeIf { m.isPrimary == true },
+                                    m.note?.takeIf { it.isNotEmpty() },
+                                ).joinToString(" · ")
+                                Box(
+                                    Modifier
+                                        .size(72.dp)
+                                        .clickable { openMedia = m }
+                                        .semantics(mergeDescendants = true) { contentDescription = spoken },
+                                ) {
+                                    if (m.key != null) {
+                                        AuthImage(catalogImageUrl(m.key, "thumb", seller), Modifier.size(72.dp))
+                                    } else {
+                                        Box(Modifier.size(72.dp).background(colors.ink.copy(alpha = 0.06f), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+                                            Icon(WorkisIcons.Play, contentDescription = null, tint = colors.muted, modifier = Modifier.size(22.dp))
+                                        }
+                                    }
+                                    if (m.isPrimary == true) {
+                                        Text("★", fontSize = 10.sp, color = Beige, modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).clearAndSetSemantics {})
+                                    }
+                                    if (!m.note.isNullOrEmpty()) {
+                                        Text("✎", fontSize = 10.sp, color = colors.muted, modifier = Modifier.align(Alignment.BottomStart).padding(4.dp).clearAndSetSemantics {})
+                                    }
                                 }
                             }
                         }
+                        Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(enabled = !vm.busy) { galleryPicker.launch(arrayOf("image/*")) }.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                        Icon(WorkisIcons.Camera, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.photo_add), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
+                    }
+                    Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(enabled = !vm.busy) { showAddVideo = true }.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                        Icon(WorkisIcons.Play, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.media_add_video), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
                     }
                 }
 
@@ -424,6 +502,107 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
     if (showAddRow) VariantSheet(vm, null) { showAddRow = false }
     editVariant?.let { v -> VariantSheet(vm, v) { editVariant = null } }
     fullImage?.let { SourcePageDialog(it, stringResource(R.string.media_title)) { fullImage = null } }
+    openMedia?.let { m -> MediaSheet(m, vm, seller, onFull = { fullImage = it }) { openMedia = null } }
+    if (showAddVideo) AddVideoSheet(vm) { showAddVideo = false }
+}
+
+/**
+ * One gallery item as its own page: the web's three actions verbatim —
+ * ★ Birincil yap (the page's ONE tinted action, images only) · ✎ Not · ✕ Kaldır
+ * (destructive, asks first).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MediaSheet(media: CatalogMedia, vm: FamilyViewModel, seller: String?, onFull: (String?) -> Unit, onClose: () -> Unit) {
+    val colors = WorkisTheme.colors
+    val context = LocalContext.current
+    var note by remember(media.id) { mutableStateOf(media.note.orEmpty()) }
+    var errorText by remember { mutableStateOf<String?>(null) }
+    var showRemove by remember { mutableStateOf(false) }
+    val id = media.id.orEmpty()
+    val isImage = media.key != null
+    fun act(action: String, text: String? = null) {
+        vm.mediaAction(id, action, text) { err -> if (err.isNullOrEmpty()) onClose() else errorText = err }
+    }
+    ModalBottomSheet(onDismissRequest = onClose, containerColor = colors.surface) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 30.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.media_title), fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = colors.ink, modifier = Modifier.weight(1f))
+                if (vm.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Kiremit500)
+            }
+            if (isImage) {
+                AuthImage(
+                    catalogImageUrl(media.key, "card", seller),
+                    Modifier.fillMaxWidth().height(220.dp).clickable { onFull(catalogImageUrl(media.key, "card", seller)) },
+                    corner = 12.dp,
+                )
+            } else media.externalUrl?.takeIf { it.isNotEmpty() }?.let { ext ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { openInApp(context, ext) }) {
+                    Icon(WorkisIcons.Play, contentDescription = null, tint = colors.blue, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(ext, fontSize = 13.sp, color = colors.blue, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            // status is never colour alone — star + words
+            if (media.isPrimary == true) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("★ ", fontSize = 13.sp, color = Beige)
+                    Text(stringResource(R.string.media_is_primary), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Beige)
+                }
+            } else if (isImage) {
+                Button(
+                    onClick = { act("primary") },
+                    enabled = !vm.busy,
+                    colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.media_primary), fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+            }
+            FormSection(stringResource(R.string.media_note).uppercase()) {
+                FormRow("", note, { note = it }, {}, false, placeholder = stringResource(R.string.media_note_placeholder), stacked = true, minLines = 1, maxLines = 5)
+                val canSave = !vm.busy && note != media.note.orEmpty()
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(enabled = canSave) { act("note", note) }.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = if (canSave) colors.accentText else colors.faint, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.media_save), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (canSave) colors.accentText else colors.faint)
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(enabled = !vm.busy) { showRemove = true }.padding(vertical = 8.dp)) {
+                Icon(Icons.Filled.Delete, contentDescription = null, tint = colors.danger, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.media_remove), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.danger)
+            }
+            errorText?.let { Text(it, fontSize = 13.sp, color = colors.danger) }
+        }
+    }
+    if (showRemove) {
+        ConfirmDialog(stringResource(R.string.media_remove), stringResource(R.string.media_remove_confirm), destructive = true, onDismiss = { showRemove = false }) {
+            act("retire")
+        }
+    }
+}
+
+/** A YouTube link straight into the gallery. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddVideoSheet(vm: FamilyViewModel, onClose: () -> Unit) {
+    val colors = WorkisTheme.colors
+    var url by remember { mutableStateOf("") }
+    ModalBottomSheet(onDismissRequest = onClose, containerColor = colors.surface) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.media_add_video), fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = colors.ink, modifier = Modifier.weight(1f))
+                TextButton(enabled = url.isNotBlank(), onClick = { vm.addMedia(youtubeUrl = url.trim()); onClose() }) {
+                    Text(stringResource(R.string.media_save), color = if (url.isBlank()) colors.faint else colors.accentText, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            FormSection(null) {
+                FormRow("", url, { url = it }, {}, false, placeholder = stringResource(R.string.media_video_url), stacked = true, keyboardType = KeyboardType.Uri)
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -35,7 +35,13 @@ data class CompanyInfo(
 data class CompanySeats(val buyer: Boolean? = null, val seller: Boolean? = null, val carrier: Boolean? = null)
 
 @Serializable
-data class RegionLead(val name: String? = null, val region: String? = null) {
+data class RegionLead(
+    val name: String? = null,
+    val region: String? = null,
+    /** The lead's Madde 11/3 declaration (firm names) and whether this seller is one of them. */
+    val relatedFirms: List<String>? = null,
+    val ownFirm: Boolean? = null,
+) {
     /** "Armağan — İstanbul Avrupa" — the region once, even when the name already carries it. */
     val line: String get() {
         val n = name.orEmpty(); val r = region.orEmpty()

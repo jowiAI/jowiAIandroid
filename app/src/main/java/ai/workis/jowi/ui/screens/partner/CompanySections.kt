@@ -67,6 +67,7 @@ import ai.workis.jowi.ui.components.PdfViewerDialog
 import ai.workis.jowi.ui.components.looksLikePdf
 import ai.workis.jowi.ui.screens.expert.NoteBand
 import ai.workis.jowi.ui.theme.SuccessGreen
+import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.Dispatchers
@@ -226,7 +227,8 @@ fun CompanySections(mode: CompanyMode = CompanyMode.Company, vm: CompanyViewMode
         vis(stringResource(R.string.vkn_label)), vis(stringResource(R.string.region_lead_label)),
     ) else listOf(
         vis(stringResource(R.string.settings_title)), vis(stringResource(R.string.permissions_title)), vis(stringResource(R.string.region_lead_label)),
-        vis(stringResource(R.string.catalog_helper_toggle), VisStyle.SECONDARY), vis(stringResource(R.string.autonomy_title)),
+        vis(stringResource(R.string.related_firms_label)), vis(stringResource(R.string.catalog_helper_toggle), VisStyle.SECONDARY),
+        vis(stringResource(R.string.autonomy_title)),
         vis(stringResource(R.string.auto_outward), VisStyle.SECONDARY), vis(stringResource(R.string.auto_reorder), VisStyle.SECONDARY),
         vis(stringResource(R.string.auto_fund), VisStyle.SECONDARY), vis(stringResource(R.string.auto_award_cap)),
         vis(stringResource(R.string.auto_release)),
@@ -248,6 +250,30 @@ fun CompanySections(mode: CompanyMode = CompanyMode.Company, vm: CompanyViewMode
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.region_lead_label) + ": " + lead.line, fontSize = 13.sp, color = colors.muted)
                         }
+                    }
+                    // Madde 4/4 + 11/3: the lead's related-firm declaration is read
+                    // BEFORE the switch below — the seller decides knowing it
+                    val firms = c.catalogHelper?.lead?.relatedFirms.orEmpty()
+                    if (firms.isNotEmpty()) {
+                        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(WorkisIcons.Building, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    stringResource(R.string.related_firms_label) + ": " + firms.joinToString(", "),
+                                    fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, modifier = Modifier.weight(1f, fill = false),
+                                )
+                                if (c.catalogHelper?.lead?.ownFirm == true) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        "· " + stringResource(R.string.related_firms_own),
+                                        fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.accentText,
+                                    )
+                                }
+                            }
+                            Text(stringResource(R.string.related_firms_note), fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
+                        }
+                        Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
                     }
                     val h = c.catalogHelper
                     if (h?.available == true) {

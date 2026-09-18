@@ -356,7 +356,16 @@
     <string name="match_header">Purchase request</string>
     <string name="match_offers">offers</string>
     <string name="matched_word">matched</string>
+    <string name="media_add_video">Add YouTube video</string>
+    <string name="media_is_primary">Main photo</string>
+    <string name="media_note">✎ Note</string>
+    <string name="media_note_placeholder">What does this photo show?</string>
+    <string name="media_primary">★ Make primary</string>
+    <string name="media_remove">✕ Remove</string>
+    <string name="media_remove_confirm">The item leaves the gallery. If it was the main photo, the product is left without one.</string>
+    <string name="media_save">Save</string>
     <string name="media_title">Photos &amp; videos</string>
+    <string name="media_video_url">YouTube link</string>
     <string name="msg_word">messages</string>
     <string name="my_agreement">My agreement</string>
     <string name="name_visibility_title">Name visibility</string>
@@ -405,7 +414,7 @@
     <string name="payout_title">Payout account and tax status</string>
     <string name="pdf_too_big">The PDF exceeds 5 MB — choose a smaller file.</string>
     <string name="permissions_title">Permissions</string>
-    <string name="photo_add">Add to gallery</string>
+    <string name="photo_add">Add photo from device</string>
     <string name="photo_replace">Replace photo</string>
     <string name="pinned_geocode">Located from the address</string>
     <string name="pinned_manual">Pinned by you</string>
@@ -462,6 +471,9 @@
     <string name="reject_family">Reject</string>
     <string name="rejoin_row">Come back</string>
     <string name="rejoin_sub">You have left — if you come back, the coordinator re-verifies you before new shares accrue.</string>
+    <string name="related_firms_label">Related-firm declaration</string>
+    <string name="related_firms_note">Your field lead is an officer of the firm(s) above, which also trade on Workis. Know this before you open your catalogue: the platform gives them no advantage, and everything the lead does on your page is recorded.</string>
+    <string name="related_firms_own">this is your own firm</string>
     <string name="reply_placeholder">Reply — the partner sees it in their Jowi chat…</string>
     <string name="reply_placeholder_expert">Reply — the expert sees it in their Jowi chat…</string>
     <string name="request_label">Request</string>

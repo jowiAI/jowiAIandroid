@@ -356,7 +356,16 @@
     <string name="match_header">Satın alma talebi</string>
     <string name="match_offers">teklif</string>
     <string name="matched_word">eşleşti</string>
+    <string name="media_add_video">YouTube videosu ekle</string>
+    <string name="media_is_primary">Ana fotoğraf</string>
+    <string name="media_note">✎ Not</string>
+    <string name="media_note_placeholder">Bu fotoğraf neyi gösteriyor?</string>
+    <string name="media_primary">★ Birincil yap</string>
+    <string name="media_remove">✕ Kaldır</string>
+    <string name="media_remove_confirm">Görsel galeriden çıkar. Ana fotoğraf ise ürün ana fotoğrafsız kalır.</string>
+    <string name="media_save">Kaydet</string>
     <string name="media_title">Fotoğraf ve video</string>
+    <string name="media_video_url">YouTube bağlantısı</string>
     <string name="msg_word">mesaj</string>
     <string name="my_agreement">Sözleşmem</string>
     <string name="name_visibility_title">Ad görünürlüğü</string>
@@ -405,7 +414,7 @@
     <string name="payout_title">Ödeme hesabı ve vergi durumu</string>
     <string name="pdf_too_big">PDF 5 MB\'ı aşıyor — daha küçük bir dosya seçin.</string>
     <string name="permissions_title">Yetkiler</string>
-    <string name="photo_add">Galeriye ekle</string>
+    <string name="photo_add">Cihazdan fotoğraf ekle</string>
     <string name="photo_replace">Fotoğrafı değiştir</string>
     <string name="pinned_geocode">Adresten bulundu</string>
     <string name="pinned_manual">Sizin sabitlediğiniz</string>
@@ -462,6 +471,9 @@
     <string name="reject_family">Reddet</string>
     <string name="rejoin_row">Geri dön</string>
     <string name="rejoin_sub">Ayrıldınız — geri dönerseniz yeni pay birikmeden önce koordinatör sizi yeniden doğrular.</string>
+    <string name="related_firms_label">İlişkili firma beyanı</string>
+    <string name="related_firms_note">Saha sorumlunuz, Workis üzerinde de ticaret yapan yukarıdaki firma(lar)da yetkilidir. Kataloğunuzu açmadan önce bunu bilin: platform onlara hiçbir üstünlük tanımaz ve saha sorumlusunun sayfanızda yaptığı her işlem kaydedilir.</string>
+    <string name="related_firms_own">bu sizin firmanız</string>
     <string name="reply_placeholder">Yanıtla — partner Jowi sohbetinde görür…</string>
     <string name="reply_placeholder_expert">Yanıtla — uzman Jowi sohbetinde görür…</string>
     <string name="request_label">Talep</string>

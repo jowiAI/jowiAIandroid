@@ -284,6 +284,33 @@ interface WorkisApi {
     @POST("workis/seller/catalog/families/{id}/image/")
     suspend fun catalogFamilyImage(@Path("id") id: String, @Part image: okhttp3.MultipartBody.Part, @Query("seller") seller: String? = null): SimpleResult
 
+    /** One gallery item: `primary` (images only) · `retire` · `note` ({note} only for note). Serves proposed and approved families alike. */
+    @POST("workis/seller/catalog/families/{id}/media/{mediaId}/{action}/")
+    suspend fun catalogFamilyMediaAction(
+        @Path("id") id: String,
+        @Path("mediaId") mediaId: String,
+        @Path("action") action: String,
+        @Body body: kotlinx.serialization.json.JsonObject,
+        @Query("seller") seller: String? = null,
+    ): SimpleResult
+
+    /** Adds to the gallery: a photo from the device … */
+    @Multipart
+    @POST("workis/seller/catalog/families/{id}/media/")
+    suspend fun catalogFamilyMediaUpload(
+        @Path("id") id: String,
+        @Part image: okhttp3.MultipartBody.Part,
+        @Query("seller") seller: String? = null,
+    ): SimpleResult
+
+    /** … or a YouTube link. */
+    @POST("workis/seller/catalog/families/{id}/media/")
+    suspend fun catalogFamilyMediaLink(
+        @Path("id") id: String,
+        @Body body: kotlinx.serialization.json.JsonObject,
+        @Query("seller") seller: String? = null,
+    ): SimpleResult
+
     @POST("workis/seller/catalog/families/{id}/web/")
     suspend fun catalogFamilyWeb(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject, @Query("seller") seller: String? = null): SimpleResult
 
