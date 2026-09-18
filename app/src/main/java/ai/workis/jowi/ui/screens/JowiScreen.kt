@@ -470,7 +470,14 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Uni
                     // the stamp: verified-by-expert vs generative — text, never colour alone.
                     // A "which one do you mean?" turn has no provenance to stamp.
                     val label = line.label
-                    if (line.source == "clarify" || line.options != null) Unit
+                    // the competitor-price wall says itself: a lock and the sentence,
+                    // no provenance line and no thumbs (2026-09-18)
+                    if (line.source == "wall") {
+                        Text(
+                            "🔒 " + stringResource(R.string.ask_answer_source_wall),
+                            fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint,
+                        )
+                    } else if (line.source == "clarify" || line.options != null) Unit
                     else if (!label.isNullOrEmpty()) {
                         Text(label, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.5.sp, color = colors.muted)
                     } else if (line.source != null && line.surface != null) {
@@ -486,7 +493,7 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Uni
                             fontSize = 12.sp, color = colors.faint,
                         )
                     }
-                    if (line.kb != null) Thumbs(line, vm)
+                    if (line.kb != null && line.source != "wall") Thumbs(line, vm)
                 }
             }
         }

@@ -72,6 +72,8 @@ import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.OnKiremitFill
 import ai.workis.jowi.ui.theme.SuccessGreen
+import androidx.compose.material3.Icon
+import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.Dispatchers
@@ -129,7 +131,7 @@ class QuotesViewModel : ViewModel() {
 
 /** Teklifler — one card per invitation; ONE of: send quote / the sent quote / the won order. */
 @Composable
-fun QuotesScreen(vm: QuotesViewModel, onCompose: (String) -> Unit) {
+fun QuotesScreen(vm: QuotesViewModel, onCompose: (String) -> Unit, onThread: (String) -> Unit = {}) {
     val colors = WorkisTheme.colors
     LaunchedEffect(Unit) { vm.load() }
     var pdf by remember { mutableStateOf<Pair<String, String>?>(null) } // url to title
@@ -142,7 +144,13 @@ fun QuotesScreen(vm: QuotesViewModel, onCompose: (String) -> Unit) {
             rows != null -> {
                 if (rows.isEmpty()) item { Text(stringResource(R.string.quotes_empty), fontSize = 13.sp, color = colors.faint) }
                 items(rows, key = { it.id ?: it.hashCode() }) { inv ->
-                    InvitationCard(inv, onCompose = { inv.id?.let(onCompose) }, onPdf = { url, title -> pdf = url to title }, onRevise = { reviseFor = inv })
+                    InvitationCard(
+                        inv,
+                        onCompose = { inv.id?.let(onCompose) },
+                        onPdf = { url, title -> pdf = url to title },
+                        onRevise = { reviseFor = inv },
+                        onThread = { inv.id?.let(onThread) },
+                    )
                 }
             }
             vm.error != null -> item { Text(vm.error.orEmpty(), color = colors.danger, fontSize = 13.sp) }
@@ -164,7 +172,7 @@ fun QuotesScreen(vm: QuotesViewModel, onCompose: (String) -> Unit) {
 }
 
 @Composable
-private fun InvitationCard(inv: SellerInvitation, onCompose: () -> Unit, onPdf: (String, String) -> Unit, onRevise: () -> Unit) {
+private fun InvitationCard(inv: SellerInvitation, onCompose: () -> Unit, onPdf: (String, String) -> Unit, onRevise: () -> Unit, onThread: () -> Unit) {
     val colors = WorkisTheme.colors
     SurfaceCard {
         Row(verticalAlignment = Alignment.Top) {
@@ -193,6 +201,12 @@ private fun InvitationCard(inv: SellerInvitation, onCompose: () -> Unit, onPdf: 
             inv.isOpen -> Button(onClick = onCompose, colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill), modifier = Modifier.fillMaxWidth().height(44.dp)) {
                 Text("✈ " + stringResource(R.string.send_quote), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             }
+        }
+        // every invitation carries its own table (slice 2 part 2)
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(onClick = onThread).padding(vertical = 4.dp)) {
+            Icon(WorkisIcons.Bubble, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.thread_open), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
         }
         inv.order?.let { OrderBlock(it, onPdf) }
         if (inv.lost == true) StatusPill(stringResource(R.string.order_lost))

@@ -295,6 +295,16 @@ private fun CardLabel(text: String) {
     )
 }
 
+/** The 1040-style Sign-Here band, for any paper that needs a typed signature. */
+@Composable
+fun SignHereBand(
+    signerName: String,
+    onSignerChange: (String) -> Unit,
+    onSignerCommit: () -> Unit = {},
+    modifier: Modifier = Modifier,
+    readOnly: Boolean = false,
+) = SignBand(signerName, onSignerChange, onSignerCommit, modifier, readOnly)
+
 @Composable
 private fun SignBand(
     signerName: String,

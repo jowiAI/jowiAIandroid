@@ -83,6 +83,9 @@ import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.OnKiremitFill
 import ai.workis.jowi.ui.theme.SuccessGreen
+import ai.workis.jowi.ui.components.FormSection
+import ai.workis.jowi.ui.theme.WorkisIcons
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.Job
@@ -185,7 +188,7 @@ private fun sendGroups(d: PurchaseListDetail): List<SendGroup> {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ListDetailScreen(listId: String, onBack: () -> Unit) {
+fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> Unit = {}) {
     val vm: ListDetailViewModel = viewModel(key = "list-$listId")
     val colors = WorkisTheme.colors
     LaunchedEffect(listId) { vm.bind(listId) }
@@ -234,7 +237,10 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit) {
                             ) { Text(label, fontSize = 13.sp, maxLines = 1) }
                         }
                     }
-                    if (segment == 0) ItemsSegment(d, vm, onPick = { pickItem = it }, onAdd = { showAdd = true })
+                    if (segment == 0) {
+                        ItemsSegment(d, vm, onPick = { pickItem = it }, onAdd = { showAdd = true })
+                        ChatInvitesSection(d, onThread)
+                    }
                     else RfqSegment(d, vm, onRfqPdf = { rfqPdf = vm.rfqPdfUrl(it) }, onAward = { showAward = true })
                 }
                 vm.error != null -> Text(vm.error.orEmpty(), color = colors.danger, fontSize = 13.sp)
@@ -277,6 +283,33 @@ private fun Header(d: PurchaseListDetail) {
 }
 
 // ---------- Liste ----------
+
+/** One row per invited seller — the buyer's door onto that seller's table. */
+@Composable
+private fun ChatInvitesSection(d: PurchaseListDetail, onThread: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    val invites = d.chatInvites.orEmpty().filter { !it.id.isNullOrEmpty() }
+    if (invites.isEmpty()) return
+    Spacer(Modifier.height(14.dp))
+    FormSection(stringResource(R.string.chat_invites_title).uppercase()) {
+        invites.forEachIndexed { i, inv ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().clickable { inv.id?.let(onThread) }.padding(horizontal = 14.dp, vertical = 12.dp),
+            ) {
+                Icon(WorkisIcons.Bubble, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(inv.lbl?.short ?: inv.lbl?.long.orEmpty(), fontSize = 14.sp, color = colors.ink, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                (inv.unread ?: 0).takeIf { it > 0 }?.let {
+                    StatusPill("$it " + stringResource(R.string.order_unread), Kiremit500)
+                    Spacer(Modifier.width(6.dp))
+                }
+                Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint)
+            }
+            if (i < invites.lastIndex) Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
+        }
+    }
+}
 
 @Composable
 private fun ItemsSegment(d: PurchaseListDetail, vm: ListDetailViewModel, onPick: (PLItem) -> Unit, onAdd: () -> Unit) {

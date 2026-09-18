@@ -55,6 +55,10 @@ sealed interface MarketDest {
     data class Compose(val invitationId: String) : MarketDest
     data object Catalog : MarketDest
     data class Family(val id: String) : MarketDest
+    data object Orders : MarketDest
+    data object Approvals : MarketDest
+    data class Thread(val door: ThreadDoor, val back: MarketDest) : MarketDest
+    data class Contract(val orderId: String, val back: MarketDest) : MarketDest
 }
 
 @Composable
@@ -63,26 +67,67 @@ fun MarketRoot() {
     val listsVm: ListsViewModel = viewModel()
     val quotesVm: QuotesViewModel = viewModel()
     val catalogVm: CatalogViewModel = viewModel()
+    val ordersVm: OrdersViewModel = viewModel()
+    val approvalsVm: ApprovalsViewModel = viewModel()
     BackHandler(enabled = dest != MarketDest.Home) {
-        dest = when (dest) { is MarketDest.ListDetail -> MarketDest.Lists; is MarketDest.Compose -> MarketDest.Quotes; is MarketDest.Family -> MarketDest.Catalog; else -> MarketDest.Home }
+        dest = when (val d = dest) {
+            is MarketDest.ListDetail -> MarketDest.Lists
+            is MarketDest.Compose -> MarketDest.Quotes
+            is MarketDest.Family -> MarketDest.Catalog
+            is MarketDest.Thread -> d.back
+            is MarketDest.Contract -> d.back
+            else -> MarketDest.Home
+        }
     }
     when (val d = dest) {
-        MarketDest.Home -> MarketHome(listsVm, quotesVm, catalogVm) { dest = it }
+        MarketDest.Home -> MarketHome(listsVm, quotesVm, catalogVm, ordersVm, approvalsVm) { dest = it }
+        MarketDest.Orders -> OrdersScreen(
+            ordersVm,
+            onBack = { dest = MarketDest.Home },
+            onThread = { o -> o.id?.let { dest = MarketDest.Thread(ThreadDoor.Order(it), MarketDest.Orders) } },
+            onContract = { o -> o.id?.let { dest = MarketDest.Contract(it, MarketDest.Orders) } },
+        )
+        MarketDest.Approvals -> ApprovalsScreen(
+            approvalsVm,
+            onBack = { dest = MarketDest.Home },
+            onList = { dest = MarketDest.ListDetail(it) },
+        )
+        is MarketDest.Thread -> ThreadScreen(
+            d.door,
+            onBack = { dest = d.back },
+            onContract = { id -> dest = MarketDest.Contract(id, MarketDest.Thread(d.door, d.back)) },
+        )
+        is MarketDest.Contract -> OrderContractScreen(d.orderId, onBack = { dest = d.back })
         MarketDest.Catalog -> CatalogScreen(catalogVm, onBack = { dest = MarketDest.Home }, onOpenFamily = { dest = MarketDest.Family(it) })
         is MarketDest.Family -> FamilyScreen(d.id, onBack = { dest = MarketDest.Catalog; catalogVm.load() })
         MarketDest.Lists -> ConsoleSub(stringResource(R.string.lists_title), { dest = MarketDest.Home }, trailing = { ListsMenu(listsVm) }) {
             ListsScreen(listsVm) { dest = MarketDest.ListDetail(it) }
         }
-        is MarketDest.ListDetail -> ListDetailScreen(d.id, onBack = { dest = MarketDest.Lists; listsVm.load() })
+        is MarketDest.ListDetail -> ListDetailScreen(
+            d.id,
+            onBack = { dest = MarketDest.Lists; listsVm.load() },
+            onThread = { invId -> dest = MarketDest.Thread(ThreadDoor.Invitation(invId), MarketDest.ListDetail(d.id)) },
+        )
         MarketDest.Quotes -> ConsoleSub(stringResource(R.string.quotes_title), { dest = MarketDest.Home }) {
-            QuotesScreen(quotesVm) { dest = MarketDest.Compose(it) }
+            QuotesScreen(
+                quotesVm,
+                onCompose = { dest = MarketDest.Compose(it) },
+                onThread = { invId -> dest = MarketDest.Thread(ThreadDoor.Invitation(invId), MarketDest.Quotes) },
+            )
         }
         is MarketDest.Compose -> QuoteComposerScreen(quotesVm, d.invitationId) { dest = MarketDest.Quotes }
     }
 }
 
 @Composable
-private fun MarketHome(listsVm: ListsViewModel, quotesVm: QuotesViewModel, catalogVm: CatalogViewModel, onOpen: (MarketDest) -> Unit) {
+private fun MarketHome(
+    listsVm: ListsViewModel,
+    quotesVm: QuotesViewModel,
+    catalogVm: CatalogViewModel,
+    ordersVm: OrdersViewModel,
+    approvalsVm: ApprovalsViewModel,
+    onOpen: (MarketDest) -> Unit,
+) {
     // a tab root: no seller screen is open (2026-09-17)
     LaunchedEffect(Unit) { ScreenContext.clear() }
     val colors = WorkisTheme.colors
@@ -91,6 +136,8 @@ private fun MarketHome(listsVm: ListsViewModel, quotesVm: QuotesViewModel, catal
     LaunchedEffect(c?.isBuyer, c?.isSeller) {
         if (c?.isBuyer == true) listsVm.load()
         if (c?.isSeller == true) { quotesVm.load(); catalogVm.load() }
+        // the order loop is every seat's — a carrier sees only these two
+        if (c != null) { ordersVm.load(); approvalsVm.load() }
     }
     Column(
         Modifier.fillMaxSize().background(colors.canvas).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
@@ -141,6 +188,26 @@ private fun MarketHome(listsVm: ListsViewModel, quotesVm: QuotesViewModel, catal
             ) { onOpen(MarketDest.Quotes) }
             Spacer(Modifier.height(14.dp))
         }
+        // Siparişler and Onaylar sit on every seat (Django §5, §8)
+        val orders = ordersVm.orders
+        BigTile(
+            number = orders?.size,
+            label = stringResource(R.string.orders_screen_title),
+            sub = orders?.let {
+                val unread = ordersVm.unreadTotal
+                if (unread > 0) "$unread " + stringResource(R.string.order_unread)
+                else ordersVm.missingTermsOrders.takeIf { n -> n > 0 }?.let { n -> "$n " + stringResource(R.string.order_terms_missing) } ?: " "
+            },
+            icon = WorkisIcons.Checklist,
+        ) { onOpen(MarketDest.Orders) }
+        Spacer(Modifier.height(14.dp))
+        BigTile(
+            number = approvalsVm.data?.counts?.total,
+            label = stringResource(R.string.approvals_title),
+            sub = approvalsVm.data?.let { " " },
+            icon = WorkisIcons.DocPlus,
+        ) { onOpen(MarketDest.Approvals) }
+        Spacer(Modifier.height(14.dp))
         if (!c.isBuyer && !c.isSeller) {
             Text(stringResource(R.string.market_empty), fontSize = 14.sp, color = colors.muted, modifier = Modifier.padding(top = 20.dp))
         }

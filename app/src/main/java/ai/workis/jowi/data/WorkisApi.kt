@@ -235,6 +235,84 @@ interface WorkisApi {
     @POST("workis/company/catalog-helper/")
     suspend fun companyCatalogHelper(@Body body: kotlinx.serialization.json.JsonObject): SimpleResult
 
+    // --- partner seat, slice 2: the order loop (Django §5–§8) — money here is a JSON number ---
+    /** One card per order per seat the firm holds. */
+    @GET("workis/orders/")
+    suspend fun orders(): PartnerOrders
+
+    /** The buyer escrows the total — only while `escrow == "no_escrow"`. */
+    @POST("workis/orders/{id}/fund/")
+    suspend fun orderFund(@Path("id") id: String): OrderFundResult
+
+    @POST("workis/orders/lines/{lineId}/received/")
+    suspend fun orderLineReceived(@Path("lineId") lineId: String): SimpleResult
+
+    @POST("workis/shipments/{id}/review/")
+    suspend fun shipmentReview(@Path("id") id: String, @Body body: ReviewBody): SimpleResult
+
+    // the two threads — one screen, two doors
+    @GET("workis/orders/{id}/thread/")
+    suspend fun orderThread(@Path("id") id: String): ThreadPayload
+
+    @GET("workis/invitations/{id}/thread/")
+    suspend fun invitationThread(@Path("id") id: String): ThreadPayload
+
+    @POST("workis/orders/{id}/thread/")
+    suspend fun orderThreadPost(@Path("id") id: String, @Body body: ThreadPostBody): ThreadPostResult
+
+    @POST("workis/invitations/{id}/thread/")
+    suspend fun invitationThreadPost(@Path("id") id: String, @Body body: ThreadPostBody): ThreadPostResult
+
+    /** Polled every 8 s while the screen is open — there is no push channel yet. */
+    @GET("workis/orders/{id}/thread/new/")
+    suspend fun orderThreadNew(@Path("id") id: String, @Query("after") after: String): ThreadNew
+
+    @GET("workis/invitations/{id}/thread/new/")
+    suspend fun invitationThreadNew(@Path("id") id: String, @Query("after") after: String): ThreadNew
+
+    /** `{action:"confirm"}` or `{action:"edit", value:"<the sentence>"}` — buyer and seller only. */
+    @POST("workis/orders/{id}/terms/{key}/")
+    suspend fun orderTerm(@Path("id") id: String, @Path("key") key: String, @Body body: kotlinx.serialization.json.JsonObject): TermActionResult
+
+    // the order contract
+    @GET("workis/orders/{id}/contract/")
+    suspend fun orderContract(@Path("id") id: String): ContractResponse
+
+    @POST("workis/orders/{id}/contract/accept/")
+    suspend fun orderContractAccept(@Path("id") id: String, @Body body: ContractAcceptBody): ContractAcceptResult
+
+    // Onaylar — nine kinds, one action per card
+    @GET("workis/approvals/")
+    suspend fun approvals(): Approvals
+
+    @POST("workis/approvals/outward/{mid}/")
+    suspend fun approvalOutward(@Path("mid") mid: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
+    @POST("workis/orders/{id}/delay-cancel/")
+    suspend fun orderDelayCancel(@Path("id") id: String): SimpleResult
+
+    @POST("workis/orders/lines/{lineId}/return/")
+    suspend fun lineReturn(@Path("lineId") lineId: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
+    @POST("workis/orders/lines/{lineId}/return-decision/")
+    suspend fun lineReturnDecision(@Path("lineId") lineId: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
+    /** Releases the held payment for the line. */
+    @POST("workis/orders/lines/{lineId}/confirm/")
+    suspend fun lineConfirm(@Path("lineId") lineId: String): SimpleResult
+
+    @POST("workis/orders/lines/{lineId}/objection/")
+    suspend fun lineObjection(@Path("lineId") lineId: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
+    @POST("workis/orders/lines/{lineId}/objection-withdraw/")
+    suspend fun lineObjectionWithdraw(@Path("lineId") lineId: String): SimpleResult
+
+    @POST("workis/orders/lines/{lineId}/objection-resolve/")
+    suspend fun lineObjectionResolve(@Path("lineId") lineId: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
+    @POST("workis/orders/lines/{lineId}/warranty-decision/")
+    suspend fun lineWarrantyDecision(@Path("lineId") lineId: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
     @GET("workis/geo/provinces/")
     suspend fun geoProvinces(): GeoProvinces
 

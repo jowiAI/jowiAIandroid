@@ -150,6 +150,14 @@ data class PurchaseListIndex(val lists: List<PurchaseListRow>? = null)
 data class PLLabel(val short: String? = null, val long: String? = null, val city: String? = null, val district: String? = null, val hover: String? = null)
 
 @Serializable
+data class PLChatInvite(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val lbl: PLLabel? = null,
+    val status: String? = null,
+    val unread: Int? = null,
+)
+
+@Serializable
 data class PLInfo(
     @Serializable(with = FlexString::class) val id: String? = null,
     val title: String? = null,
@@ -318,6 +326,8 @@ data class PurchaseListDetail(
     val sendPreview: List<PLSendRow>? = null,
     val sendStatusMode: Boolean? = null,
     val chatUnreadTotal: Int? = null,
+    /** The buyer's "Satıcı yazışmaları" rows — one per invited seller. */
+    val chatInvites: List<PLChatInvite>? = null,
     val rfqNote: String? = null,
     val rfqLetter: String? = null,
     val rfqLetterDefault: String? = null,
