@@ -52,6 +52,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,6 +79,9 @@ import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.OnKiremitFill
 import ai.workis.jowi.ui.theme.SuccessGreen
 import ai.workis.jowi.data.AskNext
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.text.style.TextOverflow
 import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.data.AskOption
 import ai.workis.jowi.data.ScreenContext
@@ -92,7 +97,53 @@ import kotlinx.coroutines.withTimeoutOrNull
 import retrofit2.HttpException
 
 /** A purchase request read by Jowi — the parsed line + the catalogue's sellers (price-blind). */
-data class AskMatch(val item: String, val qty: String?, val sellers: List<AskSeller>)
+data class AskMatch(
+    val item: String,
+    val qty: String?,
+    val unit: String?,
+    val nProducts: Int?,
+    val approximate: Boolean,
+    val listStage: String?,
+    val sellers: List<AskSeller>,
+) {
+    /** "100 metre · yeşil emici spiral hortum" — `item` no longer carries the quantity. */
+    val title: String
+        get() {
+            val measure = listOfNotNull(qty?.takeIf { it.isNotEmpty() }, unit?.takeIf { it.isNotEmpty() }).joinToString(" ")
+            return listOf(measure, item).filter { it.isNotEmpty() }.joinToString(" · ")
+        }
+}
+
+/**
+ * A trailing full stop or a stray space is not a rewrite. A changed word, an
+ * added "?" or "!", or a different case is.
+ */
+fun materiallyDifferent(typed: String, shown: String): Boolean {
+    fun norm(s: String) = s.trim().trimEnd('.', ' ', '\u00A0')
+    return norm(typed) != norm(shown)
+}
+
+/** ISO-8601 for a turn written right now, so live and history read alike. */
+private fun nowStamp(): String =
+    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.ROOT).format(java.util.Date())
+
+/** "HH:mm" under a turn; empty when the stamp is unreadable. */
+fun clockOf(at: String?): String {
+    val t = at.orEmpty()
+    val i = t.indexOf('T')
+    return if (i > 0 && t.length >= i + 6) t.substring(i + 1, i + 6) else ""
+}
+
+/** "18 Eylül 2026" — the faint separator when the day turns over. */
+fun dayOf(at: String?): String {
+    val d = at.orEmpty().take(10)
+    if (d.length != 10) return ""
+    val parsed = runCatching {
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).parse(d)
+    }.getOrNull() ?: return ""
+    val locale = if (ai.workis.jowi.Graph.language.value == "en") java.util.Locale.UK else java.util.Locale("tr", "TR")
+    return java.text.SimpleDateFormat("d MMMM yyyy", locale).format(parsed)
+}
 
 /**
  * One line of the conversation — server history rows and the live turns
@@ -118,6 +169,9 @@ data class JowiLine(
     val question: String? = null, // the asker's text this reply answers
     val options: List<AskOption>? = null, // "which one do you mean?" (2026-09-17)
     val optionPicked: Boolean = false, // a tapped option closes the set
+    val at: String? = null, // the turn's stamp; a live turn takes "now"
+    /** "Teklif topla" on a match card: the spinner and the list stay on THAT card. */
+    val collecting: Boolean = false,
 )
 
 class JowiViewModel : ViewModel() {
@@ -151,14 +205,21 @@ class JowiViewModel : ViewModel() {
                         .associate { (it.question.orEmpty() + "\u001F" + it.text) to (it.options!! to it.optionPicked) }
                     lines.clear()
                     var lastQ: String? = null // each reply remembers the question it answers ("Teklif topla" resends it)
+                    // the server keeps a "Teklif topla" resend as its own question +
+                    // answer pair; the card that bore the match carries the listId,
+                    // so the repeat pair is folded away
+                    val collected = HashMap<String, String>() // question → listId
                     r.value.lines.orEmpty().forEach { l ->
-                        val match = if (l.kind == "match") AskMatch(l.item.orEmpty(), l.qty, l.sellers.orEmpty()) else null
+                        val match = if (l.kind == "match") AskMatch(
+                            l.item.orEmpty(), l.qty, l.unit, l.nProducts, l.approximate == true, l.listStage, l.sellers.orEmpty(),
+                        ) else null
                         val isUser = l.who == "user"
                         lines += JowiLine(
                             id = newId(), who = l.who ?: "jowi", text = l.text.orEmpty(),
                             original = l.qOriginal, href = l.href?.takeIf { it.isNotEmpty() },
                             match = match, source = l.source, surface = l.surface, label = l.label, kb = l.kb,
                             listId = l.listId?.takeIf { it.isNotEmpty() }, next = l.next, question = if (isUser) null else lastQ,
+                            at = l.at,
                         )
                         if (!isUser) {
                             kept[lastQ.orEmpty() + "\u001F" + l.text.orEmpty()]?.let { (opts, picked) ->
@@ -166,12 +227,33 @@ class JowiViewModel : ViewModel() {
                             }
                         }
                         if (isUser) lastQ = l.text
+                        if (!isUser) l.listId?.takeIf { it.isNotEmpty() }?.let { collected[lastQ.orEmpty()] = it }
                     }
+                    foldResends(collected)
                 }
                 is ApiResult.Err -> Unit // an unreachable history is not an error screen
             }
             loaded = true
         }
+    }
+
+    /** Move a resend's `listId` onto the match card and drop the repeat pair. */
+    private fun foldResends(collected: Map<String, String>) {
+        if (collected.isEmpty()) return
+        val drop = mutableSetOf<Long>()
+        lines.forEachIndexed { i, l ->
+            if (l.match == null) return@forEachIndexed
+            val listId = collected[l.question.orEmpty()] ?: return@forEachIndexed
+            lines[i] = l.copy(listId = l.listId ?: listId)
+            // the repeat is the LATER pair with the same question and no match
+            lines.forEachIndexed { j, other ->
+                if (j > i && other.question == l.question && other.match == null && other.listId == listId) {
+                    drop += other.id
+                    lines.getOrNull(j - 1)?.takeIf { it.who == "user" && it.text == l.question }?.let { drop += it.id }
+                }
+            }
+        }
+        if (drop.isNotEmpty()) lines.removeAll { it.id in drop }
     }
 
     fun clear() {
@@ -214,10 +296,38 @@ class JowiViewModel : ViewModel() {
         send(q, null, createList = true)
     }
 
+    /** "Teklif topla" on a match card: the same sentence again, but the answer
+     *  stays on THAT card — no new pair is drawn. */
+    fun collectQuotesOnCard(line: JowiLine) {
+        val q = line.question ?: lines.lastOrNull { it.who == "user" }?.text ?: return
+        val id = line.id
+        val idx = lines.indexOfFirst { it.id == id }
+        if (idx < 0 || lines[idx].collecting) return
+        lines[idx] = lines[idx].copy(collecting = true)
+        viewModelScope.launch {
+            val ctx = ScreenContext.current
+            val r = runCatching {
+                Graph.api.ask(
+                    AskBody(
+                        q = q, page = if (ctx?.screen?.startsWith("seller.product") == true) "products" else "lists",
+                        createList = true, screen = ctx?.screen, state = ctx?.state,
+                        visible = ctx?.visible?.takeIf { it.isNotEmpty() }, seller = ctx?.seller,
+                    ),
+                )
+            }.getOrNull()
+            val at = lines.indexOfFirst { it.id == id }
+            if (at >= 0) lines[at] = lines[at].copy(
+                collecting = false,
+                listId = r?.listId?.takeIf { it.isNotEmpty() } ?: lines[at].listId,
+            )
+        }
+    }
+
     fun send(q: String, original: String?, createList: Boolean = false) {
-        lines += JowiLine(id = newId(), who = "user", text = q, original = original?.takeIf { it != q })
+        val now = nowStamp()
+        lines += JowiLine(id = newId(), who = "user", text = q, original = original?.takeIf { it != q }, at = now)
         val pendingId = newId()
-        lines += JowiLine(id = pendingId, who = "jowi", pending = true, question = q)
+        lines += JowiLine(id = pendingId, who = "jowi", pending = true, question = q, at = now)
         viewModelScope.launch {
             val i = { lines.indexOfFirst { it.id == pendingId } }
             try {
@@ -233,7 +343,9 @@ class JowiViewModel : ViewModel() {
                         seller = ctx?.seller,
                     ),
                 )
-                val match = if (r.kind == "match") AskMatch(r.item.orEmpty(), r.qty, r.sellers.orEmpty()) else null
+                val match = if (r.kind == "match") AskMatch(
+                    r.item.orEmpty(), r.qty, r.unit, r.nProducts, r.approximate == true, r.listStage, r.sellers.orEmpty(),
+                ) else null
                 val guidance = if (r.answer == null) {
                     r.message?.takeIf { it.isNotEmpty() }
                         ?: if (lang == "en") "Couldn't answer that — try rephrasing." else "Buna cevap veremedim — farklı sorabilirsin."
@@ -291,9 +403,11 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
     val listState: LazyListState = rememberLazyListState()
     LaunchedEffect(Unit) { vm.reload() }
     // keep the newest turn in view: a new line, the clarify card, or the answer replacing the spinner
+    // the answer grows the turn without changing the count, so the text is a key
+    // too; the target is the trailing spacer, which always clears the ask field
     val lastText = vm.lines.lastOrNull()?.text
     LaunchedEffect(vm.lines.size, vm.clarify, lastText) {
-        if (vm.lines.isNotEmpty()) listState.animateScrollToItem(vm.lines.size + 1)
+        if (vm.lines.isNotEmpty()) listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
     }
 
     Column(
@@ -334,7 +448,17 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
                     )
                 }
             }
-            itemsIndexed(vm.lines, key = { _, l -> l.id }) { _, line ->
+            itemsIndexed(vm.lines, key = { _, l -> l.id }) { i, line ->
+                // a faint date line whenever the day turns over
+                val day = dayOf(line.at)
+                val prevDay = vm.lines.getOrNull(i - 1)?.let { dayOf(it.at) }
+                if (day.isNotEmpty() && day != prevDay) {
+                    Text(
+                        day, fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    )
+                }
                 if (line.who == "user") UserBubble(line) else ReplyBubble(line, vm) { askFocus.requestFocus() }
             }
             vm.clarify?.let { (typed, reading) -> item { ClarifyCard(typed, reading, vm) } }
@@ -385,6 +509,7 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
 @Composable
 private fun UserBubble(line: JowiLine) {
     val colors = WorkisTheme.colors
+    val showTypedLabel = stringResource(R.string.clarify_show_typed)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Column(
             horizontalAlignment = Alignment.End,
@@ -395,12 +520,32 @@ private fun UserBubble(line: JowiLine) {
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Text(line.text, fontSize = 15.sp, lineHeight = 21.sp, color = colors.ink, textAlign = TextAlign.End)
-            line.original?.let {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    stringResource(R.string.clarify_typed_label) + " · " + it,
-                    fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint, textAlign = TextAlign.End,
-                )
+            // Jowi rewrote the question: the record hides behind a keyboard glyph
+            // rather than a second permanent line. A monogram would say WHO wrote
+            // it — that is kept for the three-seat tables.
+            var showTyped by remember(line.id) { mutableStateOf(false) }
+            val typed = line.original?.takeIf { materiallyDifferent(it, line.text) }
+            if (typed != null) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                    Box(
+                        Modifier
+                            .size(width = 44.dp, height = 30.dp)
+                            .clickable { showTyped = !showTyped }
+                            .semantics { contentDescription = showTypedLabel },
+                        contentAlignment = Alignment.CenterEnd,
+                    ) {
+                        Text("⌨", fontSize = 14.sp, color = if (showTyped) colors.accentText else colors.faint)
+                    }
+                }
+                if (showTyped) {
+                    Text(
+                        stringResource(R.string.clarify_you_wrote) + " · " + typed,
+                        fontFamily = WorkisMono, fontSize = 10.sp, lineHeight = 15.sp, color = colors.faint, textAlign = TextAlign.End,
+                    )
+                }
+            }
+            clockOf(line.at).takeIf { it.isNotEmpty() }?.let {
+                Text(it, fontFamily = WorkisMono, fontSize = 9.sp, color = colors.faint, textAlign = TextAlign.End)
             }
         }
     }
@@ -442,10 +587,10 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Uni
                     // the server writes **bold** and links — render the inline
                     // markdown, never the asterisks (2026-09-17)
                     MarkdownText(line.text, color = colors.ink, fontSize = 15.sp, lineHeight = 22.sp)
-                    line.match?.takeIf { it.sellers.isNotEmpty() }?.let { MatchCard(it) }
+                    line.match?.takeIf { it.sellers.isNotEmpty() }?.let { MatchCard(it, line, vm) }
                     // the chat-born list opens natively; else the step after a technical answer
                     val listId = line.listId
-                    if (listId != null) {
+                    if (listId != null && line.match == null) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.clickable { vm.openList = listId }.padding(vertical = 4.dp),
@@ -494,6 +639,9 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Uni
                         )
                     }
                     if (line.kb != null && line.source != "wall") Thumbs(line, vm)
+                    clockOf(line.at).takeIf { it.isNotEmpty() }?.let {
+                        Text(it, fontFamily = WorkisMono, fontSize = 9.sp, color = colors.faint)
+                    }
                 }
             }
         }
@@ -584,23 +732,83 @@ private fun NextCard(n: AskNext, line: JowiLine, vm: JowiViewModel) {
 
 /** Purchase request read by Jowi: the parsed line, then the sellers with their offer count — price-blind here. */
 @Composable
-private fun MatchCard(m: AskMatch) {
+private fun MatchCard(m: AskMatch, line: JowiLine, vm: JowiViewModel) {
     val colors = WorkisTheme.colors
     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(R.string.match_header).uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.faint)
-        Text(listOfNotNull(m.qty?.let { "$it ×" }, m.item).joinToString(" "), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
+        // no exact match is said in words, in the beige idiom — never "N matches"
+        if (m.approximate) {
+            Text(
+                stringResource(R.string.match_approx_header),
+                fontSize = 13.sp, lineHeight = 18.sp, color = Beige,
+                modifier = Modifier.fillMaxWidth().background(BeigeBg, RoundedCornerShape(10.dp)).padding(10.dp),
+            )
+        } else {
+            Text(stringResource(R.string.match_header).uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.faint)
+        }
+        Text(m.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, color = colors.ink)
         m.sellers.take(5).forEach { s ->
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                    Text(s.name ?: "?", fontSize = 14.sp, color = colors.ink, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(top = 4.dp).semantics { contentDescription = listOfNotNull(s.name, s.city).joinToString(" · ") },
+                ) {
+                    // the row draws the SHORT name; the long trading title cut off
+                    Text(s.rowName.ifEmpty { "?" }, fontSize = 14.sp, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     s.city?.takeIf { it.isNotEmpty() }?.let {
                         Spacer(Modifier.width(8.dp))
                         Text(it, fontSize = 12.sp, color = colors.faint)
                     }
                     Spacer(Modifier.weight(1f))
+                    // a catalogue row is a PRODUCT; a quote is what the seller sends back
                     Text("${s.offers?.size ?: 0} " + stringResource(R.string.match_offers), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.muted)
                 }
+                // the products ride a shelf that runs to the bubble's edge, so the
+                // next card peeks and the scroll is obvious; no prices here
+                s.offers?.takeIf { it.isNotEmpty() }?.let { offers ->
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        offers.forEach { o ->
+                            Column(
+                                Modifier
+                                    .size(width = 168.dp, height = 92.dp)
+                                    .background(colors.ink.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                                    .padding(10.dp),
+                            ) {
+                                Text(o.name.orEmpty(), fontSize = 12.sp, lineHeight = 16.sp, color = colors.ink, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.weight(1f))
+                                o.sku?.takeIf { it.isNotEmpty() }?.let {
+                                    Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                    }
+                }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(colors.ink.copy(alpha = 0.08f)))
+            }
+        }
+        // the card has its own door: the same sentence again with createList,
+        // but the answer lands HERE — no second pair is drawn
+        val listId = line.listId
+        when {
+            listId != null -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clickable { vm.openList = listId }.padding(vertical = 4.dp),
+            ) {
+                Icon(WorkisIcons.Checklist, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.open_list), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
+            }
+            line.collecting -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Kiremit500)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.collect_quotes), fontSize = 13.sp, color = colors.faint)
+            }
+            else -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clickable { vm.collectQuotesOnCard(line) }.padding(vertical = 4.dp),
+            ) {
+                Icon(WorkisIcons.Sparkle, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.collect_quotes), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.accentText)
             }
         }
     }

@@ -169,10 +169,12 @@
     <string name="chip_web_name">web: name matched · code unverified</string>
     <string name="chip_web_no_photo">web verified · no photo on page</string>
     <string name="chip_web_verified">web verified</string>
+    <string name="clarify_show_typed">Show what you wrote</string>
     <string name="clarify_title">Jowi read it as</string>
     <string name="clarify_typed_label">AS TYPED</string>
     <string name="clarify_use_own">My own words</string>
     <string name="clarify_use_reading">This reading</string>
+    <string name="clarify_you_wrote">YOU WROTE</string>
     <string name="clear_filter">clear filter</string>
     <string name="close_lead">Close</string>
     <string name="close_lead_confirm">Close this application?</string>
@@ -360,7 +362,7 @@
     <string name="jowi_awaiting_expert">awaiting expert</string>
     <string name="jowi_awaiting_staff">awaiting you</string>
     <string name="jowi_catalog_placeholder">Ask Jowi about your catalogue…</string>
-    <string name="jowi_clear">Clear conversation</string>
+    <string name="jowi_clear">Clear history</string>
     <string name="jowi_clear_confirm">Also clears the web drawer; the rows stay for coordinator oversight.</string>
     <string name="jowi_empty">Ask about your lists, orders, ledger or calendar — Jowi answers from your records.</string>
     <string name="jowi_lane_empty">Nothing in this window.</string>
@@ -404,8 +406,9 @@
     <string name="maps_link_hint">Paste a Google Maps link to pin the location; your pin outranks the address lookup.</string>
     <string name="market_empty">No marketplace doors for this seat yet.</string>
     <string name="market_tab">Panel</string>
+    <string name="match_approx_header">No exact match — the closest products</string>
     <string name="match_header">Purchase request</string>
-    <string name="match_offers">offers</string>
+    <string name="match_offers">products</string>
     <string name="matched_word">matched</string>
     <string name="media_add_video">Add YouTube video</string>
     <string name="media_is_primary">Main photo</string>
@@ -544,8 +547,8 @@
     <string name="related_firms_label">Related-firm declaration</string>
     <string name="related_firms_note">Your field lead is an officer of the firm(s) above, which also trade on Workis. Know this before you open your catalogue: the platform gives them no advantage, and everything the lead does on your page is recorded.</string>
     <string name="related_firms_own">this is your own firm</string>
-    <string name="reply_placeholder">Reply — the partner sees it in their Jowi chat…</string>
-    <string name="reply_placeholder_expert">Reply — the expert sees it in their Jowi chat…</string>
+    <string name="reply_placeholder">Reply — the partner sees it on their Jowi screen…</string>
+    <string name="reply_placeholder_expert">Reply — the expert sees it on their Jowi screen…</string>
     <string name="request_label">Request</string>
     <string name="request_quotes">Request quotes</string>
     <string name="requirements_title">General requirements</string>
@@ -633,7 +636,7 @@
     <string name="st_quoted">Quoted</string>
     <string name="st_ready">Ready</string>
     <string name="st_resolved">resolved</string>
-    <string name="start_conv_hint">The partner sees this in their Jowi chat and activity feed.</string>
+    <string name="start_conv_hint">The partner sees this on their Jowi screen and activity feed.</string>
     <string name="start_conversation">Start conversation</string>
     <string name="stat_active">Active partners</string>
     <string name="stat_awaiting">Awaiting approval</string>

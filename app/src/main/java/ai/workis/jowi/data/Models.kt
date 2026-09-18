@@ -151,17 +151,23 @@ data class AskBody(
 @Serializable
 data class AskOption(val label: String = "", val q: String? = null)
 
-/** One catalogue seller in a match — snake_case from the web payload. Price-blind here. */
+/** One catalogue row in a match — a PRODUCT, not an offer. Price-blind here. */
 @Serializable
 data class AskOffer(val sku: String? = null, val name: String? = null)
 
 @Serializable
 data class AskSeller(
     @SerialName("partner_id") @Serializable(with = FlexString::class) val partnerId: String? = null,
+    /** The long trading name — TalkBack only; the row draws `short`. */
     val name: String? = null,
+    val short: String? = null,
+    val hover: String? = null,
     val city: String? = null,
     val offers: List<AskOffer>? = null,
-)
+) {
+    /** History rows predate `short`; they fall back to the long name. */
+    val rowName get() = short?.takeIf { it.isNotEmpty() } ?: name.orEmpty()
+}
 
 @Serializable
 data class AskResponse(
@@ -176,6 +182,13 @@ data class AskResponse(
     val kind: String? = null,
     val item: String? = null,
     @Serializable(with = FlexString::class) val qty: String? = null,
+    /** "metre" — `item` no longer carries the quantity, so the app joins them. */
+    val unit: String? = null,
+    val nProducts: Int? = null,
+    /** No exact match: say so, never "N matches". */
+    val approximate: Boolean? = null,
+    /** parsing → ready: the list is still being read. */
+    val listStage: String? = null,
     val sellers: List<AskSeller>? = null,
     @Serializable(with = FlexString::class) val listId: String? = null,
     // answer policy B: a stamp under the bubble; `kb` present → 👍/👎
@@ -198,6 +211,10 @@ data class AskLine(
     val kind: String? = null,
     val item: String? = null,
     @Serializable(with = FlexString::class) val qty: String? = null,
+    val unit: String? = null,
+    val nProducts: Int? = null,
+    val approximate: Boolean? = null,
+    val listStage: String? = null,
     val sellers: List<AskSeller>? = null,
     @Serializable(with = FlexString::class) val listId: String? = null,
     val label: String? = null,

@@ -271,7 +271,11 @@ fun CompanySections(mode: CompanyMode = CompanyMode.Company, vm: CompanyViewMode
                                     )
                                 }
                             }
-                            Text(stringResource(R.string.related_firms_note), fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
+                            Text(
+                                stringResource(R.string.related_firms_note),
+                                fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted,
+                                modifier = Modifier.padding(start = 20.dp),
+                            )
                         }
                         Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
                     }

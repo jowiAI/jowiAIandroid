@@ -406,7 +406,7 @@ private fun NoteLetterSection(d: PurchaseListDetail, vm: ListDetailViewModel) {
             if (vm.noteTick) { Spacer(Modifier.width(6.dp)); Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(14.dp)) }
         }
         OutlinedTextField(value = noteText, onValueChange = { noteText = it; dirty = true }, placeholder = { Text(stringResource(R.string.note_placeholder), color = colors.faint, fontSize = 14.sp) }, minLines = 2, maxLines = 6, shape = RoundedCornerShape(14.dp), colors = fieldColors, modifier = Modifier.fillMaxWidth().then(commit))
-        OutlinedTextField(value = letter, onValueChange = { letter = it; dirty = true }, placeholder = { Text(stringResource(if (!d.rfqLetterDefault.isNullOrEmpty()) R.string.letter_default_hint else R.string.letter_title), color = colors.faint, fontSize = 14.sp) }, minLines = 3, maxLines = 12, shape = RoundedCornerShape(14.dp), colors = fieldColors, modifier = Modifier.fillMaxWidth().then(commit))
+        OutlinedTextField(value = letter, onValueChange = { letter = it; dirty = true }, placeholder = { Text(stringResource(R.string.letter_title), color = colors.faint, fontSize = 14.sp) }, minLines = 3, maxLines = 12, shape = RoundedCornerShape(14.dp), colors = fieldColors, modifier = Modifier.fillMaxWidth().then(commit))
         Text(stringResource(R.string.letter_default_hint), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
     }
 }

@@ -42,6 +42,9 @@ import androidx.compose.foundation.layout.Box
 import ai.workis.jowi.data.PartnerSeatState
 import ai.workis.jowi.data.ScreenContext
 import ai.workis.jowi.ui.screens.console.ConsoleSub
+import ai.workis.jowi.ui.theme.Beige
+import ai.workis.jowi.ui.theme.BeigeBg
+import androidx.compose.ui.text.style.TextOverflow
 import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
@@ -159,59 +162,133 @@ private fun MarketHome(
             if (c.isCarrier) StatusPill(stringResource(R.string.seat_carrier))
         }
         Spacer(Modifier.height(14.dp))
-        if (c.isBuyer) {
-            val lists = listsVm.lists
-            BigTile(
-                number = lists?.size,
-                label = stringResource(R.string.lists_title),
-                sub = lists?.let { l -> "${l.count { it.status == "quoting" }} " + stringResource(R.string.ls_quoting).lowercase() },
-                icon = WorkisIcons.Tray,
-            ) { onOpen(MarketDest.Lists) }
-            Spacer(Modifier.height(14.dp))
-        }
-        if (c.isSeller) {
-            // Ürünler (2026-09-15): families awaiting review, live offers under
-            val cat = catalogVm.page
-            BigTile(
-                number = cat?.counts?.proposed,
-                label = stringResource(R.string.catalog_title),
-                sub = cat?.let { "${it.counts?.liveOffers ?: 0} " + stringResource(R.string.catalog_live_offers) },
-                icon = WorkisIcons.ShippingBox,
-            ) { onOpen(MarketDest.Catalog) }
-            Spacer(Modifier.height(14.dp))
-            val inv = quotesVm.invitations
-            BigTile(
-                number = inv?.count { it.isOpen },
-                label = stringResource(R.string.quotes_title),
-                sub = inv?.let { i -> "${i.size} · ${i.count { it.isOpen }} " + stringResource(R.string.open_invitations) },
-                icon = WorkisIcons.Sparkle,
-            ) { onOpen(MarketDest.Quotes) }
-            Spacer(Modifier.height(14.dp))
-        }
-        // Siparişler and Onaylar sit on every seat (Django §5, §8)
+        // The console Panel's rhythm, so the whole seat fits one screen: the
+        // hero on the left two rows tall (Onaylar), two capsules on the right,
+        // and — for a seller — a half row underneath. Positions are fixed per
+        // seat set: a box never moves because a number changed.
+        val lists = listsVm.lists
+        val cat = catalogVm.page
+        val inv = quotesVm.invitations
         val orders = ordersVm.orders
-        BigTile(
-            number = orders?.size,
-            label = stringResource(R.string.orders_screen_title),
-            sub = orders?.let {
-                val unread = ordersVm.unreadTotal
-                if (unread > 0) "$unread " + stringResource(R.string.order_unread)
-                else ordersVm.missingTermsOrders.takeIf { n -> n > 0 }?.let { n -> "$n " + stringResource(R.string.order_terms_missing) } ?: " "
-            },
-            icon = WorkisIcons.Checklist,
-        ) { onOpen(MarketDest.Orders) }
-        Spacer(Modifier.height(14.dp))
-        BigTile(
-            number = approvalsVm.data?.counts?.total,
-            label = stringResource(R.string.approvals_title),
-            sub = approvalsVm.data?.let { " " },
-            icon = WorkisIcons.DocPlus,
-        ) { onOpen(MarketDest.Approvals) }
+        val unread = ordersVm.unreadTotal
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            // the hero is the one emphasis on this screen — a beige note band,
+            // content and not a coloured button; the number says the state
+            HeroTile(
+                number = approvalsVm.data?.counts?.total,
+                label = stringResource(R.string.approvals_title),
+                sub = unread.takeIf { it > 0 }?.let { "$it " + stringResource(R.string.order_unread) },
+                modifier = Modifier.weight(1f),
+            ) { onOpen(MarketDest.Approvals) }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                CapsuleTile(
+                    number = orders?.size,
+                    label = stringResource(R.string.orders_screen_title),
+                    icon = WorkisIcons.Checklist,
+                ) { onOpen(MarketDest.Orders) }
+                if (c.isSeller) {
+                    CapsuleTile(
+                        number = inv?.count { it.isOpen },
+                        label = stringResource(R.string.quotes_title),
+                        icon = WorkisIcons.Sparkle,
+                    ) { onOpen(MarketDest.Quotes) }
+                } else if (c.isBuyer) {
+                    CapsuleTile(
+                        number = lists?.size,
+                        label = stringResource(R.string.lists_title),
+                        icon = WorkisIcons.Tray,
+                    ) { onOpen(MarketDest.Lists) }
+                }
+            }
+        }
+        // the bottom half-row belongs to the seller seat only
+        if (c.isSeller) {
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                if (c.isBuyer) {
+                    HalfTile(
+                        number = lists?.size,
+                        label = stringResource(R.string.lists_title),
+                        sub = lists?.let { l -> "${l.count { it.status == "quoting" }} " + stringResource(R.string.ls_quoting).lowercase() },
+                        icon = WorkisIcons.Tray,
+                        modifier = Modifier.weight(1f),
+                    ) { onOpen(MarketDest.Lists) }
+                }
+                HalfTile(
+                    number = cat?.counts?.proposed,
+                    label = stringResource(R.string.catalog_title),
+                    sub = cat?.let { "${it.counts?.liveOffers ?: 0} " + stringResource(R.string.catalog_live_offers) },
+                    icon = WorkisIcons.ShippingBox,
+                    modifier = Modifier.weight(1f),
+                ) { onOpen(MarketDest.Catalog) }
+            }
+        }
         Spacer(Modifier.height(14.dp))
         if (!c.isBuyer && !c.isSeller) {
             Text(stringResource(R.string.market_empty), fontSize = 14.sp, color = colors.muted, modifier = Modifier.padding(top = 20.dp))
         }
         Spacer(Modifier.height(30.dp))
+    }
+}
+
+/** Two rows tall, beige band: the seat's one emphasis. */
+@Composable
+private fun HeroTile(number: Int?, label: String, sub: String?, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier
+            .height(174.dp)
+            .background(BeigeBg, RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+    ) {
+        Icon(WorkisIcons.DocPlus, contentDescription = null, tint = Beige, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.weight(1f))
+        Text(number?.toString() ?: "–", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 38.sp, color = Beige)
+        Text(label, fontSize = 14.sp, color = Beige)
+        Text(sub ?: " ", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = Beige.copy(alpha = 0.75f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Half the hero's height: icon, number, name. */
+@Composable
+private fun CapsuleTile(number: Int?, label: String, icon: ImageVector, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .height(80.dp)
+            .background(colors.surface, RoundedCornerShape(20.dp))
+            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.weight(1f))
+            Text(number?.toString() ?: "–", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = colors.ink)
+        }
+        Spacer(Modifier.weight(1f))
+        Text(label, fontSize = 13.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** The seller's bottom row. */
+@Composable
+private fun HalfTile(number: Int?, label: String, sub: String?, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Column(
+        modifier
+            .height(120.dp)
+            .background(colors.surface, RoundedCornerShape(20.dp))
+            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.weight(1f))
+        Text(number?.toString() ?: "–", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 26.sp, color = colors.ink)
+        Text(label, fontSize = 13.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(sub ?: " ", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
