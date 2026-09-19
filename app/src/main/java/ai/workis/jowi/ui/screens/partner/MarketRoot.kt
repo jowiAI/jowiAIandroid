@@ -61,7 +61,8 @@ sealed interface MarketDest {
     data object Orders : MarketDest
     data object Approvals : MarketDest
     data class Thread(val door: ThreadDoor, val back: MarketDest) : MarketDest
-    data class Contract(val orderId: String, val back: MarketDest) : MarketDest
+    /** `seat` comes from the door that opened the paper — the reader's own acceptance card. */
+    data class Contract(val orderId: String, val back: MarketDest, val seat: String? = null) : MarketDest
 }
 
 @Composable
@@ -88,7 +89,7 @@ fun MarketRoot() {
             ordersVm,
             onBack = { dest = MarketDest.Home },
             onThread = { o -> o.id?.let { dest = MarketDest.Thread(ThreadDoor.Order(it), MarketDest.Orders) } },
-            onContract = { o -> o.id?.let { dest = MarketDest.Contract(it, MarketDest.Orders) } },
+            onContract = { o -> o.id?.let { dest = MarketDest.Contract(it, MarketDest.Orders, o.role) } },
         )
         MarketDest.Approvals -> ApprovalsScreen(
             approvalsVm,
@@ -98,9 +99,9 @@ fun MarketRoot() {
         is MarketDest.Thread -> ThreadScreen(
             d.door,
             onBack = { dest = d.back },
-            onContract = { id -> dest = MarketDest.Contract(id, MarketDest.Thread(d.door, d.back)) },
+            onContract = { id, seat -> dest = MarketDest.Contract(id, MarketDest.Thread(d.door, d.back), seat) },
         )
-        is MarketDest.Contract -> OrderContractScreen(d.orderId, onBack = { dest = d.back })
+        is MarketDest.Contract -> OrderContractScreen(d.orderId, d.seat, onBack = { dest = d.back })
         MarketDest.Catalog -> CatalogScreen(catalogVm, onBack = { dest = MarketDest.Home }, onOpenFamily = { dest = MarketDest.Family(it) })
         is MarketDest.Family -> FamilyScreen(d.id, onBack = { dest = MarketDest.Catalog; catalogVm.load() })
         MarketDest.Lists -> ConsoleSub(stringResource(R.string.lists_title), { dest = MarketDest.Home }, trailing = { ListsMenu(listsVm) }) {

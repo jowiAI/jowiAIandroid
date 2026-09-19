@@ -193,6 +193,8 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
     val colors = WorkisTheme.colors
     LaunchedEffect(listId) { vm.bind(listId) }
     val d = vm.detail
+    // Jowi's page + scope: "bu listede kaç kalem var?" is answered from THIS list (2026-09-19)
+    LaunchedEffect(listId, d?.list?.title) { ai.workis.jowi.data.ScreenContext.openList(listId, d?.list?.title) }
     var segment by rememberSaveable { mutableStateOf(0) }
     var pickItem by remember { mutableStateOf<PLItem?>(null) }
     var showAdd by remember { mutableStateOf(false) }
@@ -349,31 +351,72 @@ private fun ItemRow(item: PLItem, draft: Boolean, onClick: () -> Unit, onDelete:
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
         Text("${item.n ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint, modifier = Modifier.width(24.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Same grammar as the seller's card (2026-09-19): the PRODUCT leads once
+            // there is one — the variant I would be buying — and my own words follow
+            // as "İstenen: …". With the generic name on top the row read as a family.
+            val sel = item.selected
             Row(verticalAlignment = Alignment.Top) {
-                Text(item.name ?: "—", fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 19.sp, color = colors.ink, modifier = Modifier.weight(1f))
+                Text(sel?.displayName ?: item.name ?: "—", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, color = colors.ink, maxLines = 3, modifier = Modifier.weight(1f))
                 if (item.qty != null || !item.unit.isNullOrEmpty()) {
                     Spacer(Modifier.width(6.dp))
-                    Text(WorkisMoney.qty(item.qty) + " " + item.unit.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.muted)
+                    Text(WorkisMoney.qty(item.qty) + " " + item.unit.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
                 }
             }
-            val sel = item.selected
+            AskedLine(if (sel != null) item.name else null, item.requirements)
             if (sel != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.size(6.dp).background(if (item.matchState == "bound") SuccessGreen else colors.faint, CircleShape))
-                    Text(sel.name ?: sel.sku.orEmpty(), fontSize = 12.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    sel.sku?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)) }
                     Spacer(Modifier.weight(1f))
                     ComplianceChip(sel.compliance)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text((if (sel.verified == false) "✋ " else "") + sel.seller.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
                     Spacer(Modifier.weight(1f))
-                    Text(WorkisMoney.text(sel.price, sel.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
+                    VariantPrice(sel)
                 }
             } else {
                 Text(stringResource(R.string.no_match), fontSize = 12.sp, color = colors.faint)
             }
             if (draft) Text(stringResource(R.string.delete_item), fontSize = 11.sp, color = colors.danger, modifier = Modifier.clickable(onClick = onDelete))
         }
+    }
+}
+
+/** "İstenen: <generic name> · <demands>" — the buyer's own words, faint, under the product. */
+@Composable
+private fun AskedLine(generic: String?, requirements: List<String>?) {
+    val asked = (listOf(generic) + requirements.orEmpty()).filterNotNull().filter { it.isNotEmpty() }
+    if (asked.isEmpty()) return
+    Text(
+        stringResource(R.string.asked_label) + ": " + asked.joinToString(" · "),
+        fontSize = 12.sp, lineHeight = 16.sp, color = WorkisTheme.colors.muted, maxLines = 3, overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/**
+ * A candidate's price — or, while the asked size has not resolved to ONE variant, the
+ * reason there is none. An unresolved family must never show a price: the first
+ * variant's price stood in for the asked one (3/4" shown for 1", 2026-09-18).
+ */
+@Composable
+private fun VariantPrice(c: PLCandidate) {
+    val colors = WorkisTheme.colors
+    when {
+        c.price != null -> Text(WorkisMoney.text(c.price, c.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
+        c.variant == "none" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Icon(WorkisIcons.QuestionCircle, contentDescription = null, tint = Beige, modifier = Modifier.size(12.dp))
+            Text(stringResource(R.string.variant_none), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Beige)
+        }
+        c.variant == "ambiguous" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Icon(WorkisIcons.Warning, contentDescription = null, tint = Beige, modifier = Modifier.size(12.dp))
+            Text(
+                stringResource(R.string.variant_ambiguous) + " · ${c.nVariants ?: c.variants?.size ?: 0} " + stringResource(R.string.variants_word),
+                fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Beige,
+            )
+        }
+        // prices come with the quotes — say nothing rather than a dash that reads as zero
+        else -> Unit
     }
 }
 
@@ -489,12 +532,27 @@ private fun SendGroupCard(g: SendGroup, d: PurchaseListDetail) {
         }
         Eyebrow(head.uppercase())
         SurfaceCard {
-            g.rows.forEach { r ->
-                Row { Text(r.item.orEmpty(), fontSize = 13.sp, color = colors.ink, modifier = Modifier.weight(1f)); Text(WorkisMoney.qty(r.qty) + " " + r.unit.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
-                if (!uncovered) r.alts?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 11.sp, color = colors.faint) }
-            }
+            g.rows.forEach { r -> SendRowLine(r, uncovered) }
         }
         if (uncovered) Text(stringResource(R.string.uncovered_sub), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
+    }
+}
+
+/**
+ * The PRODUCT leads (the variant this seller is asked for), the buyer's generic name
+ * follows as "İstenen: …" — the same grammar as the list row and the seller's card.
+ */
+@Composable
+private fun SendRowLine(r: PLSendRow, uncovered: Boolean) {
+    val colors = WorkisTheme.colors
+    val product = if (!uncovered) r.alts?.takeIf { it.isNotEmpty() } else null
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(verticalAlignment = Alignment.Top) {
+            Text(product ?: r.item.orEmpty(), fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 19.sp, color = colors.ink, maxLines = 3, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(6.dp))
+            Text(WorkisMoney.qty(r.qty) + " " + r.unit.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
+        }
+        if (product != null) AskedLine(r.item, null)
     }
 }
 
@@ -533,9 +591,11 @@ private fun ProposalSection(d: PurchaseListDetail, vm: ListDetailViewModel, onAw
 private fun AssignmentRow(a: PLAssignment) {
     val colors = WorkisTheme.colors
     Row(verticalAlignment = Alignment.Top) {
-        Column(Modifier.weight(1f)) {
-            Text(a.itemName.orEmpty(), fontSize = 13.sp, color = colors.ink)
-            a.name?.takeIf { it != a.itemName }?.let { Text(it, fontSize = 11.sp, color = colors.faint) }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            // the quoted PRODUCT leads; the buyer's generic name follows as "İstenen: …"
+            val product = a.name?.takeIf { it.isNotEmpty() && it != a.itemName }
+            Text(product ?: a.itemName.orEmpty(), fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 19.sp, color = colors.ink, maxLines = 3)
+            if (product != null) AskedLine(a.itemName, null)
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(WorkisMoney.text(a.amount, a.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
@@ -599,7 +659,7 @@ private fun CandidateRow(c: PLCandidate, bound: Boolean, onClick: () -> Unit) {
     val colors = WorkisTheme.colors
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(c.name ?: c.sku.orEmpty(), fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink, modifier = Modifier.weight(1f))
+            Text(c.displayName, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink, modifier = Modifier.weight(1f))
             if (bound) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(18.dp))
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -607,7 +667,14 @@ private fun CandidateRow(c: PLCandidate, bound: Boolean, onClick: () -> Unit) {
             c.sku?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint) }
             Spacer(Modifier.weight(1f))
             ComplianceChip(c.compliance)
-            Text(WorkisMoney.text(c.price, c.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
+            VariantPrice(c)
+        }
+        // several variants fit the asked size: name them, each with its own price
+        c.variants?.takeIf { c.variant == "exact" && it.size > 1 }?.forEach { v ->
+            Row(verticalAlignment = Alignment.Top) {
+                Text(v.name ?: v.sku.orEmpty(), fontSize = 12.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                v.price?.let { Spacer(Modifier.width(6.dp)); Text(WorkisMoney.text(it, v.currency), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.ink) }
+            }
         }
         c.compliance?.rows.orEmpty().forEach { v ->
             Column(Modifier.padding(top = 2.dp)) {
@@ -675,11 +742,8 @@ private fun SendPreviewSheet(d: PurchaseListDetail, vm: ListDetailViewModel, onD
                         )
                         if (!uncovered) Text(stringResource(if (off) R.string.send_action else R.string.exclude_seller), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable { excluded = if (off) excluded - g.key else excluded + g.key })
                     }
-                    Column(Modifier.alpha(if (off) 0.4f else 1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        g.rows.forEach { r ->
-                            Row { Text(r.item.orEmpty(), fontSize = 13.sp, color = colors.ink, modifier = Modifier.weight(1f)); Text(WorkisMoney.qty(r.qty) + " " + r.unit.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
-                            if (!uncovered) r.alts?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 11.sp, color = colors.faint) }
-                        }
+                    Column(Modifier.alpha(if (off) 0.4f else 1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        g.rows.forEach { r -> SendRowLine(r, uncovered) }
                     }
                     if (uncovered) Text(stringResource(R.string.uncovered_sub), fontSize = 12.sp, color = colors.faint)
                 }

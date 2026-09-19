@@ -198,11 +198,37 @@ data class AskResponse(
     val next: AskNext? = null,
     /** `source: "clarify"` carries tappable options (2026-09-17). */
     val options: List<AskOption>? = null,
+    /** The turn's row ids + `canHide`, so "Soruyu geri çek" works right after sending (2026-09-19). */
+    val turn: AskTurn? = null,
+    val handedOff: Boolean? = null,
 )
 
-/** One row of the Jowi thread (GET /workis/ask/history/) — the SAME thread the web drawer keeps. */
+@Serializable
+data class AskTurn(
+    @Serializable(with = FlexString::class) val questionId: String? = null,
+    val answerIds: List<@Serializable(with = FlexString::class) String>? = null,
+    val canHide: Boolean? = null,
+)
+
+/**
+ * One row of the Jowi thread (GET /workis/ask/history/) — the SAME thread the web drawer keeps.
+ * A withdrawn turn comes back IN PLACE as a stub: `hidden: true`, no text, the
+ * folded row ids in `turn`, `trace` ready to print, `canUnhide` (2026-09-18).
+ */
 @Serializable
 data class AskLine(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    /** Only a turn that did nothing can be withdrawn — the server decides. */
+    val canHide: Boolean? = null,
+    val hidden: Boolean? = null,
+    /** An id ARRAY — the rows folded into the stub. */
+    val turn: List<@Serializable(with = FlexString::class) String>? = null,
+    val hiddenAt: String? = null,
+    val canUnhide: Boolean? = null,
+    val trace: String? = null,
+    val handoffClosed: Boolean? = null,
+    /** First row of an `unhide/`: the question went back to the team's inbox. */
+    val handoffReopened: Boolean? = null,
     val who: String? = null, // user | jowi | expert | lead
     val text: String? = null,
     val href: String? = null,
@@ -224,8 +250,22 @@ data class AskLine(
     val next: AskNext? = null,
 )
 
+/** `nextBefore` only on the archive pages — null once the oldest page is in hand. */
 @Serializable
-data class AskHistory(val success: Boolean? = null, val lines: List<AskLine>? = null)
+data class AskHistory(val success: Boolean? = null, val lines: List<AskLine>? = null, val nextBefore: String? = null)
+
+/** `hide/` → draw `stub` where the turn stood, no reload. */
+@Serializable
+data class AskHideResult(
+    val success: Boolean = false,
+    val hidden: List<@Serializable(with = FlexString::class) String>? = null,
+    val stub: AskLine? = null,
+    val error: String? = null,
+)
+
+/** `unhide/` → the turn back, in the ordinary row shape. */
+@Serializable
+data class AskUnhideResult(val success: Boolean = false, val lines: List<AskLine>? = null, val error: String? = null)
 
 @Serializable
 data class AskPreviewBody(val q: String)

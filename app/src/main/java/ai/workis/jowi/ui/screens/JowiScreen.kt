@@ -22,14 +22,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -38,8 +37,18 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontStyle
+import ai.workis.jowi.data.AskLine
+import ai.workis.jowi.ui.screens.expert.NoteBand
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -74,9 +83,7 @@ import ai.workis.jowi.data.statusMessage
 import ai.workis.jowi.ui.components.openInApp
 import ai.workis.jowi.ui.theme.Beige
 import ai.workis.jowi.ui.theme.BeigeBg
-import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.Kiremit500
-import ai.workis.jowi.ui.theme.OnKiremitFill
 import ai.workis.jowi.ui.theme.SuccessGreen
 import ai.workis.jowi.data.AskNext
 import androidx.compose.foundation.horizontalScroll
@@ -87,7 +94,6 @@ import ai.workis.jowi.data.AskOption
 import ai.workis.jowi.data.ScreenContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.draw.alpha
 import ai.workis.jowi.ui.components.JowiOptions
 import ai.workis.jowi.ui.components.MarkdownText
 import ai.workis.jowi.ui.theme.WorkisMono
@@ -172,6 +178,14 @@ data class JowiLine(
     val at: String? = null, // the turn's stamp; a live turn takes "now"
     /** "Teklif topla" on a match card: the spinner and the list stay on THAT card. */
     val collecting: Boolean = false,
+    // a written record is never deleted (2026-09-18): the server's row id and
+    // whether this turn can still be WITHDRAWN into a stub in its place
+    val serverId: String? = null,
+    val canHide: Boolean = false,
+    /** A withdrawn turn's stub: dashed trace where the question stood; "Geri getir" while `canUnhide`. */
+    val hidden: Boolean = false,
+    val trace: String? = null,
+    val canUnhide: Boolean = false,
 )
 
 class JowiViewModel : ViewModel() {
@@ -187,10 +201,70 @@ class JowiViewModel : ViewModel() {
     /** A chat-born list opened from the thread — the native list detail as a cover. */
     var openList by mutableStateOf<String?>(null)
 
+    /** Bumped whenever something lands at the BOTTOM — older pages prepend and must not scroll. */
+    var scrollTick by mutableStateOf(0)
+        private set
+    /** A server sentence to show once (a 400's reason, "Sorunuz ekibe yeniden iletildi."). */
+    var note by mutableStateOf<String?>(null)
+    var noteRes by mutableStateOf<Int?>(null)
+
+    // "Eski kayıtları yükle": the archive paged backwards until `nextBefore` is null
+    var loadingOlder by mutableStateOf(false)
+        private set
+    var noOlder by mutableStateOf(false)
+        private set
+    private var nextBefore: String? = null
+
+    /** The scope picker: "Genel" drops `ctxList`; a newly opened list starts scoped. */
+    var scopeGeneral by mutableStateOf(false)
+    var scopeFor: String? = null
+
     private var nextId = 1L
     private fun newId() = nextId++
     private val lang get() = Graph.language.value
     private val hasPending get() = lines.any { it.pending }
+
+    /** The page the asker came from; a seller's catalogue screens say "products". */
+    private fun askPage(ctx: ScreenContext.Snapshot?): String =
+        if (ctx?.screen?.startsWith("seller.product") == true) "products" else ScreenContext.page ?: "lists"
+
+    /** The open list rides as `ctxList` while the scope stays on it. */
+    private fun ctxList(): String? = if (scopeGeneral) null else ScreenContext.openListId
+
+    /** Server rows → lines; each reply remembers the question it answers ("Teklif topla" resends it). */
+    private fun fromServer(rows: List<AskLine>, kept: Map<String, Pair<List<AskOption>, Boolean>> = emptyMap()): List<JowiLine> {
+        val out = ArrayList<JowiLine>(rows.size)
+        var lastQ: String? = null
+        rows.forEach { l ->
+            // a withdrawn turn: a stub in its place, the answer rows folded into it
+            if (l.hidden == true) {
+                out += JowiLine(
+                    id = newId(), who = "user", hidden = true, trace = l.trace?.takeIf { it.isNotEmpty() },
+                    canUnhide = l.canUnhide == true, serverId = l.id, at = l.at,
+                )
+                return@forEach
+            }
+            val match = if (l.kind == "match") AskMatch(
+                l.item.orEmpty(), l.qty, l.unit, l.nProducts, l.approximate == true, l.listStage, l.sellers.orEmpty(),
+            ) else null
+            val isUser = l.who == "user"
+            var line = JowiLine(
+                id = newId(), who = l.who ?: "jowi", text = l.text.orEmpty(),
+                original = l.qOriginal, href = l.href?.takeIf { it.isNotEmpty() },
+                match = match, source = l.source, surface = l.surface, label = l.label, kb = l.kb,
+                listId = l.listId?.takeIf { it.isNotEmpty() }, next = l.next, question = if (isUser) null else lastQ,
+                at = l.at, serverId = l.id, canHide = l.canHide == true,
+            )
+            if (!isUser) {
+                kept[lastQ.orEmpty() + "\u001F" + l.text.orEmpty()]?.let { (opts, picked) ->
+                    line = line.copy(options = opts, optionPicked = picked)
+                }
+            }
+            out += line
+            if (isUser) lastQ = l.text
+        }
+        return out
+    }
 
     /** The server's thread replaces the local one — except mid-turn. */
     fun reload() {
@@ -204,38 +278,99 @@ class JowiViewModel : ViewModel() {
                     val kept = lines.filter { it.who != "user" && it.options != null }
                         .associate { (it.question.orEmpty() + "\u001F" + it.text) to (it.options!! to it.optionPicked) }
                     lines.clear()
-                    var lastQ: String? = null // each reply remembers the question it answers ("Teklif topla" resends it)
+                    nextBefore = null; noOlder = false
+                    lines += fromServer(r.value.lines.orEmpty(), kept)
                     // the server keeps a "Teklif topla" resend as its own question +
                     // answer pair; the card that bore the match carries the listId,
                     // so the repeat pair is folded away
                     val collected = HashMap<String, String>() // question → listId
-                    r.value.lines.orEmpty().forEach { l ->
-                        val match = if (l.kind == "match") AskMatch(
-                            l.item.orEmpty(), l.qty, l.unit, l.nProducts, l.approximate == true, l.listStage, l.sellers.orEmpty(),
-                        ) else null
-                        val isUser = l.who == "user"
-                        lines += JowiLine(
-                            id = newId(), who = l.who ?: "jowi", text = l.text.orEmpty(),
-                            original = l.qOriginal, href = l.href?.takeIf { it.isNotEmpty() },
-                            match = match, source = l.source, surface = l.surface, label = l.label, kb = l.kb,
-                            listId = l.listId?.takeIf { it.isNotEmpty() }, next = l.next, question = if (isUser) null else lastQ,
-                            at = l.at,
-                        )
-                        if (!isUser) {
-                            kept[lastQ.orEmpty() + "\u001F" + l.text.orEmpty()]?.let { (opts, picked) ->
-                                lines[lines.lastIndex] = lines.last().copy(options = opts, optionPicked = picked)
-                            }
-                        }
-                        if (isUser) lastQ = l.text
-                        if (!isUser) l.listId?.takeIf { it.isNotEmpty() }?.let { collected[lastQ.orEmpty()] = it }
-                    }
+                    lines.forEach { l -> if (l.who != "user") l.listId?.let { collected[l.question.orEmpty()] = it } }
                     foldResends(collected)
+                    scrollTick++
                 }
                 is ApiResult.Err -> Unit // an unreachable history is not an error screen
             }
             loaded = true
         }
     }
+
+    /** One archive page older than what is on screen, prepended; the scroll stays put. */
+    fun loadOlder() {
+        if (loadingOlder || noOlder) return
+        loadingOlder = true
+        viewModelScope.launch {
+            when (val r = safeCall(lang) { Graph.api.askHistoryArchived(nextBefore) }) {
+                is ApiResult.Ok -> {
+                    val rows = fromServer(r.value.lines.orEmpty())
+                    lines.addAll(0, rows)
+                    nextBefore = r.value.nextBefore?.takeIf { it.isNotEmpty() }
+                    if (nextBefore == null || rows.isEmpty()) noOlder = true
+                }
+                is ApiResult.Err -> note = r.message
+            }
+            loadingOlder = false
+        }
+    }
+
+    /** "Arşivle": nothing is deleted — the open history closes into the archive and a new one starts. */
+    fun archive() {
+        viewModelScope.launch {
+            val ok = runCatching { Graph.api.askHistoryArchive().success }.getOrDefault(false)
+            if (ok) { lines.clear(); nextBefore = null; noOlder = false }
+        }
+    }
+
+    /** "Soruyu geri çek": the turn becomes the returned stub IN PLACE — no reload. */
+    fun hide(line: JowiLine) {
+        val id = line.serverId ?: return
+        viewModelScope.launch {
+            try {
+                val r = Graph.api.askHide(id)
+                if (!r.success) { note = r.error; return@launch }
+                val idx = lines.indexOfFirst { it.id == line.id }
+                if (idx < 0) return@launch
+                // the question and the answers under it, up to the next question
+                var end = idx + 1
+                while (end < lines.size && lines[end].who != "user") end++
+                repeat(end - idx) { lines.removeAt(idx) }
+                // an older server sends no stub: the turn simply leaves
+                r.stub?.let { s ->
+                    lines.add(idx, JowiLine(
+                        id = newId(), who = "user", hidden = true, trace = s.trace?.takeIf { it.isNotEmpty() },
+                        canUnhide = s.canUnhide == true, serverId = s.id ?: id, at = s.at ?: line.at,
+                    ))
+                }
+            } catch (e: HttpException) {
+                note = messageFromBody(e, lang)
+            } catch (e: Exception) {
+                note = statusMessage(null, lang)
+            }
+        }
+    }
+
+    /** "Geri getir": the stub becomes the returned rows; a re-opened hand-off says so. */
+    fun unhide(line: JowiLine) {
+        val id = line.serverId ?: return
+        viewModelScope.launch {
+            try {
+                val r = Graph.api.askUnhide(id)
+                if (!r.success) { note = r.error; return@launch }
+                val idx = lines.indexOfFirst { it.id == line.id }
+                if (idx < 0) return@launch
+                val rows = fromServer(r.lines.orEmpty())
+                lines.removeAt(idx)
+                lines.addAll(idx, rows)
+                if (r.lines.orEmpty().firstOrNull()?.handoffReopened == true) noteRes = R.string.ask_handoff_reopened
+            } catch (e: HttpException) {
+                note = messageFromBody(e, lang)
+            } catch (e: Exception) {
+                note = statusMessage(null, lang)
+            }
+        }
+    }
+
+    /** "Düzenlemeye dön": the typed text goes back to the field, nothing is sent. */
+    fun backToEdit(): String? = clarify?.also { clarify = null }?.first
 
     /** Move a resend's `listId` onto the match card and drop the repeat pair. */
     private fun foldResends(collected: Map<String, String>) {
@@ -254,13 +389,6 @@ class JowiViewModel : ViewModel() {
             }
         }
         if (drop.isNotEmpty()) lines.removeAll { it.id in drop }
-    }
-
-    fun clear() {
-        viewModelScope.launch {
-            val ok = runCatching { Graph.api.askHistoryClear().success }.getOrDefault(false)
-            if (ok) lines.clear()
-        }
     }
 
     /**
@@ -309,7 +437,7 @@ class JowiViewModel : ViewModel() {
             val r = runCatching {
                 Graph.api.ask(
                     AskBody(
-                        q = q, page = if (ctx?.screen?.startsWith("seller.product") == true) "products" else "lists",
+                        q = q, page = askPage(ctx), ctxList = ctxList(),
                         createList = true, screen = ctx?.screen, state = ctx?.state,
                         visible = ctx?.visible?.takeIf { it.isNotEmpty() }, seller = ctx?.seller,
                     ),
@@ -325,9 +453,11 @@ class JowiViewModel : ViewModel() {
 
     fun send(q: String, original: String?, createList: Boolean = false) {
         val now = nowStamp()
-        lines += JowiLine(id = newId(), who = "user", text = q, original = original?.takeIf { it != q }, at = now)
+        val userId = newId()
+        lines += JowiLine(id = userId, who = "user", text = q, original = original?.takeIf { it != q }, at = now)
         val pendingId = newId()
         lines += JowiLine(id = pendingId, who = "jowi", pending = true, question = q, at = now)
+        scrollTick++
         viewModelScope.launch {
             val i = { lines.indexOfFirst { it.id == pendingId } }
             try {
@@ -337,7 +467,7 @@ class JowiViewModel : ViewModel() {
                 val r = Graph.api.ask(
                     AskBody(
                         q = q, qOriginal = original?.takeIf { it != q },
-                        page = if (ctx?.screen?.startsWith("seller.product") == true) "products" else "lists",
+                        page = askPage(ctx), ctxList = ctxList(),
                         createList = if (createList) true else null,
                         screen = ctx?.screen, state = ctx?.state, visible = ctx?.visible?.takeIf { it.isNotEmpty() },
                         seller = ctx?.seller,
@@ -355,7 +485,15 @@ class JowiViewModel : ViewModel() {
                     source = r.source, surface = r.surface, match = match, label = r.label, kb = r.kb,
                     listId = r.listId?.takeIf { it.isNotEmpty() }, next = r.next,
                     options = r.options?.takeIf { it.isNotEmpty() },
+                    serverId = r.turn?.answerIds?.firstOrNull(),
                 )
+                // the row ids ride in the answer (2026-09-19): "Soruyu geri çek"
+                // works the moment the reply lands, no history re-read
+                r.turn?.let { t ->
+                    val u = lines.indexOfFirst { it.id == userId }
+                    if (u >= 0) lines[u] = lines[u].copy(serverId = t.questionId, canHide = t.canHide == true)
+                }
+                scrollTick++
             } catch (e: HttpException) {
                 val idx = i(); if (idx >= 0) lines[idx] = lines[idx].copy(pending = false, error = messageFromBody(e, lang))
             } catch (e: Exception) {
@@ -398,16 +536,22 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
     }
     var question by remember { mutableStateOf("") }
     val askFocus = remember { FocusRequester() }
-    var menu by remember { mutableStateOf(false) }
-    var askClear by remember { mutableStateOf(false) }
+    var askArchive by remember { mutableStateOf(false) }
     val listState: LazyListState = rememberLazyListState()
     LaunchedEffect(Unit) { vm.reload() }
-    // keep the newest turn in view: a new line, the clarify card, or the answer replacing the spinner
-    // the answer grows the turn without changing the count, so the text is a key
-    // too; the target is the trailing spacer, which always clears the ask field
-    val lastText = vm.lines.lastOrNull()?.text
-    LaunchedEffect(vm.lines.size, vm.clarify, lastText) {
+    // keep the newest turn in view: a new line, the clarify card, or the answer
+    // replacing the spinner — every one bumps the tick; an older page prepends
+    // and leaves the scroll alone. The target is the trailing spacer, which
+    // always clears the ask field
+    LaunchedEffect(vm.scrollTick, vm.clarify) {
         if (vm.lines.isNotEmpty()) listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
+    }
+    // the list open on the Pazar tab, if any: the standard scope picker
+    // [ <list> | Genel ] — "Genel" drops ctxList; no list, no picker
+    val openListId = ScreenContext.openListId
+    val openListTitle = ScreenContext.openListTitle
+    LaunchedEffect(openListId) {
+        if (openListId != vm.scopeFor) { vm.scopeFor = openListId; vm.scopeGeneral = false }
     }
 
     Column(
@@ -418,23 +562,60 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
             .imePadding(),
     ) {
         Spacer(Modifier.height(24.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Jowi", style = MaterialTheme.typography.headlineMedium, color = colors.ink, modifier = Modifier.weight(1f))
-            if (vm.lines.isNotEmpty()) {
-                Box {
-                    IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = null, tint = colors.ink) }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.jowi_clear), color = colors.danger, fontSize = 14.sp) },
-                            onClick = { menu = false; askClear = true },
+        Text("Jowi", style = MaterialTheme.typography.headlineMedium, color = colors.ink)
+        if (openListId != null) {
+            Spacer(Modifier.height(10.dp))
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                listOf(false, true).forEachIndexed { i, general ->
+                    SegmentedButton(
+                        selected = vm.scopeGeneral == general,
+                        onClick = { vm.scopeGeneral = general },
+                        shape = SegmentedButtonDefaults.itemShape(index = i, count = 2),
+                        colors = SegmentedButtonDefaults.colors(
+                            activeContainerColor = Kiremit500.copy(alpha = 0.12f), activeContentColor = colors.ink,
+                            inactiveContainerColor = colors.surface, inactiveContentColor = colors.muted,
+                            activeBorderColor = colors.border, inactiveBorderColor = colors.border,
+                        ),
+                    ) {
+                        Text(
+                            if (general) stringResource(R.string.jowi_scope_general) else openListTitle ?: stringResource(R.string.jowi_scope_this_list),
+                            fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
             }
         }
         Spacer(Modifier.height(10.dp))
+        NoteBand(vm.note ?: vm.noteRes?.let { stringResource(it) })
 
         LazyColumn(state = listState, modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // the top of the history: the archive door and the way back into it —
+            // nothing is deleted, the record moves and can be read again
+            if (vm.loaded) {
+                item(key = "history-top") {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                        when {
+                            vm.loadingOlder -> CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 1.5.dp, color = colors.faint)
+                            vm.noOlder -> Text(stringResource(R.string.jowi_no_older), fontSize = 12.sp, color = colors.faint)
+                            else -> Text(
+                                stringResource(R.string.jowi_load_older), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText,
+                                modifier = Modifier.clickable { vm.loadOlder() }.padding(vertical = 4.dp),
+                            )
+                        }
+                        Spacer(Modifier.weight(1f))
+                        if (vm.lines.any { !it.pending }) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable { askArchive = true }.padding(vertical = 4.dp),
+                            ) {
+                                Icon(WorkisIcons.Archive, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(5.dp))
+                                Text(stringResource(R.string.jowi_clear), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.muted)
+                            }
+                        }
+                    }
+                }
+            }
             if (vm.lines.isEmpty() && vm.clarify == null && !vm.previewing && vm.loaded) {
                 item {
                     Text(
@@ -459,9 +640,15 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
                         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                     )
                 }
-                if (line.who == "user") UserBubble(line) else ReplyBubble(line, vm) { askFocus.requestFocus() }
+                when {
+                    line.hidden -> WithdrawnStub(line, vm)
+                    line.who == "user" -> UserBubble(line, vm)
+                    else -> ReplyBubble(line, vm) { askFocus.requestFocus() }
+                }
             }
-            vm.clarify?.let { (typed, reading) -> item { ClarifyCard(typed, reading, vm) } }
+            vm.clarify?.let { (typed, reading) ->
+                item { ClarifyCard(typed, reading, vm) { back -> question = back; askFocus.requestFocus() } }
+            }
             if (vm.previewing || (!vm.loaded && vm.lines.isEmpty())) {
                 item { Box(Modifier.fillMaxWidth().padding(vertical = 10.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Kiremit500) } }
             }
@@ -489,34 +676,90 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
         Spacer(Modifier.height(16.dp))
     }
 
-    if (askClear) {
+    // archiving is not deleting — a neutral confirm, never the danger colour
+    if (askArchive) {
         AlertDialog(
-            onDismissRequest = { askClear = false },
+            onDismissRequest = { askArchive = false },
             containerColor = colors.surface,
             title = { Text(stringResource(R.string.jowi_clear), color = colors.ink) },
             text = { Text(stringResource(R.string.jowi_clear_confirm), fontSize = 14.sp, lineHeight = 20.sp, color = colors.muted) },
             confirmButton = {
-                TextButton(onClick = { askClear = false; vm.clear() }) {
-                    Text(stringResource(R.string.jowi_clear), color = colors.danger, fontWeight = FontWeight.SemiBold)
+                TextButton(onClick = { askArchive = false; vm.archive() }) {
+                    Text(stringResource(R.string.jowi_clear), color = colors.accentText, fontWeight = FontWeight.SemiBold)
                 }
             },
-            dismissButton = { TextButton(onClick = { askClear = false }) { Text(stringResource(R.string.cancel), color = colors.muted) } },
+            dismissButton = { TextButton(onClick = { askArchive = false }) { Text(stringResource(R.string.cancel), color = colors.muted) } },
         )
     }
 }
 
-/** The asker's line, right-aligned: ink text, the seat hue as a thin kiremit OUTLINE with a whisper of fill. */
+/**
+ * A withdrawn turn, where the question stood: right-aligned, dashed frame, the
+ * server's trace in italics, "Geri getir" beside it while `canUnhide`. The
+ * WhatsApp "deleted" idiom with the two differences that are the point — the
+ * content is not deleted, and here it can come back.
+ */
 @Composable
-private fun UserBubble(line: JowiLine) {
+private fun WithdrawnStub(line: JowiLine, vm: JowiViewModel) {
+    val colors = WorkisTheme.colors
+    val dash = colors.faint
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .widthIn(max = 300.dp)
+                .drawBehind {
+                    drawRoundRect(
+                        color = dash, cornerRadius = CornerRadius(18.dp.toPx()),
+                        style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 7f))),
+                    )
+                }
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            Text(
+                line.trace ?: stringResource(R.string.jowi_withdrawn_trace),
+                fontSize = 13.sp, lineHeight = 18.sp, fontStyle = FontStyle.Italic, color = colors.muted,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (line.canUnhide) {
+                Spacer(Modifier.width(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { vm.unhide(line) }) {
+                    Icon(WorkisIcons.Undo, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.jowi_bring_back), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.accentText)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The asker's line, right-aligned: ink text, the seat hue as a thin kiremit
+ * OUTLINE with a whisper of fill. A long press offers "Soruyu geri çek" — only
+ * while the server says the turn did nothing (`canHide`); otherwise no menu.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun UserBubble(line: JowiLine, vm: JowiViewModel) {
     val colors = WorkisTheme.colors
     val showTypedLabel = stringResource(R.string.clarify_show_typed)
+    var menu by remember(line.id) { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Box {
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(
+                    leadingIcon = { Icon(WorkisIcons.Undo, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(16.dp)) },
+                    text = { Text(stringResource(R.string.jowi_hide_turn), color = colors.ink, fontSize = 14.sp) },
+                    onClick = { menu = false; vm.hide(line) },
+                )
+            }
         Column(
             horizontalAlignment = Alignment.End,
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .background(Kiremit500.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
                 .border(1.dp, Kiremit500.copy(alpha = 0.55f), RoundedCornerShape(18.dp))
+                .combinedClickable(enabled = line.canHide && line.serverId != null, onClick = {}, onLongClick = { menu = true })
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Text(line.text, fontSize = 15.sp, lineHeight = 21.sp, color = colors.ink, textAlign = TextAlign.End)
@@ -534,7 +777,7 @@ private fun UserBubble(line: JowiLine) {
                             .semantics { contentDescription = showTypedLabel },
                         contentAlignment = Alignment.CenterEnd,
                     ) {
-                        Text("⌨", fontSize = 14.sp, color = if (showTyped) colors.accentText else colors.faint)
+                        Icon(WorkisIcons.Keyboard, contentDescription = null, tint = if (showTyped) colors.accentText else colors.faint, modifier = Modifier.size(16.dp))
                     }
                 }
                 if (showTyped) {
@@ -547,6 +790,7 @@ private fun UserBubble(line: JowiLine) {
             clockOf(line.at).takeIf { it.isNotEmpty() }?.let {
                 Text(it, fontFamily = WorkisMono, fontSize = 9.sp, color = colors.faint, textAlign = TextAlign.End)
             }
+        }
         }
     }
 }
@@ -680,27 +924,61 @@ private fun ThumbButton(label: String, description: String, onClick: () -> Unit)
     )
 }
 
-/** The two-reading card — the asker decides which text becomes the record. */
+/**
+ * The two-reading card — the asker decides which text becomes the record.
+ * Each choice IS its text (2026-09-19): a small capsule label on the right,
+ * the sentence that would go out under it on the left; tapping either sends
+ * that text. No pair of coloured buttons — the screen's one tinted action is
+ * the send button. The third way, "Düzenlemeye dön", hands the typed text back
+ * to the field so the writer can fix their own slip.
+ */
 @Composable
-private fun ClarifyCard(typed: String, reading: String, vm: JowiViewModel) {
+private fun ClarifyCard(typed: String, reading: String, vm: JowiViewModel, onBackToEdit: (String) -> Unit) {
     val colors = WorkisTheme.colors
     Column(
         Modifier.fillMaxWidth().background(BeigeBg, RoundedCornerShape(16.dp)).padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(stringResource(R.string.clarify_title), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, letterSpacing = 1.sp, color = Beige)
-        Text(reading, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 21.sp, color = colors.ink)
-        Text(stringResource(R.string.clarify_typed_label) + " · " + typed, fontFamily = WorkisMono, fontSize = 11.sp, lineHeight = 16.sp, color = colors.faint)
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(
-                onClick = { vm.chooseReading() },
-                colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill),
-                modifier = Modifier.height(36.dp),
-            ) { Text(stringResource(R.string.clarify_use_reading), fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
-            TextButton(onClick = { vm.chooseOwn() }, modifier = Modifier.height(36.dp).border(1.dp, colors.border, CircleShape)) {
-                Text(stringResource(R.string.clarify_use_own), fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.muted)
+        // Jowi's reading: the "/" capsule in kiremit text, the sentence in ink
+        Column(Modifier.fillMaxWidth().clickable { vm.chooseReading() }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                ClarifyCapsule(stringResource(R.string.clarify_jowi_suggests), Kiremit500, slash = true)
+            }
+            Text(reading, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 21.sp, color = colors.ink)
+        }
+        // the writer's own words: keyboard capsule, the sentence in light beige
+        Column(Modifier.fillMaxWidth().clickable { vm.chooseOwn() }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                ClarifyCapsule(stringResource(R.string.clarify_your_words), Beige, icon = WorkisIcons.Keyboard)
+            }
+            Text(typed, fontSize = 15.sp, lineHeight = 21.sp, color = Beige)
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Beige.copy(alpha = 0.25f)))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Box(Modifier.clickable { onBackToEdit(vm.backToEdit() ?: typed) }) {
+                ClarifyCapsule(stringResource(R.string.clarify_back_to_edit), Beige, icon = WorkisIcons.Pencil)
             }
         }
+    }
+}
+
+/** A small capsule label on the beige ground: thin light-beige edge, never a filled colour ("selected"). */
+@Composable
+private fun ClarifyCapsule(label: String, tint: androidx.compose.ui.graphics.Color, slash: Boolean = false, icon: androidx.compose.ui.graphics.vector.ImageVector? = null) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.border(1.dp, Beige.copy(alpha = 0.45f), CircleShape).padding(horizontal = 9.dp, vertical = 4.dp),
+    ) {
+        if (slash) {
+            Text("/", fontFamily = WorkisMono, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = tint)
+            Spacer(Modifier.width(5.dp))
+        }
+        icon?.let {
+            Icon(it, contentDescription = null, tint = tint, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(5.dp))
+        }
+        Text(label, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.5.sp, color = tint)
     }
 }
 

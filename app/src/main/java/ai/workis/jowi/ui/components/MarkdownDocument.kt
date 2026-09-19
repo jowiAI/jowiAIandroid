@@ -161,10 +161,17 @@ private fun Body(text: String, color: Color, size: TextUnit = 15.sp, lineHeight:
     Text(richInline(text, color), color = color, fontFamily = WorkisSans, fontSize = size, lineHeight = lineHeight, modifier = modifier)
 }
 
+/**
+ * `paper = true` is the document scale a contract is read at (13 sp body, the
+ * headings down with it) — a legal text is set smaller than a guide, and the
+ * whole clause has to fit a phone line without the eye losing the column.
+ */
 @Composable
-fun MarkdownDocument(markdown: String, modifier: Modifier = Modifier) {
+fun MarkdownDocument(markdown: String, modifier: Modifier = Modifier, paper: Boolean = false) {
     val colors = WorkisTheme.colors
     val blocks = remember(markdown) { parseBlocks(markdown) }
+    val body = if (paper) 13.sp else 15.sp
+    val bodyLine = if (paper) 19.sp else 22.sp
     Column(modifier, verticalArrangement = Arrangement.spacedBy(0.dp)) {
         blocks.forEachIndexed { index, b ->
             when (b) {
@@ -174,14 +181,22 @@ fun MarkdownDocument(markdown: String, modifier: Modifier = Modifier) {
                         b.text,
                         fontFamily = if (b.level <= 2) WorkisMono else WorkisSans,
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = when (b.level) { 1 -> 24.sp; 2 -> 20.sp; else -> 17.sp },
-                        lineHeight = when (b.level) { 1 -> 32.sp; 2 -> 28.sp; else -> 24.sp },
+                        fontSize = if (paper) {
+                            when (b.level) { 1 -> 19.sp; 2 -> 16.sp; else -> 14.sp }
+                        } else {
+                            when (b.level) { 1 -> 24.sp; 2 -> 20.sp; else -> 17.sp }
+                        },
+                        lineHeight = if (paper) {
+                            when (b.level) { 1 -> 26.sp; 2 -> 22.sp; else -> 20.sp }
+                        } else {
+                            when (b.level) { 1 -> 32.sp; 2 -> 28.sp; else -> 24.sp }
+                        },
                         color = colors.ink,
                     )
                     Spacer(Modifier.height(if (b.level <= 2) 8.dp else 6.dp))
                 }
                 is Block.Paragraph -> {
-                    Body(b.text, colors.ink)
+                    Body(b.text, colors.ink, size = body, lineHeight = bodyLine)
                     Spacer(Modifier.height(14.dp))
                 }
                 is Block.Quote -> {
@@ -194,7 +209,7 @@ fun MarkdownDocument(markdown: String, modifier: Modifier = Modifier) {
                             .height(IntrinsicSize.Min),
                     ) {
                         Box(Modifier.width(3.dp).fillMaxHeight().background(Kiremit500))
-                        Body(b.text, colors.ink, modifier = Modifier.padding(14.dp))
+                        Body(b.text, colors.ink, size = body, lineHeight = bodyLine, modifier = Modifier.padding(14.dp))
                     }
                     Spacer(Modifier.height(16.dp))
                 }
@@ -205,10 +220,10 @@ fun MarkdownDocument(markdown: String, modifier: Modifier = Modifier) {
                                 Text(
                                     if (b.ordered) "${n + 1}." else "•",
                                     fontFamily = if (b.ordered) WorkisMono else WorkisSans,
-                                    fontSize = 15.sp, lineHeight = 22.sp, color = colors.muted,
+                                    fontSize = body, lineHeight = bodyLine, color = colors.muted,
                                     modifier = Modifier.width(26.dp),
                                 )
-                                Body(item, colors.ink, modifier = Modifier.weight(1f))
+                                Body(item, colors.ink, size = body, lineHeight = bodyLine, modifier = Modifier.weight(1f))
                             }
                         }
                     }

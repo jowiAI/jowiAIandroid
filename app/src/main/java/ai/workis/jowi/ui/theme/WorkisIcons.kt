@@ -322,4 +322,173 @@ object WorkisIcons {
             lineTo(12f, 20f)
         }
     }
+
+    /** SF "keyboard" — the words as typed, behind the stamp row. */
+    val Keyboard: ImageVector = stroked("Keyboard") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(3f, 6.5f); lineTo(21f, 6.5f); lineTo(21f, 17.5f); lineTo(3f, 17.5f); close()
+            moveTo(6.5f, 10f); lineTo(7f, 10f); moveTo(10f, 10f); lineTo(10.5f, 10f)
+            moveTo(13.5f, 10f); lineTo(14f, 10f); moveTo(17f, 10f); lineTo(17.5f, 10f)
+            moveTo(8f, 14f); lineTo(16f, 14f)
+        }
+    }
+
+    /** SF "archivebox" — putting a draft away; never a bin. */
+    val Archive: ImageVector = stroked("Archive") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(3f, 5f); lineTo(21f, 5f); lineTo(21f, 9f); lineTo(3f, 9f); close()
+            moveTo(4.5f, 9f); lineTo(4.5f, 19.5f); lineTo(19.5f, 19.5f); lineTo(19.5f, 9f)
+            moveTo(9.5f, 13f); lineTo(14.5f, 13f)
+        }
+    }
+
+    /** SF "clock". */
+    val Clock: ImageVector = stroked("Clock") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(3.5f, 12f); arcToRelative(8.5f, 8.5f, 0f, true, false, 17f, 0f); arcToRelative(8.5f, 8.5f, 0f, true, false, -17f, 0f)
+            moveTo(12f, 7.5f); lineTo(12f, 12f); lineTo(15f, 14f)
+        }
+    }
+
+    /** SF "shield". */
+    val Shield: ImageVector = stroked("Shield") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(12f, 3f); lineTo(19.5f, 6f); lineTo(19.5f, 11.5f)
+            quadTo(19.5f, 17.5f, 12f, 21f); quadTo(4.5f, 17.5f, 4.5f, 11.5f); lineTo(4.5f, 6f); close()
+        }
+    }
+
+    /** SF "list.clipboard" — a term proposal read from the correspondence. */
+    val Clipboard: ImageVector = stroked("Clipboard") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(9f, 5f); lineTo(6f, 5f); lineTo(6f, 21f); lineTo(18f, 21f); lineTo(18f, 5f); lineTo(15f, 5f)
+            moveTo(9f, 3.5f); lineTo(15f, 3.5f); lineTo(15f, 6.5f); lineTo(9f, 6.5f); close()
+            moveTo(9f, 11f); lineTo(15f, 11f); moveTo(9f, 14.5f); lineTo(15f, 14.5f); moveTo(9f, 18f); lineTo(12.5f, 18f)
+        }
+    }
+
+    /** SF "arrow.uturn.backward" — returned / withdrawn. */
+    val Undo: ImageVector = stroked("Undo") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(8.5f, 5f); lineTo(4f, 9.5f); lineTo(8.5f, 14f)
+            moveTo(4f, 9.5f); lineTo(14.5f, 9.5f); arcToRelative(5f, 5f, 0f, false, true, 0f, 10f); lineTo(9f, 19.5f)
+        }
+    }
+
+    /** SF "calendar" — an open-account term runs on a date, not a lock. */
+    val Calendar: ImageVector = stroked("Calendar") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(4f, 6f); lineTo(20f, 6f); lineTo(20f, 20f); lineTo(4f, 20f); close()
+            moveTo(4f, 10.5f); lineTo(20f, 10.5f)
+            moveTo(8.5f, 3.5f); lineTo(8.5f, 7.5f); moveTo(15.5f, 3.5f); lineTo(15.5f, 7.5f)
+        }
+    }
+
+    /** SF "lock". */
+    val Lock: ImageVector = stroked("Lock") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(5.5f, 10.5f); lineTo(18.5f, 10.5f); lineTo(18.5f, 20.5f); lineTo(5.5f, 20.5f); close()
+            moveTo(8.5f, 10.5f); lineTo(8.5f, 7.5f); arcToRelative(3.5f, 3.5f, 0f, false, true, 7f, 0f); lineTo(15.5f, 10.5f)
+        }
+    }
+
+    /** SF "exclamationmark.triangle" — stuck / objection; always beside a word. */
+    val Warning: ImageVector = stroked("Warning") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(12f, 4f); lineTo(21f, 19.5f); lineTo(3f, 19.5f); close()
+            moveTo(12f, 10f); lineTo(12f, 14.5f); moveTo(12f, 17f); lineTo(12f, 17.2f)
+        }
+    }
+
+    /** SF "arrow.clockwise" — "Yeniden dene". */
+    val Retry: ImageVector = stroked("Retry") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(19.5f, 12f); arcToRelative(7.5f, 7.5f, 0f, true, true, -2.6f, -5.7f)
+            moveTo(17.5f, 3f); lineTo(17.5f, 7f); lineTo(13.5f, 7f)
+        }
+    }
+
+    /** SF "checkmark" — one on the table, two side by side once every seat has seen it. */
+    val Check: ImageVector = stroked("Check") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 2.2f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(5f, 12.5f); lineTo(10f, 17.5f); lineTo(19.5f, 7f)
+        }
+    }
+
+    /** SF "lock.open" — the money let go. */
+    val LockOpen: ImageVector = stroked("LockOpen") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(5.5f, 10.5f); lineTo(18.5f, 10.5f); lineTo(18.5f, 20.5f); lineTo(5.5f, 20.5f); close()
+            moveTo(8.5f, 10.5f); lineTo(8.5f, 7.5f); arcToRelative(3.5f, 3.5f, 0f, false, true, 7f, 0f)
+        }
+    }
+
+    /** SF "xmark.circle" — a change not taken. */
+    val Cross: ImageVector = stroked("Cross") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(3.5f, 12f); arcToRelative(8.5f, 8.5f, 0f, true, false, 17f, 0f); arcToRelative(8.5f, 8.5f, 0f, true, false, -17f, 0f)
+            moveTo(9f, 9f); lineTo(15f, 15f); moveTo(15f, 9f); lineTo(9f, 15f)
+        }
+    }
+
+    /** The neutral mark for a system line whose kind we do not know. */
+    val Dot: ImageVector = stroked("Dot") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(4.5f, 12f); arcToRelative(7.5f, 7.5f, 0f, true, false, 15f, 0f); arcToRelative(7.5f, 7.5f, 0f, true, false, -15f, 0f)
+            moveTo(9.5f, 12f); arcToRelative(2.5f, 2.5f, 0f, true, false, 5f, 0f); arcToRelative(2.5f, 2.5f, 0f, true, false, -5f, 0f)
+        }
+    }
+
+    /** SF "magnifyingglass". */
+    val Search: ImageVector = stroked("Search") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(4f, 10.5f); arcToRelative(6.5f, 6.5f, 0f, true, false, 13f, 0f); arcToRelative(6.5f, 6.5f, 0f, true, false, -13f, 0f)
+            moveTo(15.5f, 15.5f); lineTo(20.5f, 20.5f)
+        }
+    }
 }

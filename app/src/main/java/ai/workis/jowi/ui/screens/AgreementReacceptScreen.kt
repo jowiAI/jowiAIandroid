@@ -83,12 +83,20 @@ class ReacceptViewModel : ViewModel() {
         val lang = Graph.language.value
         viewModelScope.launch {
             when (val r = Graph.auth.acceptAgreement(signerName.trim())) {
-                is ApiResult.Ok -> if (r.value.success) done = true
-                else note = r.value.error?.let { code ->
-                    if (code == "nothing_pending") (if (lang == "en") "Nothing is pending." else "Bekleyen bir sözleşme yok.")
-                    else applyErrorMessage(code, lang)
-                } ?: r.value.message
-                is ApiResult.Err -> note = r.message
+                is ApiResult.Ok -> when {
+                    r.value.success -> done = true
+                    // the row was already written — the paper opened on a verdict
+                    // that had since been answered, not on a failure
+                    r.value.error == "nothing_pending" -> done = true
+                    else -> note = r.value.error?.let { applyErrorMessage(it, lang) } ?: r.value.message
+                }
+                // an error is not proof that nothing was signed: a gateway can drop
+                // the answer after the acceptance is recorded. Ask what is still
+                // pending before telling the reader it failed (2026-09-19).
+                is ApiResult.Err -> {
+                    Graph.auth.refreshAgreementPending()
+                    if (Graph.auth.agreementPending.value?.pending != true) done = true else note = r.message
+                }
             }
             submitting = false
         }

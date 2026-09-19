@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Badge
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -35,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,7 +79,6 @@ class OrdersViewModel : ViewModel() {
     private val lang get() = Graph.language.value
 
     val unreadTotal get() = orders.orEmpty().sumOf { it.unread ?: 0 }
-    val missingTermsOrders get() = orders.orEmpty().count { it.termsMissing > 0 }
 
     fun load() {
         viewModelScope.launch {
@@ -118,7 +119,7 @@ fun OrdersScreen(vm: OrdersViewModel, onBack: () -> Unit, onThread: (PartnerOrde
     val colors = WorkisTheme.colors
     var reviewFor by remember { mutableStateOf<PartnerOrder?>(null) }
     var confirmFund by remember { mutableStateOf<PartnerOrder?>(null) }
-    LaunchedEffect(Unit) { vm.load() }
+    LaunchedEffect(Unit) { ai.workis.jowi.data.ScreenContext.setPage("orders"); vm.load() } // Jowi's page (2026-09-19)
     ConsoleSub(stringResource(R.string.orders_screen_title), onBack, trailing = {
         if (vm.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Kiremit500)
     }) {
@@ -181,12 +182,19 @@ private fun OrderCard(
             if (o.isCarrier) {
                 Text(stringResource(R.string.order_no_money_for_carrier), fontSize = 11.sp, lineHeight = 15.sp, color = colors.faint, modifier = Modifier.weight(1f))
             } else {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(WorkisMoney.text(o.total, o.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
-                    o.escrowLabel?.takeIf { it.isNotEmpty() }?.let {
-                        Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.muted)
-                    }
-                }
+                Text(WorkisMoney.text(o.total, o.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
+            }
+        }
+        // the payment word is a legal fact and is NEVER cut: it takes its own
+        // line under the amount rather than an ellipsis beside it (seen on a
+        // narrow screen as "Güvenceli ödeme yok (açık hes…", 2026-09-19)
+        if (!o.isCarrier) {
+            o.escrowLabel?.takeIf { it.isNotEmpty() }?.let {
+                Text(
+                    it,
+                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp,
+                    color = colors.muted, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
         // the parties, as the server names them
@@ -198,24 +206,6 @@ private fun OrderCard(
             ).joinToString(" → "),
             fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
         )
-        // badges: the counts are the server's
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            o.terms?.let { t ->
-                val missing = o.termsMissing
-                StatusPill(
-                    if (missing > 0) "$missing " + stringResource(R.string.order_terms_missing)
-                    else "${t.ok ?: 0}/${t.total ?: 0} " + stringResource(R.string.order_terms_badge),
-                    if (missing > 0) Beige else SuccessGreen,
-                )
-            }
-            o.contract?.let { c ->
-                StatusPill(
-                    stringResource(if (c.status == "accepted") R.string.order_contract_accepted else R.string.order_contract_draft) + " v${c.version ?: 1}",
-                    if (c.status == "accepted") SuccessGreen else colors.muted,
-                )
-            }
-            (o.unread ?: 0).takeIf { it > 0 }?.let { StatusPill("$it " + stringResource(R.string.order_unread), Kiremit500) }
-        }
         o.shipment?.let { s ->
             Text(
                 listOfNotNull(
@@ -243,29 +233,64 @@ private fun OrderCard(
                 }
             }
         }
-        // actions: the thread door, the contract door, escrow, the rating
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(onClick = onThread)) {
+        // Each state stands over the door it belongs to — the unread count on
+        // the correspondence row, the terms under it, the contract's standing
+        // under its own row. In the card's corner they said nothing about
+        // where to go (user finding, 2026-09-19).
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(onClick = onThread)) {
                 Icon(WorkisIcons.Bubble, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(R.string.thread_open), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
+                Spacer(Modifier.weight(1f))
+                (o.unread ?: 0).takeIf { it > 0 }?.let { Badge { Text("$it", fontSize = 10.sp) } }
             }
-            if (o.contract != null) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(onClick = onContract)) {
+            o.terms?.let { t ->
+                val ok = t.ok ?: 0
+                val total = t.total ?: 0
+                Text(
+                    "$ok/$total " + stringResource(R.string.order_terms_settled),
+                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp,
+                    color = if (total > 0 && ok >= total) SuccessGreen else Beige,
+                    modifier = Modifier.padding(start = 20.dp),
+                )
+            }
+        }
+        // the contract door carries its own standing; a carrier signs nothing
+        if (!o.isCarrier) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(onClick = onContract)) {
                     Icon(WorkisIcons.DocText, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(stringResource(R.string.contract_open), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
                 }
-            }
-            if (o.canReview == true && o.myRating == null && o.shipment?.id != null) {
+                val c = o.contract
                 Text(
-                    stringResource(R.string.order_rate_carrier), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText,
-                    modifier = Modifier.clickable(onClick = onReview),
+                    when {
+                        c == null -> stringResource(R.string.order_contract_after_terms)
+                        c.status == "accepted" -> stringResource(R.string.order_contract_accepted)
+                        else -> stringResource(R.string.order_contract_draft) + " · v${c.version ?: 1}"
+                    },
+                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp,
+                    color = if (c?.status == "accepted") SuccessGreen else colors.faint,
+                    modifier = Modifier.padding(start = 20.dp),
                 )
             }
         }
-        // the one tinted action a card may carry: escrow the total
-        if (o.canFund && !o.isCarrier) {
+        if (o.canReview == true && o.myRating == null && o.shipment?.id != null) {
+            Text(
+                stringResource(R.string.order_rate_carrier), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText,
+                modifier = Modifier.clickable(onClick = onReview),
+            )
+        }
+        // why the block is not on offer — the server's sentence, never ours
+        o.fundHint?.takeIf { it.isNotEmpty() }?.let {
+            Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
+        }
+        // the one tinted action a card may carry: escrow the total. The settled
+        // payment term decides, not the escrow word — a missing flag is a shut
+        // door (a vade order was offering "Ödemeyi blokla" on 2026-09-19).
+        if (o.canFund == true && !o.isCarrier) {
             androidx.compose.material3.Button(
                 onClick = onFund,
                 enabled = !vm.busy,

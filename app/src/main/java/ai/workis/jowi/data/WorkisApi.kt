@@ -240,7 +240,7 @@ interface WorkisApi {
     @GET("workis/orders/")
     suspend fun orders(): PartnerOrders
 
-    /** The buyer escrows the total — only while `escrow == "no_escrow"`. */
+    /** The buyer escrows the total — only while the card says `canFund`. */
     @POST("workis/orders/{id}/fund/")
     suspend fun orderFund(@Path("id") id: String): OrderFundResult
 
@@ -270,7 +270,21 @@ interface WorkisApi {
     @GET("workis/invitations/{id}/thread/new/")
     suspend fun invitationThreadNew(@Path("id") id: String, @Query("after") after: String): ThreadNew
 
-    /** `{action:"confirm"}` or `{action:"edit", value:"<the sentence>"}` — buyer and seller only. */
+    /**
+     * A written record is never deleted: the sender's own message leaves the
+     * screens while no other seat has seen it, and a trace stays in its place.
+     * 400 carries the sentence to show.
+     */
+    @POST("workis/orders/{id}/thread/{messageId}/retract/")
+    suspend fun orderThreadRetract(@Path("id") id: String, @Path("messageId") messageId: String): ThreadRetractResult
+
+    @POST("workis/invitations/{id}/thread/{messageId}/retract/")
+    suspend fun invitationThreadRetract(@Path("id") id: String, @Path("messageId") messageId: String): ThreadRetractResult
+
+    /**
+     * `{action:"confirm"}` · `{action:"edit", value:"<the sentence>"}` ·
+     * `{action:"withdraw"|"decline"}` (the way out of a proposal) — buyer and seller only.
+     */
     @POST("workis/orders/{id}/terms/{key}/")
     suspend fun orderTerm(@Path("id") id: String, @Path("key") key: String, @Body body: kotlinx.serialization.json.JsonObject): TermActionResult
 
@@ -403,7 +417,17 @@ interface WorkisApi {
     suspend fun catalogOfferCell(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject, @Query("seller") seller: String? = null): SimpleResult
 
     @GET("workis/lists/")
-    suspend fun lists(): PurchaseListIndex
+    suspend fun lists(@Query("archived") archived: Int? = null): PurchaseListIndex
+
+    // archive a draft (never delete), bring it back, retry a stuck one — 409 carries the sentence
+    @POST("workis/lists/{id}/archive/")
+    suspend fun listArchive(@Path("id") id: String): ListActionResult
+
+    @POST("workis/lists/{id}/unarchive/")
+    suspend fun listUnarchive(@Path("id") id: String): ListActionResult
+
+    @POST("workis/lists/{id}/retry/")
+    suspend fun listRetry(@Path("id") id: String): ListActionResult
 
     @Multipart
     @POST("workis/lists/upload/")
@@ -474,8 +498,21 @@ interface WorkisApi {
     @GET("workis/ask/history/")
     suspend fun askHistory(): AskHistory
 
-    @POST("workis/ask/history/clear/")
-    suspend fun askHistoryClear(): SimpleResult
+    /** The archive, paged backwards: `before` = the previous page's `nextBefore`, null on the first page. */
+    @GET("workis/ask/history/?archived=1")
+    suspend fun askHistoryArchived(@Query("before") before: String?, @Query("limit") limit: Int = 40): AskHistory
+
+    /** "Arşivle": nothing is deleted — the open history moves to the archive and a new one starts. */
+    @POST("workis/ask/history/archive/")
+    suspend fun askHistoryArchive(): SimpleResult
+
+    // a written record is never deleted (2026-09-18): a turn is WITHDRAWN into a
+    // stub in its place, and can come back
+    @POST("workis/ask/history/{id}/hide/")
+    suspend fun askHide(@Path("id") id: String): AskHideResult
+
+    @POST("workis/ask/history/{id}/unhide/")
+    suspend fun askUnhide(@Path("id") id: String): AskUnhideResult
 
     /** 👍/👎 on a knowledge-backed answer; first verdict wins (rated: false afterwards). */
     @POST("workis/ask/like/")

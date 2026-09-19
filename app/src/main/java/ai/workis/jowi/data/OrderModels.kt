@@ -55,8 +55,14 @@ data class PartnerOrder(
     /** null on a carrier card (§7.1) — never draw a zero there. */
     val total: Double? = null,
     val currency: String? = null,
-    val escrow: String? = null, // raw state; "no_escrow" is what opens Blokla
+    val escrow: String? = null, // a display fact only — never what opens Blokla
     val escrowLabel: String? = null,
+    /**
+     * The server weighs the settled payment term: a deferred term runs on open
+     * account and is never blocked. FAILS CLOSED — a missing flag is a shut door.
+     */
+    val canFund: Boolean? = null,
+    val fundHint: String? = null, // the refusal in the server's words; "" when not worth a line
     val shipment: OrderShipment? = null,
     val myRating: Int? = null,
     val canReview: Boolean? = null,
@@ -67,8 +73,6 @@ data class PartnerOrder(
     @Serializable(with = FlexString::class) val invitationId: String? = null,
 ) {
     val isCarrier get() = role == "carrier"
-    val canFund get() = escrow == "no_escrow"
-    val termsMissing get() = ((terms?.total ?: 0) - (terms?.ok ?: 0)).coerceAtLeast(0)
 }
 
 @Serializable
@@ -88,7 +92,13 @@ data class ThreadMessage(
     val who: String? = null,
     val seat: String? = null,
     val kind: String? = null, // user | jowi | system
+    /**
+     * Jowi's corrected reading. EMPTY or null once the message is withdrawn —
+     * read it optionally, or one null makes the whole table undecodable.
+     */
     val content: String? = null,
+    /** The words as typed, when Jowi corrected them; the keyboard glyph opens it. */
+    val textOriginal: String? = null,
     /** Per-reader translation; when it differs from `content` it is what shows. */
     val textLocalized: String? = null,
     val srcLang: String? = null,
@@ -97,6 +107,31 @@ data class ThreadMessage(
     val atLabel: String? = null,
     val kb: String? = null,
     val verdict: String? = null,
+    /** The seats that have seen it — one ✓ on the table, two once the others are all in. */
+    val seenBy: List<String>? = null,
+    val canRetract: Boolean? = null,
+    val retracted: Boolean? = null,
+    val retractedAt: String? = null,
+    /** What stands where a withdrawn message was; never a gap. */
+    val trace: String? = null,
+    /** The system line's own word (delivered · accepted · … · withdrawn); the emoji map is the fallback. */
+    val icon: String? = null,
+)
+
+/** The lighter door: what a poll says about rows already on screen. */
+@Serializable
+data class ThreadReceipt(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val seenBy: List<String>? = null,
+    val canRetract: Boolean? = null,
+    val retracted: Boolean? = null,
+)
+
+@Serializable
+data class ThreadRetractResult(
+    val success: Boolean = false,
+    val message: ThreadMessage? = null,
+    val error: String? = null,
 )
 
 @Serializable
@@ -114,6 +149,11 @@ data class ThreadInspection(
     val name: String? = null,
     val status: String? = null,
     val due: String? = null,
+    /** escrow | open_account — the app never writes "ödeme bloke" on its own. */
+    val moneyPath: String? = null,
+    /** The server's sentence for this state, in the request language: print it. */
+    val moneyWords: String? = null,
+    val invoice: String? = null,
 )
 
 @Serializable
@@ -135,8 +175,17 @@ data class ThreadPayload(
     val readOnly get() = myRole == "coordinator"
 }
 
+/**
+ * The poll answers with the new rows AND the standing of the caller's recent
+ * ones, so a ✓ can become ✓✓ and a spent "Geri çek" can go without a full read.
+ */
 @Serializable
-data class ThreadNew(val messages: List<ThreadMessage>? = null)
+data class ThreadNew(
+    val messages: List<ThreadMessage>? = null,
+    val receipts: List<ThreadReceipt>? = null,
+    val nTermsOk: Int? = null,
+    val nTerms: Int? = null,
+)
 
 @Serializable
 data class ThreadLine(val text: String? = null, val href: String? = null)
@@ -177,6 +226,10 @@ data class OrderTerm(
     val sellerOk: Boolean? = null,
     val canConfirm: Boolean? = null,
     val canEdit: Boolean? = null,
+    /** The way out of a proposal: the proposer withdraws, the other party declines. */
+    val canWithdraw: Boolean? = null,
+    val canDecline: Boolean? = null,
+    val proposedBy: String? = null,
 )
 
 @Serializable
@@ -192,13 +245,58 @@ data class TermActionResult(
 @Serializable
 data class ContractAcceptance(val acceptedAt: String? = null, val signer: String? = null, val ip: String? = null)
 
+/**
+ * Ek-1 as the contract's annex: accounting facts, decided on the server. The
+ * paper DRAWS these rows and computes nothing — the same table the web page
+ * and the PDF show, and `sha256` covers it.
+ */
+@Serializable
+data class ContractAnnexLine(
+    val n: Int? = null,
+    val sku: String? = null,
+    /** The QUOTED VARIANT's name, not the buyer's generic words. */
+    val name: String? = null,
+    /** What the buyer asked for ("Emici spiral hortum · 1 inç · yeşil"). */
+    val asked: String? = null,
+    val qty: Double? = null,
+    /** The order's unit per line — may be EMPTY; never assume "adet". */
+    val unit: String? = null,
+    val unitPrice: Double? = null,
+    val amount: Double? = null,
+    val vatRate: Double? = null,
+    val listPrice: Double? = null,
+    val discountPct: Double? = null,
+)
+
+/** One row per rate; `rate` is a fraction (0.20 → "%20"). */
+@Serializable
+data class ContractVat(val rate: Double? = null, val base: Double? = null, val amount: Double? = null)
+
+@Serializable
+data class ContractShipping(val label: String? = null, val amount: Double? = null, val payer: String? = null)
+
+@Serializable
+data class ContractAnnex(
+    val lines: List<ContractAnnexLine>? = null,
+    val currency: String? = null,
+    val subtotal: Double? = null,
+    val vat: List<ContractVat>? = null,
+    val shipping: ContractShipping? = null,
+    val total: Double? = null,
+    val pricesExcludeVat: Boolean? = null,
+    val note: String? = null,
+)
+
 @Serializable
 data class OrderContract(
     @Serializable(with = FlexString::class) val id: String? = null,
     val version: Int? = null,
     val status: String? = null, // draft | accepted | superseded
     val sha256: String? = null,
+    /** Ends with the heading "Ek-1 — Sipariş Kalemleri"; the table follows it. */
     val bodyMd: String? = null,
+    /** null on a version made before the rule — then Ek-1 stays the body's text. */
+    val annex: ContractAnnex? = null,
     val buyer: ContractAcceptance? = null,
     val seller: ContractAcceptance? = null,
     val acceptedAt: String? = null,
@@ -250,7 +348,12 @@ data class ApOutward(
 )
 
 @Serializable
-data class ApFund(@Serializable(with = FlexString::class) val orderId: String? = null, val po: String? = null)
+data class ApFund(
+    @Serializable(with = FlexString::class) val orderId: String? = null,
+    val po: String? = null,
+    /** The server already leaves these out; a false row is never drawn either. */
+    val canFund: Boolean? = null,
+)
 
 @Serializable
 data class ApOverdueProposal(val display: String? = null, val prev: String? = null)
@@ -275,6 +378,10 @@ data class ApLine(
     val due: String? = null,
     val description: String? = null,
     val discoveredOn: String? = null,
+    /** escrow | open_account: the money's road, and the server's words for it. */
+    val moneyPath: String? = null,
+    val moneyWords: String? = null,
+    val invoice: String? = null,
 )
 
 @Serializable

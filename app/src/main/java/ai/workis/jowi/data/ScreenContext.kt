@@ -53,6 +53,35 @@ object ScreenContext {
     var current: Snapshot? = null
         private set
 
+    /**
+     * Which PAGE the asker came from — `lists` · `quotes` · `orders`; the server
+     * picks its snapshot by it. It was hard-coded to "lists", so a seller asking
+     * from Teklifler was answered from the buyer's lists (live run 2026-09-19).
+     */
+    @Volatile
+    var page: String? = null
+        private set
+
+    /**
+     * The purchase list open on screen, if any — sent as `ctxList` when the
+     * asker keeps the scope on that list, so "bu listede kaç kalem var?" is
+     * answered from THAT list (the web's list page does the same).
+     */
+    @Volatile
+    var openListId: String? = null
+        private set
+    @Volatile
+    var openListTitle: String? = null
+        private set
+
+    /** A page without a list open: Listeler, Teklifler, Siparişler. */
+    fun setPage(page: String) { this.page = page; openListId = null; openListTitle = null }
+
+    /** The list detail: its page is `lists` and the list rides as the scope. */
+    fun openList(id: String, title: String?) {
+        page = "lists"; openListId = id; openListTitle = title?.takeIf { it.isNotEmpty() }
+    }
+
     fun set(screen: String, state: JsonObject? = null, visible: List<VisibleItem>, seller: String? = null) {
         val labels = visible.map { it.copy(label = it.label.trim()) }
             .filter { it.label.isNotEmpty() }
@@ -61,5 +90,5 @@ object ScreenContext {
         current = Snapshot(screen, state?.takeIf { it.isNotEmpty() }, labels, seller?.takeIf { it.isNotEmpty() })
     }
 
-    fun clear() { current = null }
+    fun clear() { current = null; page = null; openListId = null; openListTitle = null }
 }

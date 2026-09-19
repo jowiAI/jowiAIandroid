@@ -36,6 +36,15 @@ import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisTheme
 
+/**
+ * One screen at a time may take the whole surface: the order contract is read
+ * and signed in one focused task, and the bar sat ON its sign button (seen on
+ * device 2026-09-19). Leaving that screen puts the bar back.
+ */
+object BottomBar {
+    var hidden by mutableStateOf(false)
+}
+
 private enum class MainTab(val labelRes: Int) {
     Panel(R.string.console_tab),
     Market(R.string.market_tab),
@@ -103,19 +112,21 @@ fun MainScreen() {
     Scaffold(
         containerColor = colors.canvas,
         bottomBar = {
-            NavigationBar(containerColor = colors.surface) {
-                tabs.forEach { tab ->
-                    NavigationBarItem(
-                        selected = current == tab,
-                        onClick = { selected = tab.name; userPicked = true },
-                        icon = { Icon(icon(tab), contentDescription = null) },
-                        label = { Text(stringResource(tab.labelRes), fontSize = 11.sp) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Kiremit500, selectedTextColor = colors.ink,
-                            unselectedIconColor = colors.muted, unselectedTextColor = colors.muted,
-                            indicatorColor = colors.canvas,
-                        ),
-                    )
+            if (!BottomBar.hidden) {
+                NavigationBar(containerColor = colors.surface) {
+                    tabs.forEach { tab ->
+                        NavigationBarItem(
+                            selected = current == tab,
+                            onClick = { selected = tab.name; userPicked = true },
+                            icon = { Icon(icon(tab), contentDescription = null) },
+                            label = { Text(stringResource(tab.labelRes), fontSize = 11.sp) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = Kiremit500, selectedTextColor = colors.ink,
+                                unselectedIconColor = colors.muted, unselectedTextColor = colors.muted,
+                                indicatorColor = colors.canvas,
+                            ),
+                        )
+                    }
                 }
             }
         },

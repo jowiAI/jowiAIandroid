@@ -55,6 +55,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
+import ai.workis.jowi.data.InvListItem
 import ai.workis.jowi.data.SellerInvitation
 import ai.workis.jowi.data.SellerOrder
 import ai.workis.jowi.data.SellerQuote
@@ -133,7 +134,7 @@ class QuotesViewModel : ViewModel() {
 @Composable
 fun QuotesScreen(vm: QuotesViewModel, onCompose: (String) -> Unit, onThread: (String) -> Unit = {}) {
     val colors = WorkisTheme.colors
-    LaunchedEffect(Unit) { vm.load() }
+    LaunchedEffect(Unit) { ai.workis.jowi.data.ScreenContext.setPage("quotes"); vm.load() } // Jowi's page (2026-09-19)
     var pdf by remember { mutableStateOf<Pair<String, String>?>(null) } // url to title
     var reviseFor by remember { mutableStateOf<SellerInvitation?>(null) }
     val rows = vm.invitations
@@ -187,11 +188,8 @@ private fun InvitationCard(inv: SellerInvitation, onCompose: () -> Unit, onPdf: 
             inv.createdAt?.let { Text(it.take(10), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
         }
         val items = inv.listItems.orEmpty()
-        if (items.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            items.forEach { li ->
-                Row { Text(li.itemName.orEmpty(), fontSize = 13.sp, color = colors.ink, modifier = Modifier.weight(1f)); Text(WorkisMoney.qty(li.qty) + " " + li.unit.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
-                li.alts?.takeIf { it.isNotEmpty() }?.let { a -> Text("↳ " + a.mapNotNull { it.name ?: it.sku }.joinToString(" · "), fontSize = 11.sp, color = colors.faint) }
-            }
+        if (items.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items.forEach { li -> ListItemBlock(li) }
         } else inv.shortlist?.takeIf { it.isNotEmpty() }?.let { sl ->
             Text(stringResource(R.string.shortlist_label) + ": " + sl.mapNotNull { it.name ?: it.sku }.joinToString(" · "), fontSize = 11.sp, color = colors.faint)
         }
@@ -214,6 +212,37 @@ private fun InvitationCard(inv: SellerInvitation, onCompose: () -> Unit, onPdf: 
             val title = stringResource(R.string.rfq_pdf)
             Text("📄 $title", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable { onPdf(url, title) })
         }
+    }
+}
+
+/**
+ * The hierarchy is built from the SELLER's seat: my own product (the fitting variant)
+ * leads, its SKU under it, and the buyer's words follow as "İstenen: …". The first cut
+ * had it upside down — the buyer's generic name large, my product faint (2026-09-19).
+ */
+@Composable
+private fun ListItemBlock(li: InvListItem) {
+    val colors = WorkisTheme.colors
+    val alts = li.alts.orEmpty().filter { !(it.name ?: it.sku).isNullOrEmpty() }
+    val qty = (WorkisMoney.qty(li.qty) + " " + li.unit.orEmpty()).trim()
+    val asked = (listOf(if (alts.size == 1) li.itemName else null) + li.requirements.orEmpty()).filterNotNull().filter { it.isNotEmpty() }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.Top) {
+            Text(
+                if (alts.size == 1) (alts[0].name ?: alts[0].sku.orEmpty()) else li.itemName.orEmpty(),
+                fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, color = colors.ink, maxLines = 3, modifier = Modifier.weight(1f),
+            )
+            if (qty.isNotEmpty()) { Spacer(Modifier.width(6.dp)); Text(qty, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink) }
+        }
+        if (alts.size == 1) alts[0].sku?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.muted) }
+        // several of my products fit — each one readable, none of them a footnote
+        if (alts.size > 1) alts.forEach { a ->
+            Row(verticalAlignment = Alignment.Top) {
+                Text(a.name ?: a.sku.orEmpty(), fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, maxLines = 2, modifier = Modifier.weight(1f))
+                a.sku?.takeIf { it.isNotEmpty() }?.let { Spacer(Modifier.width(6.dp)); Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.muted) }
+            }
+        }
+        if (asked.isNotEmpty()) Text(stringResource(R.string.asked_label) + ": " + asked.joinToString(" · "), fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, maxLines = 3)
     }
 }
 
@@ -262,8 +291,34 @@ private fun OrderBlock(o: SellerOrder, onPdf: (String, String) -> Unit) {
             Spacer(Modifier.weight(1f))
             Text(WorkisMoney.text(o.total, o.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
         }
-        Text(listOfNotNull((o.escrowStateLabel ?: o.escrowState)?.let { "escrow: $it" }, o.shipment?.let { "🚚 ${it.number.orEmpty()} ${it.statusLabel ?: it.status.orEmpty()}" }).joinToString(" · "), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
-        o.poPdfUrl?.takeIf { it.isNotEmpty() }?.let { url -> val t = stringResource(R.string.po_pdf); Text("📄 $t", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable { onPdf(url, t) }) }
+        // The payment line says what the order RUNS ON. On a deferred term nothing will
+        // ever be blocked — never tell the seller to wait for it (finding 28). Branch on
+        // the CODE, never on the label.
+        if (o.payment?.mode == "vade") {
+            OrderLine(WorkisIcons.Calendar, listOfNotNull(stringResource(R.string.pay_open_account), o.payment?.days?.let { "$it " + stringResource(R.string.pay_days_term) }).joinToString(" · "))
+        } else o.escrowStateLabel?.takeIf { it.isNotEmpty() }?.let { OrderLine(WorkisIcons.Lock, it) }
+        o.shipment?.let { sh ->
+            OrderLine(WorkisIcons.ShippingBox, listOfNotNull(sh.number, sh.statusLabel ?: sh.status).filter { it.isNotEmpty() }.joinToString(" · "))
+        }
+        o.poPdfUrl?.takeIf { it.isNotEmpty() }?.let { url ->
+            val t = stringResource(R.string.po_pdf)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onPdf(url, t) }) {
+                Icon(WorkisIcons.DocText, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(t, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
+            }
+        }
+    }
+}
+
+/** One fact of the won order: the system icon in the accent tint, the server's words beside it. */
+@Composable
+private fun OrderLine(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+    val colors = WorkisTheme.colors
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(icon, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(text, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
     }
 }
 
@@ -333,6 +388,10 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
                 rows.groupBy { it.group.orEmpty() }.toSortedMap().forEach { (g, rs) ->
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Eyebrow((g.ifEmpty { stringResource(R.string.shortlist_label) }).uppercase())
+                        // the buyer's demands for this item, so the seller prices the asked size
+                        inv.listItems?.firstOrNull { it.itemName == g }?.requirements?.takeIf { g.isNotEmpty() && it.isNotEmpty() }?.let { reqs ->
+                            Text(stringResource(R.string.asked_label) + ": " + reqs.joinToString(" · "), fontSize = 12.sp, lineHeight = 16.sp, color = colors.ink, modifier = Modifier.padding(horizontal = 4.dp))
+                        }
                         SurfaceCard {
                             rs.forEach { r ->
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

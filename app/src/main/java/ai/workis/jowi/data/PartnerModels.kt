@@ -139,12 +139,26 @@ data class PurchaseListRow(
     val nMatched: Int? = null,
     val demo: Boolean? = null,
     val held: String? = null,
+    val archived: Boolean? = null,
+    /** An unsent DRAFT only — once sent the list is a record (no archive, no delete). */
+    val canArchive: Boolean? = null,
+    /** Stage `error`, or a working stage silent for 3 minutes. */
+    val stuck: Boolean? = null,
+    val canRetry: Boolean? = null,
+    val stageSince: String? = null,
+    /** The screens' own words ("teklif aşamasında" / "okunuyor") — drawn before the app's map. */
+    val statusLabel: String? = null,
+    val stageLabel: String? = null,
 ) {
     val isWorking get() = stage in setOf("parsing", "matching", "compliance")
 }
 
 @Serializable
 data class PurchaseListIndex(val lists: List<PurchaseListRow>? = null)
+
+/** `archive` / `unarchive` / `retry` — a sent list answers 409 with the sentence to show. */
+@Serializable
+data class ListActionResult(val success: Boolean = false, val list: PurchaseListRow? = null, val stage: String? = null, val message: String? = null, val error: String? = null)
 
 @Serializable
 data class PLLabel(val short: String? = null, val long: String? = null, val city: String? = null, val district: String? = null, val hover: String? = null)
@@ -191,7 +205,20 @@ data class PLCandidate(
     val img: String? = null,
     val isBound: Boolean? = null,
     val compliance: PLCompliance? = null,
-)
+    // The asked size decides the VARIANT (Django variant_match, 2026-09-19). `sku` and
+    // `price` are the fitting variant's when exactly one fits; an unresolved family
+    // carries NO price — a family-level price was the 3/4" one shown for a 1" request.
+    val variant: String? = null, // exact | single | none | ambiguous
+    val variantName: String? = null,
+    val variants: List<PLVariant>? = null,
+    val nVariants: Int? = null,
+) {
+    /** What the row names: the resolved variant, else the family. */
+    val displayName get() = variantName?.takeIf { it.isNotEmpty() } ?: name ?: sku.orEmpty()
+}
+
+@Serializable
+data class PLVariant(val sku: String? = null, val name: String? = null, val price: Double? = null, val currency: String? = null)
 
 @Serializable
 data class PLItem(
@@ -384,8 +411,18 @@ data class InvBuyer(val short: String? = null, val city: String? = null, val hov
 @Serializable
 data class SellerProduct(val sku: String? = null, val name: String? = null)
 
+/**
+ * `requirements` = the buyer's demands for THIS item ("1 inç", "yeşil"); `alts` are the
+ * FITTING VARIANTS once the size resolved, otherwise the family (2026-09-19).
+ */
 @Serializable
-data class InvListItem(val itemName: String? = null, val qty: Double? = null, val unit: String? = null, val alts: List<SellerProduct>? = null)
+data class InvListItem(
+    val itemName: String? = null,
+    val qty: Double? = null,
+    val unit: String? = null,
+    val alts: List<SellerProduct>? = null,
+    val requirements: List<String>? = null,
+)
 
 @Serializable
 data class QuoteLine(val sku: String? = null, val name: String? = null, val qty: Double? = null, val unitPrice: Double? = null, val amount: Double? = null)
@@ -413,9 +450,14 @@ data class SellerQuote(
 @Serializable
 data class InvShipment(@Serializable(with = FlexString::class) val id: String? = null, val number: String? = null, val status: String? = null, val statusLabel: String? = null, val promisedAt: String? = null, val labelUrl: String? = null)
 
+/** The payment term in force — "vade" runs on open account, nothing is ever blocked. */
+@Serializable
+data class SellerPayment(val mode: String? = null, val days: Int? = null) // "vade" | "escrow" | ""
+
 @Serializable
 data class SellerOrder(
     @Serializable(with = FlexString::class) val id: String? = null,
+    val payment: SellerPayment? = null,
     val poNumber: String? = null,
     val poPdfUrl: String? = null,
     val total: Double? = null,

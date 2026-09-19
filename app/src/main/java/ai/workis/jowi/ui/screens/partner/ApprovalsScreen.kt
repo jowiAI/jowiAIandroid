@@ -183,11 +183,14 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
                         }
                     }
                 }
-                // 3 · payments to hold — money moves, so it asks first
+                // 3 · payments to hold — money moves, so it asks first. A settled
+                // deferred term closes the door: the server leaves those rows out,
+                // and a `canFund: false` that slips through is not drawn either.
                 val fundTitle = stringResource(R.string.order_fund)
                 val fundBody = stringResource(R.string.order_fund_confirm)
-                Section(stringResource(R.string.ap_fund), d.fund.orEmpty().size) {
-                    d.fund.orEmpty().forEach { f ->
+                val fundable = d.fund.orEmpty().filter { it.canFund != false }
+                Section(stringResource(R.string.ap_fund), fundable.size) {
+                    fundable.forEach { f ->
                         ApCard(f.po.orEmpty(), "") {
                             Action(fundTitle) {
                                 confirm = Triple(fundTitle, fundBody) { f.orderId?.let { vm.fund(it) } }
@@ -211,18 +214,22 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
                         }
                     }
                 }
-                // 5 · deliveries under inspection
+                // 5 · deliveries under inspection. What happens to the money is
+                // the server's sentence (`moneyWords`) — on open account nothing
+                // is released, the invoice simply runs to its due date.
                 val releaseTitle = stringResource(R.string.ap_confirm_delivery)
                 val releaseBody = stringResource(R.string.ap_confirm_delivery_confirm)
+                val releaseBodyOpen = stringResource(R.string.ap_confirm_delivery_open_account)
                 val objectTitle = stringResource(R.string.ap_object)
                 Section(stringResource(R.string.ap_inspection), d.inspection.orEmpty().size) {
                     d.inspection.orEmpty().forEach { l ->
-                        ApCard(l.name.orEmpty(), lineSub(l)) {
+                        ApCard(l.name.orEmpty(), lineSub(l), words = moneyLine(l)) {
                             if (l.status == "objected") {
                                 Action(stringResource(R.string.ap_object_withdraw)) { l.lineId?.let { vm.objectionWithdraw(it) } }
                             } else {
+                                val body = if (l.moneyPath == "open_account") releaseBodyOpen else releaseBody
                                 Action(releaseTitle) {
-                                    confirm = Triple(releaseTitle, releaseBody) { l.lineId?.let { vm.confirmDelivery(it) } }
+                                    confirm = Triple(releaseTitle, body) { l.lineId?.let { vm.confirmDelivery(it) } }
                                 }
                                 Action(objectTitle, destructive = true) { l.lineId?.let { form = ApForm(objectTitle, it, "objection") } }
                             }
@@ -233,7 +240,7 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
                 val resolveTitle = stringResource(R.string.ap_resolve)
                 Section(stringResource(R.string.ap_objection), d.objection.orEmpty().size) {
                     d.objection.orEmpty().forEach { l ->
-                        ApCard(l.name.orEmpty(), lineSub(l)) {
+                        ApCard(l.name.orEmpty(), lineSub(l), words = moneyLine(l)) {
                             Action(resolveTitle) { l.lineId?.let { form = ApForm(resolveTitle, it, "objectionResolve") } }
                         }
                     }
@@ -280,9 +287,20 @@ private fun lineSub(l: ApLine): String = listOfNotNull(
     l.reason,
     l.status,
     l.daysLeft?.let { "$it " + stringResource(R.string.ap_days_left) },
-    l.releaseDue?.take(16)?.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.ap_release_due) + " $it" },
+    // "serbest kalır" is an escrow word: on open account no money is held and
+    // what the clock ends is the right to object
+    l.releaseDue?.take(16)?.takeIf { it.isNotEmpty() }?.let {
+        stringResource(if (l.moneyPath == "open_account") R.string.ap_window_ends else R.string.ap_release_due) + " $it"
+    },
     l.due?.take(16)?.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.ap_with_coordinator) + " $it" },
 ).joinToString(" · ")
+
+/** The money's fate in the server's own words, with the invoice it hangs on. */
+private fun moneyLine(l: ApLine): String? {
+    val words = l.moneyWords?.takeIf { it.isNotEmpty() } ?: return null
+    val invoice = l.invoice?.takeIf { it.isNotEmpty() } ?: return words
+    return "$words · $invoice"
+}
 
 @Composable
 private fun Section(title: String, count: Int, content: @Composable () -> Unit) {
@@ -299,7 +317,7 @@ private fun Section(title: String, count: Int, content: @Composable () -> Unit) 
 }
 
 @Composable
-private fun ApCard(title: String, sub: String, actions: @Composable () -> Unit) {
+private fun ApCard(title: String, sub: String, words: String? = null, actions: @Composable () -> Unit) {
     val colors = WorkisTheme.colors
     Column(
         Modifier
@@ -311,6 +329,11 @@ private fun ApCard(title: String, sub: String, actions: @Composable () -> Unit) 
     ) {
         Text(title, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
         if (sub.isNotEmpty()) Text(sub, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp, color = colors.faint, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        // printed as it arrives: whether the money is held or the invoice runs
+        // is a fact of this order, not a sentence for the app to compose
+        words?.takeIf { it.isNotEmpty() }?.let {
+            Text(it, fontSize = 12.sp, lineHeight = 17.sp, color = colors.muted)
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) { actions() }
     }
 }
