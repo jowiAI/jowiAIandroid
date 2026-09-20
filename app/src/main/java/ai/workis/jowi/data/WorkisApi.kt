@@ -58,6 +58,10 @@ interface WorkisApi {
     @DELETE("auth/passkeys/{id}/")
     suspend fun passkeyDelete(@Path("id") id: Int): SimpleResult
 
+    /** "Son girişler" — the last ten, refused attempts included. */
+    @GET("auth/sign-ins/")
+    suspend fun signIns(): SignIns
+
     @POST("auth/logout/")
     suspend fun logout(): AuthResponse
 

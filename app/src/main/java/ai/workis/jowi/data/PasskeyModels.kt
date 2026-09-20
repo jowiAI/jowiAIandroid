@@ -90,6 +90,33 @@ data class PasskeyList(
     val error: String? = null,
 )
 
+/**
+ * "Who opened this account, and when." `door` and `method` are enums the app
+ * localizes; `device` and `ip` are printed as they arrive. `note: "reopen"` is
+ * how the server marks a passkey sign-in made while a live key of the same
+ * account rode along — one person re-opening a session, not a second device.
+ */
+@Serializable
+data class SignInEvent(
+    val at: String? = null,
+    val door: String? = null, // web | api
+    val method: String? = null, // code | link | passkey | password | google | apple | register | other
+    val device: String? = null,
+    val ip: String? = null,
+    val refused: String? = null, // account_frozen | passkey_required | …
+    val note: String? = null, // reopen
+    /** Asked of Django, not shipped yet — decoded so it lights up on its own. */
+    val current: Boolean? = null,
+)
+
+/** `previous` is the sign-in BEFORE this session; history starts at its deploy. */
+@Serializable
+data class SignIns(
+    val success: Boolean = false,
+    val previous: SignInEvent? = null,
+    val recent: List<SignInEvent>? = null,
+)
+
 @Serializable
 data class CodeSignInResult(
     val success: Boolean = false,

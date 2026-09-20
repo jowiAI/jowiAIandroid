@@ -45,6 +45,8 @@ import ai.workis.jowi.R
 import ai.workis.jowi.data.Passkey
 import ai.workis.jowi.data.PasskeyList
 import ai.workis.jowi.data.PasskeyService
+import ai.workis.jowi.data.SignInEvent
+import ai.workis.jowi.data.SignIns
 import ai.workis.jowi.data.deviceLabel
 import ai.workis.jowi.data.shortDate
 import ai.workis.jowi.data.userId
@@ -85,11 +87,18 @@ class SecurityViewModel : ViewModel() {
     val canChangeCodeSignIn get() = data?.canChangeCodeSignIn == true
     val codeSignInAllowed get() = data?.codeSignInAllowed == true
 
+    /** "Son girişler" — an unreachable history is not an error screen. */
+    var signIns by mutableStateOf<SignIns?>(null)
+        private set
+
     fun load() {
         viewModelScope.launch {
             runCatching { Graph.passkeys.list() }
                 .onSuccess { data = it; loadError = null }
                 .onFailure { e -> if (data == null) loadError = (e as? PasskeyService.Refused)?.message }
+        }
+        viewModelScope.launch {
+            runCatching { Graph.api.signIns() }.onSuccess { if (it.success) signIns = it }
         }
     }
 
@@ -229,6 +238,9 @@ fun SecurityScreen(onBack: () -> Unit) {
                 }
             }
 
+            // who opened this account, and when — the section sits under the keys
+            vm.signIns?.let { SignInsSection(it) }
+
             // a code-opened session on an account WITH a passkey is otherwise a
             // dead end: the switch is locked and nothing said how to unlock it
             if (!openedWithPasskey && vm.passkeys.isNotEmpty() && Graph.passkeys.available) {
@@ -288,6 +300,88 @@ private fun PasskeyRow(key: Passkey, canRemove: Boolean, busy: Boolean, onRemove
             )
         }
     }
+}
+
+/**
+ * "Son girişler". `previous` leads — the sign-in before this session — and
+ * `signInsFirst` stands in when there is none: the history starts at its
+ * deploy, the account does not. A refused attempt is the most interesting line
+ * an owner can read here, so it keeps its method word and says why it failed,
+ * as a shape and words rather than colour alone.
+ */
+@Composable
+private fun SignInsSection(s: SignIns) {
+    val colors = WorkisTheme.colors
+    Spacer(Modifier.height(4.dp))
+    Eyebrow(stringResource(R.string.sign_ins_section))
+    SecurityCard {
+        val previous = s.previous
+        Column(Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(stringResource(R.string.sign_ins_previous), fontSize = 13.sp, color = colors.muted)
+            Text(
+                if (previous == null) stringResource(R.string.sign_ins_first) else eventLine(previous, withMethod = true),
+                fontFamily = WorkisMono, fontSize = 10.sp, lineHeight = 15.sp, color = colors.faint,
+            )
+        }
+        s.recent.orEmpty().forEach { e ->
+            Divider()
+            SignInRow(e)
+        }
+    }
+    Footnote(stringResource(R.string.sign_ins_footer))
+}
+
+@Composable
+private fun SignInRow(e: SignInEvent) {
+    val colors = WorkisTheme.colors
+    Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(methodWord(e.method), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink)
+        Text(eventLine(e, withMethod = false), fontFamily = WorkisMono, fontSize = 10.sp, lineHeight = 15.sp, color = colors.faint)
+        // a refusal is a status row: the mark and the word, never the colour alone
+        e.refused?.takeIf { it.isNotEmpty() }?.let { reason ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(WorkisIcons.Warning, contentDescription = null, tint = Beige, modifier = Modifier.size(12.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    stringResource(
+                        when (reason) {
+                            "passkey_required" -> R.string.sign_in_refused_passkey
+                            "account_frozen" -> R.string.sign_in_refused_frozen
+                            else -> R.string.sign_in_refused
+                        },
+                    ),
+                    fontSize = 12.sp, lineHeight = 17.sp, color = Beige,
+                )
+            }
+        }
+        // one person re-opening a session in place, not a second device
+        if (e.note == "reopen") {
+            Text(stringResource(R.string.sign_in_reopen), fontSize = 12.sp, lineHeight = 17.sp, color = colors.muted)
+        }
+    }
+}
+
+/** "<date time> · <method> · <door> · <device> · <ip>" — the server's words for the last two. */
+@Composable
+private fun eventLine(e: SignInEvent, withMethod: Boolean): String = listOfNotNull(
+    listOf(shortDate(e.at), clockOf(e.at)).filter { it.isNotEmpty() }.joinToString(" ").takeIf { it.isNotEmpty() },
+    if (withMethod) methodWord(e.method) else null,
+    stringResource(if (e.door == "web") R.string.sign_in_door_web else R.string.sign_in_door_app),
+    e.device?.takeIf { it.isNotEmpty() },
+    e.ip?.takeIf { it.isNotEmpty() },
+).joinToString(" · ")
+
+/** Google and Apple are names and stay as they are; the rest are ours to say. */
+@Composable
+private fun methodWord(method: String?): String = when (method) {
+    "passkey" -> stringResource(R.string.sign_in_method_passkey)
+    "code" -> stringResource(R.string.sign_in_method_code)
+    "link" -> stringResource(R.string.sign_in_method_link)
+    "password" -> stringResource(R.string.sign_in_method_password)
+    "register" -> stringResource(R.string.sign_in_method_register)
+    "google" -> "Google"
+    "apple" -> "Apple"
+    else -> stringResource(R.string.sign_in_method_other)
 }
 
 /**
