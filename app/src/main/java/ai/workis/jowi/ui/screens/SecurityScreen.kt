@@ -329,13 +329,37 @@ private fun SignInsSection(s: SignIns) {
         }
     }
     Footnote(stringResource(R.string.sign_ins_footer))
+
+    // Anyone who knows an address can produce refusals at will, so they keep
+    // their own list instead of crowding the real sign-ins out of `recent`.
+    val refused = s.refusedRecent.orEmpty()
+    if (refused.isNotEmpty()) {
+        Spacer(Modifier.height(4.dp))
+        Eyebrow(stringResource(R.string.sign_ins_refused_section))
+        SecurityCard {
+            refused.forEachIndexed { i, e ->
+                if (i > 0) Divider()
+                SignInRow(e)
+            }
+        }
+    }
 }
 
 @Composable
 private fun SignInRow(e: SignInEvent) {
     val colors = WorkisTheme.colors
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(methodWord(e.method), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(methodWord(e.method), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink)
+            // the reader's own line, so nobody reads themselves as a stranger
+            if (e.current == true) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.sign_in_current),
+                    fontFamily = WorkisMono, fontSize = 9.sp, letterSpacing = 1.sp, color = Kiremit500,
+                )
+            }
+        }
         Text(eventLine(e, withMethod = false), fontFamily = WorkisMono, fontSize = 10.sp, lineHeight = 15.sp, color = colors.faint)
         // a refusal is a status row: the mark and the word, never the colour alone
         e.refused?.takeIf { it.isNotEmpty() }?.let { reason ->

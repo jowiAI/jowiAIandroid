@@ -105,16 +105,22 @@ data class SignInEvent(
     val ip: String? = null,
     val refused: String? = null, // account_frozen | passkey_required | …
     val note: String? = null, // reopen
-    /** Asked of Django, not shipped yet — decoded so it lights up on its own. */
+    /** The event that issued the calling key — the reader's own line. */
     val current: Boolean? = null,
 )
 
-/** `previous` is the sign-in BEFORE this session; history starts at its deploy. */
+/**
+ * `previous` is the sign-in BEFORE this session; history starts at its deploy.
+ * `recent` holds the successful sign-ins and `refusedRecent` its own list, so
+ * a stranger producing refusals cannot push the real rows out. Both are read
+ * tolerantly: an older server sends refused rows inside `recent`.
+ */
 @Serializable
 data class SignIns(
     val success: Boolean = false,
     val previous: SignInEvent? = null,
     val recent: List<SignInEvent>? = null,
+    val refusedRecent: List<SignInEvent>? = null,
 )
 
 @Serializable

@@ -681,6 +681,7 @@
     <string name="sign_date_caption">imza tarihi</string>
     <string name="sign_here">İMZA BURADA</string>
     <string name="sign_in_copy">Şifre yok. E-postana tek kullanımlık giriş bağlantısı ve 6 haneli kod göndereceğiz. İlk girişte hesabın otomatik oluşturulur.</string>
+    <string name="sign_in_current">bu oturum</string>
     <string name="sign_in_door_app">uygulama</string>
     <string name="sign_in_door_web">web</string>
     <string name="sign_in_method_code">e-posta kodu</string>
@@ -697,6 +698,7 @@
     <string name="sign_ins_first">kayıtlı önceki giriş yok</string>
     <string name="sign_ins_footer">Tanımadığınız bir giriş görürseniz geçiş anahtarlarınızı gözden geçirin ve koordinatöre yazın.</string>
     <string name="sign_ins_previous">Önceki giriş</string>
+    <string name="sign_ins_refused_section">Reddedilen denemeler</string>
     <string name="sign_ins_section">Son girişler</string>
     <string name="sign_out">Çıkış yap</string>
     <string name="signed_pdf">İmzalı PDF</string>

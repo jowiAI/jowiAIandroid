@@ -75,14 +75,39 @@ class AuthRepository(
     suspend fun requestOtp(email: String): ApiResult<Unit> =
         safeCall(lang()) { api.otpRequest(OtpRequestBody(normalizedEmail(email))); Unit }
 
-    suspend fun verifyOtp(email: String, code: String): ApiResult<Unit> =
-        safeCall(lang()) { applyAuth(api.otpVerify(OtpVerifyBody(normalizedEmail(email), code.trim()))) }
+    suspend fun verifyOtp(email: String, code: String): ApiResult<Unit> {
+        val r = safeCall(lang()) { applyAuth(api.otpVerify(OtpVerifyBody(normalizedEmail(email), code.trim()))) }
+        if (r is ApiResult.Ok) syncPreferredLanguage()
+        return r
+    }
 
     /** How this session was opened — the server's word, on every `user` payload. */
     fun signedInWith(): String? = _user.value.signedInWith()
 
+    /**
+     * The language picked on the LOGIN screen never reached the account — only
+     * Hesap wrote it. A saved preference BEATS `Accept-Language` (§3), so an
+     * English screen kept getting the server's sentences in the stored Turkish.
+     * Every sign-in now carries the choice to the account when the two differ.
+     */
+    suspend fun syncPreferredLanguage() {
+        if (_user.value == null) return
+        val want = lang()
+        val stored = _user.value?.let { u ->
+            u["preferredLanguage"]?.jsonPrimitive?.contentOrNull
+                ?: u["preferred_language"]?.jsonPrimitive?.contentOrNull
+        }
+        // an ABSENT field counts as different (iOS does the same): the trap is a
+        // stored preference the app never wrote, and staying quiet would keep it
+        if (stored == want) return
+        setPreferredLanguage(want)
+    }
+
     /** A passkey sign-in answers in `otp/verify/`'s shape; it lands the same way. */
-    fun adoptPasskeySession(resp: AuthResponse) = applyAuth(resp)
+    suspend fun adoptPasskeySession(resp: AuthResponse) {
+        applyAuth(resp)
+        syncPreferredLanguage()
+    }
 
     /**
      * The way out of a code-opened session on an account that HAS a passkey: its
@@ -106,6 +131,7 @@ class AuthRepository(
             return false
         }
         applyAuth(resp)
+        syncPreferredLanguage()
         // the old key is a separate per-device session now: close it deliberately
         if (!replaced.isNullOrEmpty() && replaced != store.token) {
             val current = store.token
@@ -134,6 +160,7 @@ class AuthRepository(
             is ApiResult.Ok -> {
                 if (r.value.success || r.value.token != null || r.value.user != null) {
                     applyAuth(r.value)
+                    syncPreferredLanguage() // a language switched before this launch still reaches the account
                     true
                 } else {
                     signOutLocally() // the server said no

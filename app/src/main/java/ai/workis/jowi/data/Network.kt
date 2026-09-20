@@ -26,6 +26,7 @@ val WorkisJson = Json {
 fun buildApi(
     tokenProvider: () -> String?,
     languageProvider: () -> String,
+    clientProvider: () -> String = { "android" },
 ): WorkisApi {
     val logging = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BASIC
@@ -38,6 +39,9 @@ fun buildApi(
         .addInterceptor { chain ->
             val builder = chain.request().newBuilder()
                 .header("Accept-Language", languageProvider())
+                // names the device in the sign-in history; the stock User-Agent
+                // makes a poor label for a person reading "who opened this account"
+                .header("X-Workis-Client", clientProvider())
             tokenProvider()?.let { builder.header("Authorization", "Token $it") }
             chain.proceed(builder.build())
         }
