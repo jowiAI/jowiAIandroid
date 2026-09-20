@@ -89,6 +89,20 @@ fun LoginScreen(onApply: () -> Unit = {}) {
     var error by remember { mutableStateOf<String?>(null) }
     val codeFocus = remember { FocusRequester() }
 
+    /**
+     * A stored session the server refused does not land on a bare screen: a
+     * refusal with a reason (`account_frozen`, `passkey_required`) speaks in the
+     * server's own sentence, and an ordinary dead key gets one neutral line.
+     * Devices that signed in before the per-device keys shared one key, so a
+     * sign-out elsewhere ends this one — a person can meet it once.
+     */
+    val refused by Graph.auth.sessionWasRefused.collectAsState()
+    val refusalSentence by Graph.auth.refusalSentence.collectAsState()
+    val sessionEnded = stringResource(R.string.session_ended)
+    LaunchedEffect(refused) {
+        if (refused) { error = refusalSentence ?: sessionEnded; Graph.auth.clearRefusal() }
+    }
+
     fun requestCode() {
         if (loading || email.isBlank()) return
         loading = true

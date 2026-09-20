@@ -105,6 +105,12 @@ fun errorCodeFromBody(e: HttpException): String? = bodyField(e, "error")
 fun messageFromBody(e: HttpException, lang: String): String =
     bodyField(e, "message", "error") ?: statusMessage(e.code(), lang)
 
+/**
+ * The server's own sentence, or null when it gave none — the difference
+ * matters where the app has a better line of its own than a status idiom.
+ */
+fun serverSentence(e: HttpException): String? = bodyField(e, "error", "message")
+
 suspend fun <T> safeCall(lang: String, block: suspend () -> T): ApiResult<T> =
     try {
         ApiResult.Ok(block())

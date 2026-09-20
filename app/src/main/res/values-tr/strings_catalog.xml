@@ -662,6 +662,7 @@
     <string name="send_preview_sub">Her satıcı YALNIZCA kendisiyle eşleşen kalemleri görür.</string>
     <string name="send_preview_title">Kim ne alır</string>
     <string name="send_quote">Teklif gönder</string>
+    <string name="session_ended">Bu oturum sonlandırıldı — başka bir cihazdan çıkış yapıldı ya da Workis tarafından kapatıldı. Lütfen yeniden giriş yapın.</string>
     <string name="session_opened_with">Bu oturum</string>
     <string name="session_reopen_footer">Bu oturum e-posta koduyla açıldığı için güvenlik ayarları kilitli. Geçiş anahtarınızla oturum açınca çıkış yapmadan açılır.</string>
     <string name="session_reopen_with_passkey">Geçiş anahtarıyla oturum aç</string>

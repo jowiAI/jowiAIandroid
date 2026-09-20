@@ -662,6 +662,7 @@
     <string name="send_preview_sub">Each seller sees ONLY the items matched to them.</string>
     <string name="send_preview_title">Who receives what</string>
     <string name="send_quote">Send quote</string>
+    <string name="session_ended">This session was ended — signed out from another device, or closed by Workis. Please sign in again.</string>
     <string name="session_opened_with">This session</string>
     <string name="session_reopen_footer">Security settings are locked because this session was opened with the e-mail code. Signing in with your passkey unlocks them without signing out.</string>
     <string name="session_reopen_with_passkey">Sign in with your passkey</string>

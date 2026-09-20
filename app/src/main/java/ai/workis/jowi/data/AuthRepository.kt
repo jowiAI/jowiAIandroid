@@ -1,6 +1,7 @@
 package ai.workis.jowi.data
 
 import ai.workis.jowi.Graph
+import retrofit2.HttpException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withTimeoutOrNull
@@ -157,15 +158,48 @@ class AuthRepository(
         safeCall(lang()) { applyAuth(api.login(LoginBody(email, password))) }
 
     /**
+     * Why a stored session was refused, for the login screen to say. Null means
+     * the ordinary dead key — the screen shows its own neutral line then; a
+     * sentence here is the SERVER's (`account_frozen`, `passkey_required`) and
+     * is printed as it arrives, in the reader's language.
+     */
+    private val _refusalSentence = MutableStateFlow<String?>(null)
+    val refusalSentence: StateFlow<String?> = _refusalSentence
+
+    /** True once a stored session was refused; cleared when the screen has said so. */
+    private val _sessionWasRefused = MutableStateFlow(false)
+    val sessionWasRefused: StateFlow<Boolean> = _sessionWasRefused
+
+    fun clearRefusal() { _sessionWasRefused.value = false; _refusalSentence.value = null }
+
+    /**
      * Launch check — a three-way decision: only the server's "no" (401/403 or
      * success:false) wipes the token; a timeout (15 s), offline or a 5xx keeps
      * the stored session and lets the user in. (The 8 s answers were cold
      * gunicorn workers after deploys — fixed server-side 2026-09-11.)
+     *
+     * A refusal is never silent. Landing on a bare login screen reads as a bug
+     * to the person: devices that signed in before the per-device keys shared
+     * ONE key, so a sign-out on another phone ends this one — real users can
+     * meet it once, and they deserve the sentence.
      */
     suspend fun validate(): Boolean {
         if (store.token == null) return false
-        val r = withTimeoutOrNull(15_000) { safeCall(lang()) { api.validateToken() } }
-            ?: return true // unreachable in time → keep the session
+        val r = withTimeoutOrNull(15_000) {
+            try {
+                ApiResult.Ok(api.validateToken())
+            } catch (e: HttpException) {
+                // the body carries `code` + `error` when the refusal has a reason
+                if (e.code() == 401 || e.code() == 403) {
+                    _refusalSentence.value = serverSentence(e)?.takeIf { it.isNotBlank() }
+                }
+                ApiResult.Err(e.code(), statusMessage(e.code(), lang()))
+            } catch (e: java.io.IOException) {
+                ApiResult.Err(null, statusMessage(null, lang()))
+            } catch (e: Exception) {
+                ApiResult.Err(null, statusMessage(-1, lang()))
+            }
+        } ?: return true // unreachable in time → keep the session
         return when (r) {
             is ApiResult.Ok -> {
                 if (r.value.success || r.value.token != null || r.value.user != null) {
@@ -173,14 +207,21 @@ class AuthRepository(
                     syncPreferredLanguage() // a language switched before this launch still reaches the account
                     true
                 } else {
-                    signOutLocally() // the server said no
+                    refuse(r.value.message?.takeIf { it.isNotBlank() })
                     false
                 }
             }
             is ApiResult.Err -> {
-                if (r.status == 401 || r.status == 403) { signOutLocally(); false } else true
+                if (r.status == 401 || r.status == 403) { refuse(_refusalSentence.value); false } else true
             }
         }
+    }
+
+    /** The server said no: end the session here and keep its words for the screen. */
+    private fun refuse(sentence: String?) {
+        signOutLocally()
+        _refusalSentence.value = sentence
+        _sessionWasRefused.value = true
     }
 
     /** The account now holds what was picked, so the pick has been spent. */
