@@ -33,7 +33,9 @@ fun JowiRoot() {
     val activity = androidx.compose.ui.platform.LocalContext.current
         as? androidx.fragment.app.FragmentActivity
     val bioTitle = androidx.compose.ui.res.stringResource(ai.workis.jowi.R.string.bio_title)
-    val bioSubtitle = androidx.compose.ui.res.stringResource(ai.workis.jowi.R.string.face_idreason)
+    // the gate unlocks a session that is still open — "sign in" belongs to the
+    // passkey now, so the prompt does not borrow faceIDReason's sentence
+    val bioSubtitle = androidx.compose.ui.res.stringResource(ai.workis.jowi.R.string.bio_subtitle)
 
     LaunchedEffect(Unit) {
         // brand moment: keep the curtain up briefly while the checks run

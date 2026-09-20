@@ -78,6 +78,44 @@ class AuthRepository(
     suspend fun verifyOtp(email: String, code: String): ApiResult<Unit> =
         safeCall(lang()) { applyAuth(api.otpVerify(OtpVerifyBody(normalizedEmail(email), code.trim()))) }
 
+    /** How this session was opened — the server's word, on every `user` payload. */
+    fun signedInWith(): String? = _user.value.signedInWith()
+
+    /** A passkey sign-in answers in `otp/verify/`'s shape; it lands the same way. */
+    fun adoptPasskeySession(resp: AuthResponse) = applyAuth(resp)
+
+    /**
+     * The way out of a code-opened session on an account that HAS a passkey: its
+     * security switch is locked and signing out would only send the person back
+     * to the inbox. The new key is adopted IN PLACE and the replaced one is
+     * ended server-side — but only if the answer is the SAME account, because a
+     * phone may hold the passkeys of several.
+     */
+    suspend fun reopenWithPasskey(resp: AuthResponse): Boolean {
+        val mine = _user.value.userId()
+        val theirs = resp.user.userId()
+        val replaced = store.token
+        if (mine != null && theirs != null && mine != theirs) {
+            // end the key we were just handed; the open session is left untouched
+            resp.token?.let { fresh ->
+                val previous = store.token
+                store.token = fresh
+                safeCall(lang()) { api.logout() }
+                store.token = previous
+            }
+            return false
+        }
+        applyAuth(resp)
+        // the old key is a separate per-device session now: close it deliberately
+        if (!replaced.isNullOrEmpty() && replaced != store.token) {
+            val current = store.token
+            store.token = replaced
+            safeCall(lang()) { api.logout() }
+            store.token = current
+        }
+        return true
+    }
+
     /** Legacy password login — kept for testing while the OTP backend gap is open. */
     suspend fun loginWithPassword(email: String, password: String): ApiResult<Unit> =
         safeCall(lang()) { applyAuth(api.login(LoginBody(email, password))) }

@@ -1,6 +1,7 @@
 package ai.workis.jowi.data
 
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.POST
@@ -27,6 +28,35 @@ interface WorkisApi {
 
     @POST("auth/validate-token/")
     suspend fun validateToken(): AuthResponse
+
+    // --- passkeys (API_CONTRACT §2): the system holds the key, the app carries JSON ---
+    @POST("auth/passkey/register/options/")
+    suspend fun passkeyRegisterOptions(): PasskeyOptions
+
+    /** 201. A code-opened session on an account that has one answers 403 `need_passkey`. */
+    @POST("auth/passkey/register/verify/")
+    suspend fun passkeyRegisterVerify(@Body body: PasskeyRegisterBody): PasskeyRegisterResult
+
+    /** No auth, no e-mail asked — the credential is discoverable. */
+    @POST("auth/passkey/login/options/")
+    suspend fun passkeyLoginOptions(): PasskeyOptions
+
+    /** Answers in `otp/verify/`'s shape exactly: {success, message, token, user}. */
+    @POST("auth/passkey/login/verify/")
+    suspend fun passkeyLoginVerify(@Body body: PasskeyLoginBody): AuthResponse
+
+    /** A fresh assertion for the one call that turns the e-mail-code door. */
+    @POST("auth/passkey/step-up/options/")
+    suspend fun passkeyStepUpOptions(): PasskeyOptions
+
+    @POST("auth/passkey/code-sign-in/")
+    suspend fun passkeyCodeSignIn(@Body body: PasskeyCodeSignInBody): CodeSignInResult
+
+    @GET("auth/passkeys/")
+    suspend fun passkeys(): PasskeyList
+
+    @DELETE("auth/passkeys/{id}/")
+    suspend fun passkeyDelete(@Path("id") id: Int): SimpleResult
 
     @POST("auth/logout/")
     suspend fun logout(): AuthResponse

@@ -38,9 +38,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.contentType
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -53,6 +56,7 @@ import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.ApiResult
 import ai.workis.jowi.data.AskOption
+import ai.workis.jowi.data.PasskeyService
 import ai.workis.jowi.ui.components.JowiOptions
 import ai.workis.jowi.data.VisStyle
 import ai.workis.jowi.data.vis
@@ -108,6 +112,27 @@ fun LoginScreen(onApply: () -> Unit = {}) {
             when (val r = Graph.auth.verifyOtp(email.trim(), code.trim())) {
                 is ApiResult.Ok -> Unit // root observes isAuthenticated
                 is ApiResult.Err -> error = r.message
+            }
+            loading = false
+        }
+    }
+
+    /**
+     * The passkey door. No e-mail is asked — the credential is discoverable, so
+     * the system's own sheet names the account. A closed sheet is an answer, not
+     * a failure: nothing is shown. The answer lands exactly like an OTP verify.
+     */
+    fun signInWithPasskey() {
+        if (loading) return
+        loading = true
+        error = null
+        scope.launch {
+            try {
+                Graph.auth.adoptPasskeySession(Graph.passkeys.signIn(context))
+            } catch (e: PasskeyService.Cancelled) {
+                Unit
+            } catch (e: PasskeyService.Refused) {
+                error = e.message
             }
             loading = false
         }
@@ -173,6 +198,7 @@ fun LoginScreen(onApply: () -> Unit = {}) {
                         onChange = { email = it; error = null },
                         placeholder = stringResource(R.string.email_placeholder),
                         keyboardType = KeyboardType.Email,
+                        fieldModifier = Modifier.semantics { contentType = ContentType.Username },
                         trailing = {
                             if (email.isNotBlank()) {
                                 CircularSubmit(loading = loading, enabled = true) { requestCode() }
@@ -181,6 +207,12 @@ fun LoginScreen(onApply: () -> Unit = {}) {
                     )
                     Spacer(Modifier.height(14.dp))
                     HintLine(stringResource(R.string.email_hint))
+                    // The system offers the passkey inline above the keyboard, but
+                    // that suggestion is easy to miss — the door is drawn too.
+                    if (Graph.passkeys.available) {
+                        Spacer(Modifier.height(16.dp))
+                        PasskeyDoor(enabled = !loading) { signInWithPasskey() }
+                    }
                     Spacer(Modifier.height(22.dp))
                     ApplyCard(onApply)
                 }
@@ -227,6 +259,15 @@ fun LoginScreen(onApply: () -> Unit = {}) {
                     }
                     Spacer(Modifier.height(14.dp))
                     HintLine(stringResource(R.string.link_hint))
+                    // One neutral line for everyone: the server mails an explanation
+                    // instead of a code to an account whose code door is shut, and
+                    // this screen must not say which account that is.
+                    if (Graph.passkeys.available) {
+                        Spacer(Modifier.height(10.dp))
+                        HintLine(stringResource(R.string.code_hint_passkey))
+                        Spacer(Modifier.height(16.dp))
+                        PasskeyDoor(enabled = !loading) { signInWithPasskey() }
+                    }
                 }
             }
 
@@ -357,6 +398,9 @@ private fun GlassField(
     keyboardType: KeyboardType,
     textStyle: TextStyle? = null,
     focusRequester: FocusRequester? = null,
+    /** The e-mail step marks itself as the username field so the system can
+     *  offer the account's passkey above the keyboard. */
+    fieldModifier: Modifier = Modifier,
     trailing: @Composable () -> Unit,
 ) {
     val colors = WorkisTheme.colors
@@ -399,6 +443,7 @@ private fun GlassField(
                 cursorBrush = SolidColor(colors.blue),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(fieldModifier)
                     .let { m -> focusRequester?.let { m.focusRequester(it) } ?: m },
             )
         }
@@ -445,6 +490,39 @@ private fun HintLine(text: String) {
             fontSize = 13.sp,
             lineHeight = 18.sp,
             color = colors.muted,
+        )
+    }
+}
+
+/**
+ * "Geçiş anahtarıyla gir" — an outlined capsule, not a filled one: the screen's
+ * one tinted action stays the submit circle. Person + key is the system's own
+ * sign for a passkey.
+ */
+@Composable
+private fun PasskeyDoor(enabled: Boolean, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .background(colors.surface, CircleShape)
+            .border(1.dp, colors.border, CircleShape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 11.dp),
+    ) {
+        Icon(
+            WorkisIcons.PersonKey,
+            contentDescription = null,
+            tint = if (enabled) colors.accentText else colors.faint,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            stringResource(R.string.passkey_sign_in),
+            fontFamily = WorkisSans,
+            fontWeight = FontWeight.Medium,
+            fontSize = 14.sp,
+            color = if (enabled) colors.accentText else colors.faint,
         )
     }
 }

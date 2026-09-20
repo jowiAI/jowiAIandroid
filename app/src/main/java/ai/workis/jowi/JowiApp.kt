@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import ai.workis.jowi.data.AuthRepository
 import ai.workis.jowi.data.PartnerStore
+import ai.workis.jowi.data.PasskeyService
 import ai.workis.jowi.data.TokenStore
 import ai.workis.jowi.data.WorkisApi
 import ai.workis.jowi.data.buildApi
@@ -17,6 +18,7 @@ object Graph {
     lateinit var api: WorkisApi
     lateinit var auth: AuthRepository
     lateinit var partner: PartnerStore
+    lateinit var passkeys: PasskeyService
 
     // "system" | "light" | "dark" (iOS @AppStorage("workis_appearance"))
     val appearance = MutableStateFlow("system")
@@ -35,6 +37,7 @@ object Graph {
         )
         auth = AuthRepository(api, tokenStore) { language.value }
         partner = PartnerStore(api)
+        passkeys = PasskeyService(api) { language.value }
     }
 
     fun setAppearance(value: String) {

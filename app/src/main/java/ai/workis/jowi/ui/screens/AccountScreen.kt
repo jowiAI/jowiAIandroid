@@ -62,6 +62,7 @@ private sealed interface AccountDest {
     data object Home : AccountDest
     data object Company : AccountDest
     data object Settings : AccountDest
+    data object Security : AccountDest
     data class Agreement(val key: String) : AccountDest
 }
 
@@ -81,6 +82,7 @@ fun AccountScreen(onReaccept: () -> Unit = {}, onDeparture: () -> Unit = {}) {
                 Spacer(Modifier.height(8.dp)); CompanySections(CompanyMode.Settings); Spacer(Modifier.height(30.dp))
             }
         }
+        AccountDest.Security -> SecurityScreen { dest = AccountDest.Home }
         is AccountDest.Agreement -> ConsoleSub(stringResource(R.string.my_agreement), { dest = AccountDest.Home }) {
             AgreementScreen(d.key)
         }
@@ -204,6 +206,16 @@ private fun AccountHome(onReaccept: () -> Unit, onDeparture: () -> Unit, onOpen:
             Spacer(Modifier.height(16.dp))
             SettingsCard {
                 DoorRow(WorkisIcons.DocText, stringResource(R.string.my_agreement), null) { onOpen(AccountDest.Agreement(agreementKey)) }
+            }
+        }
+
+        // Güvenlik: the passkeys, the one e-mail-code switch, and how this
+        // session was opened. Below API 28 there are no platform passkeys, so
+        // the door is not drawn at all — those devices stay on the e-mail code.
+        if (Graph.passkeys.available) {
+            Spacer(Modifier.height(16.dp))
+            SettingsCard {
+                DoorRow(WorkisIcons.PersonKey, stringResource(R.string.security_title), null) { onOpen(AccountDest.Security) }
             }
         }
 

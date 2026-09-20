@@ -7,7 +7,11 @@
     <string name="lang_tr">Türkçe</string>
     <string name="lang_en">English</string>
     <string name="apply_sector_hint">Sector (optional)</string>
+    <!-- The gate UNLOCKS a session that is already open; signing in is what a
+         passkey does. The catalog's faceIDReason still says "sign in", so the
+         prompt takes its own Android-only line. -->
     <string name="bio_title">Unlock Jowi</string>
+    <string name="bio_subtitle">Unlock the session open on this device</string>
     <string name="age_minutes">%d min</string>
     <string name="age_hours">%d h</string>
 </resources>

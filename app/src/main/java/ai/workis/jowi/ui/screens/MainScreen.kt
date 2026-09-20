@@ -99,6 +99,11 @@ fun MainScreen() {
     LaunchedEffect(Unit) { Graph.auth.refreshAgreementPending() }
     LaunchedEffect(pending?.pending) { if (pending?.pending == true && !reacceptOffered) { reacceptOffered = true; showReaccept = true } }
     if (showReaccept) { AgreementReacceptScreen(onClose = { showReaccept = false }); return }
+    // The passkey offer sits over the tab bar the same way — but strictly after
+    // the paper: it is asked only once the re-acceptance is out of the way, and
+    // once per account per device ("Şimdi değil" is an answer).
+    val passkeyOffer = rememberPasskeyOffer(enabled = !showReaccept && pending?.pending != true)
+    if (passkeyOffer.show) { PasskeyOfferScreen(passkeyOffer); return }
     var showDeparture by rememberSaveable { mutableStateOf(false) }
     if (showDeparture) { ExpertDepartureScreen(onClose = { showDeparture = false }, onLeft = {}); return }
     // the apply wizard as a full-screen cover from the Başvuru tab; company/ re-asked on close
