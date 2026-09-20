@@ -703,6 +703,8 @@
     <string name="teach_toggle">Teach Jowi</string>
     <string name="term_amendment">amendment proposed</string>
     <string name="term_confirm">Confirm</string>
+    <string name="term_confirm_amend_body">With your confirmation both sides have accepted the change: it is added to the signed contract as an amendment and the system acts on it. It cannot be withdrawn afterwards.</string>
+    <string name="term_confirm_amend_title">Confirm the change</string>
     <string name="term_confirmed">settled</string>
     <string name="term_conflict">the sources disagree</string>
     <string name="term_decline">Decline the change</string>

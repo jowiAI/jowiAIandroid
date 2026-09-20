@@ -35,7 +35,7 @@ data class OrderShipment(
     val carrier: OrderParty? = null,
 )
 
-/** "2 şart eksik" / "7/7 şart" — the server counts, the app prints. */
+/** "7/7 koşul kesinleşti" — the server counts, the app prints. */
 @Serializable
 data class OrderTermsBadge(val ok: Int? = null, val total: Int? = null)
 

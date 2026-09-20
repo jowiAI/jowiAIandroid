@@ -309,6 +309,8 @@ fun ThreadScreen(door: ThreadDoor, onBack: () -> Unit, onContract: (String, Stri
     val colors = WorkisTheme.colors
     var editTerm by remember { mutableStateOf<OrderTerm?>(null) }
     var retractTarget by remember { mutableStateOf<ThreadMessage?>(null) }
+    /** "Onayla" on an AMENDMENT asks first — it signs a change to a signed contract. */
+    var confirmTerm by remember { mutableStateOf<OrderTerm?>(null) }
     val composerFocus = remember { FocusRequester() }
     val listState: LazyListState = rememberLazyListState()
     LaunchedEffect(door) { vm.open(door) }
@@ -352,7 +354,11 @@ fun ThreadScreen(door: ThreadDoor, onBack: () -> Unit, onContract: (String, Stri
                 // by itself while something is still missing
                 val terms = p.terms.orEmpty()
                 if (terms.isNotEmpty()) {
-                    TermsStrip(terms, p.nTermsOk ?: 0, p.nTerms ?: terms.size, vm) { editTerm = it }
+                    TermsStrip(
+                        terms, p.nTermsOk ?: 0, p.nTerms ?: terms.size, vm,
+                        onEdit = { editTerm = it },
+                        onConfirmAmendment = { confirmTerm = it },
+                    )
                     Spacer(Modifier.height(10.dp))
                 }
                 val seats = otherSeats(p)
@@ -412,6 +418,32 @@ fun ThreadScreen(door: ThreadDoor, onBack: () -> Unit, onContract: (String, Stri
         }
     }
     editTerm?.let { t -> TermEditSheet(t, vm) { editTerm = null } }
+    confirmTerm?.let { t ->
+        // the change itself, then what the tap does — and "Onayla" is NOT
+        // destructive styling: nothing is destroyed, a version is added
+        val change = listOfNotNull(t.prevDisplay?.takeIf { it.isNotEmpty() }, t.display?.takeIf { it.isNotEmpty() })
+            .joinToString(" → ")
+        val head = listOfNotNull(t.label?.takeIf { it.isNotEmpty() }, change.takeIf { it.isNotEmpty() }).joinToString(": ")
+        AlertDialog(
+            onDismissRequest = { confirmTerm = null },
+            containerColor = colors.surface,
+            title = { Text(stringResource(R.string.term_confirm_amend_title), color = colors.ink) },
+            text = {
+                Text(
+                    listOf(head, stringResource(R.string.term_confirm_amend_body)).filter { it.isNotEmpty() }.joinToString("\n\n"),
+                    fontSize = 14.sp, lineHeight = 20.sp, color = colors.muted,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val key = t.key
+                    confirmTerm = null
+                    key?.let { vm.term(it, jsonBody("action" to "confirm")) }
+                }) { Text(stringResource(R.string.term_confirm), color = colors.accentText, fontWeight = FontWeight.SemiBold) }
+            },
+            dismissButton = { TextButton(onClick = { confirmTerm = null }) { Text(stringResource(R.string.cancel), color = colors.muted) } },
+        )
+    }
     retractTarget?.let { m ->
         AlertDialog(
             onDismissRequest = { retractTarget = null },
@@ -879,7 +911,14 @@ private fun InspectionStrip(p: ThreadPayload) {
 // ---------- the seven term cards
 
 @Composable
-private fun TermsStrip(terms: List<OrderTerm>, ok: Int, total: Int, vm: ThreadViewModel, onEdit: (OrderTerm) -> Unit) {
+private fun TermsStrip(
+    terms: List<OrderTerm>,
+    ok: Int,
+    total: Int,
+    vm: ThreadViewModel,
+    onEdit: (OrderTerm) -> Unit,
+    onConfirmAmendment: (OrderTerm) -> Unit,
+) {
     val colors = WorkisTheme.colors
     // open by itself while a term is still missing
     var open by remember(terms.size) { mutableStateOf(terms.any { it.status == "missing" }) }
@@ -901,14 +940,19 @@ private fun TermsStrip(terms: List<OrderTerm>, ok: Int, total: Int, vm: ThreadVi
         if (open) {
             Spacer(Modifier.height(8.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                terms.forEach { t -> TermCard(t, vm, onEdit) }
+                terms.forEach { t -> TermCard(t, vm, onEdit, onConfirmAmendment) }
             }
         }
     }
 }
 
 @Composable
-private fun TermCard(t: OrderTerm, vm: ThreadViewModel, onEdit: (OrderTerm) -> Unit) {
+private fun TermCard(
+    t: OrderTerm,
+    vm: ThreadViewModel,
+    onEdit: (OrderTerm) -> Unit,
+    onConfirmAmendment: (OrderTerm) -> Unit,
+) {
     val colors = WorkisTheme.colors
     // status is icon + word, never colour alone
     val (mark, word, tint) = when (t.status) {
@@ -975,9 +1019,16 @@ private fun TermCard(t: OrderTerm, vm: ThreadViewModel, onEdit: (OrderTerm) -> U
                 )
             }
             if (t.canConfirm == true) {
+                // confirming an AMENDMENT is the second signature on a change to a
+                // signed contract — the server writes the next version — and it sits
+                // one finger from "Değişikliği kabul etme", so it asks first. A
+                // first-round term still settles in one tap.
                 Text(
                     stringResource(R.string.term_confirm), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.accentText,
-                    modifier = Modifier.clickable(enabled = !vm.busy) { t.key?.let { vm.term(it, jsonBody("action" to "confirm")) } },
+                    modifier = Modifier.clickable(enabled = !vm.busy) {
+                        if (t.amendment == true) onConfirmAmendment(t)
+                        else t.key?.let { vm.term(it, jsonBody("action" to "confirm")) }
+                    },
                 )
             }
         }

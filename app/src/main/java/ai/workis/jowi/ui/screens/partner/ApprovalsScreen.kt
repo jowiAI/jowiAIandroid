@@ -134,6 +134,14 @@ class ApprovalsViewModel : ViewModel() {
     }
 }
 
+/** A card's "are you sure": its own words, and whether it destroys anything. */
+private data class ApConfirm(
+    val title: String,
+    val body: String,
+    val destructive: Boolean,
+    val run: () -> Unit,
+)
+
 /** What one small form has to collect, and what to do with it. */
 private data class ApForm(
     val title: String,
@@ -145,7 +153,9 @@ private data class ApForm(
 fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String) -> Unit) {
     val colors = WorkisTheme.colors
     var form by remember { mutableStateOf<ApForm?>(null) }
-    var confirm by remember { mutableStateOf<Triple<String, String, () -> Unit>?>(null) }
+    // whether the tap destroys something is the caller's word, not a guess from
+    // its title: "Teslimatı onayla" and "yeni tarihi kabul et" build something
+    var confirm by remember { mutableStateOf<ApConfirm?>(null) }
     LaunchedEffect(Unit) { vm.load() }
     val d = vm.data
 
@@ -193,7 +203,7 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
                     fundable.forEach { f ->
                         ApCard(f.po.orEmpty(), "") {
                             Action(fundTitle) {
-                                confirm = Triple(fundTitle, fundBody) { f.orderId?.let { vm.fund(it) } }
+                                confirm = ApConfirm(fundTitle, fundBody, destructive = false) { f.orderId?.let { vm.fund(it) } }
                             }
                         }
                     }
@@ -201,15 +211,27 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
                 // 4 · late deliveries: accept the new date, or cancel for delay
                 val cancelTitle = stringResource(R.string.ap_overdue_cancel)
                 val cancelBody = stringResource(R.string.ap_overdue_cancel_confirm)
+                val acceptTitle = stringResource(R.string.ap_overdue_accept)
+                val amendBody = stringResource(R.string.term_confirm_amend_body)
                 Section(stringResource(R.string.ap_overdue), d.overdue.orEmpty().size) {
                     d.overdue.orEmpty().forEach { o ->
                         ApCard(
                             o.po.orEmpty(),
                             listOfNotNull(o.proposal?.display, o.proposal?.prev?.let { stringResource(R.string.term_previous) + ": $it" }).joinToString(" · "),
                         ) {
-                            if (o.proposal != null) Action(stringResource(R.string.ap_overdue_accept)) { o.orderId?.let { vm.acceptNewDate(it) } }
+                            // the same second signature as "Onayla" on an amended term
+                            // card — it writes the next version of a signed contract,
+                            // so it asks first, with that card's sentence
+                            o.proposal?.display?.takeIf { it.isNotEmpty() }?.let { shown ->
+                                val change = o.proposal?.prev?.takeIf { it.isNotEmpty() }?.let { "$it → $shown" } ?: shown
+                                Action(acceptTitle) {
+                                    confirm = ApConfirm(acceptTitle, "$change\n\n$amendBody", destructive = false) {
+                                        o.orderId?.let { vm.acceptNewDate(it) }
+                                    }
+                                }
+                            }
                             Action(cancelTitle, destructive = true) {
-                                confirm = Triple(cancelTitle, cancelBody) { o.orderId?.let { vm.delayCancel(it) } }
+                                confirm = ApConfirm(cancelTitle, cancelBody, destructive = true) { o.orderId?.let { vm.delayCancel(it) } }
                             }
                         }
                     }
@@ -229,7 +251,7 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
                             } else {
                                 val body = if (l.moneyPath == "open_account") releaseBodyOpen else releaseBody
                                 Action(releaseTitle) {
-                                    confirm = Triple(releaseTitle, body) { l.lineId?.let { vm.confirmDelivery(it) } }
+                                    confirm = ApConfirm(releaseTitle, body, destructive = false) { l.lineId?.let { vm.confirmDelivery(it) } }
                                 }
                                 Action(objectTitle, destructive = true) { l.lineId?.let { form = ApForm(objectTitle, it, "objection") } }
                             }
@@ -275,8 +297,8 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
             }
         }
     }
-    confirm?.let { (title, body, run) ->
-        ConfirmDialog(title, body, destructive = title != stringResource(R.string.order_fund) && title != stringResource(R.string.ap_confirm_delivery), onDismiss = { confirm = null }) { run() }
+    confirm?.let { c ->
+        ConfirmDialog(c.title, c.body, c.destructive, onDismiss = { confirm = null }) { c.run() }
     }
     form?.let { f -> ApFormSheet(f, vm) { form = null } }
 }
