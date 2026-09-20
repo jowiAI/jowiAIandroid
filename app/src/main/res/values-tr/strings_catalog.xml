@@ -186,6 +186,7 @@
     <string name="clarify_back_to_edit">Düzenlemeye dön</string>
     <string name="clarify_jowi_suggests">Jowi\'nin önerisi</string>
     <string name="clarify_show_typed">Yazdığınızı göster</string>
+    <string name="clarify_show_typed_other">Yazıldığı gibi göster</string>
     <string name="clarify_title">Jowi bunu şöyle okudu</string>
     <string name="clarify_typed_label">YAZILDIĞI GİBİ</string>
     <string name="clarify_use_own">Kendi sözlerim</string>

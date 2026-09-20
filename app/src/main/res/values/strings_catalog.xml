@@ -186,6 +186,7 @@
     <string name="clarify_back_to_edit">Back to editing</string>
     <string name="clarify_jowi_suggests">Jowi\'s suggestion</string>
     <string name="clarify_show_typed">Show what you wrote</string>
+    <string name="clarify_show_typed_other">Show it as typed</string>
     <string name="clarify_title">Jowi read it as</string>
     <string name="clarify_typed_label">AS TYPED</string>
     <string name="clarify_use_own">My own words</string>

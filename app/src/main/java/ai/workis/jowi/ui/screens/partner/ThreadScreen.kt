@@ -615,7 +615,8 @@ private fun Stamp(m: ThreadMessage, mine: Boolean) {
     val colors = WorkisTheme.colors
     val typed = m.textOriginal?.takeIf { it.isNotEmpty() }
     var open by remember(m.id) { mutableStateOf(false) }
-    val showTyped = stringResource(R.string.clarify_show_typed)
+    // the button says whose words it opens: mine, or the other party's
+    val showTyped = stringResource(if (mine) R.string.clarify_show_typed else R.string.clarify_show_typed_other)
     Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         if (typed != null && open) {
             Text(

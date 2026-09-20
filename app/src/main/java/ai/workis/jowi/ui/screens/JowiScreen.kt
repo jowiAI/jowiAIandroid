@@ -379,7 +379,17 @@ class JowiViewModel : ViewModel() {
         lines.forEachIndexed { i, l ->
             if (l.match == null) return@forEachIndexed
             val listId = collected[l.question.orEmpty()] ?: return@forEachIndexed
-            lines[i] = l.copy(listId = l.listId ?: listId)
+            // The folded pair is the turn that DID the work, and the server marks it
+            // `canHide: false`. On this screen its question is the surviving one, so
+            // the fold hands that word over too — otherwise a question standing above
+            // a "Listeyi aç" card would offer "Soruyu geri çek", and withdrawing it
+            // would un-fold the repeat right under the trace (3.37). Not a derivation:
+            // both words are the server's; the fold only joins them.
+            lines[i] = l.copy(listId = l.listId ?: listId, canHide = false)
+            // the turn's question is the last user row above the card, not always i-1:
+            // a turn can carry a worded answer before its match
+            val u = (0 until i).lastOrNull { lines[it].who == "user" }
+            if (u != null && lines[u].text == l.question) lines[u] = lines[u].copy(canHide = false)
             // the repeat is the LATER pair with the same question and no match
             lines.forEachIndexed { j, other ->
                 if (j > i && other.question == l.question && other.match == null && other.listId == listId) {
@@ -444,10 +454,22 @@ class JowiViewModel : ViewModel() {
                 )
             }.getOrNull()
             val at = lines.indexOfFirst { it.id == id }
-            if (at >= 0) lines[at] = lines[at].copy(
-                collecting = false,
-                listId = r?.listId?.takeIf { it.isNotEmpty() } ?: lines[at].listId,
-            )
+            val opened = r?.listId?.takeIf { it.isNotEmpty() }
+            if (at >= 0) {
+                // the resend's turn did the work: the server says `canHide: false`, and
+                // the card plus the question it stands under inherit it here too — the
+                // same word the history read joins on (3.37)
+                val sealed = opened != null && r.turn?.canHide != true
+                lines[at] = lines[at].copy(
+                    collecting = false,
+                    listId = opened ?: lines[at].listId,
+                    canHide = if (sealed) false else lines[at].canHide,
+                )
+                if (sealed) {
+                    val u = (0 until at).lastOrNull { lines[it].who == "user" }
+                    if (u != null) lines[u] = lines[u].copy(canHide = false)
+                }
+            }
         }
     }
 
