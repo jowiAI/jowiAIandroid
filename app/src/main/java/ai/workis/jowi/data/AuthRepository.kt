@@ -1,5 +1,6 @@
 package ai.workis.jowi.data
 
+import ai.workis.jowi.Graph
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withTimeoutOrNull
@@ -86,9 +87,15 @@ class AuthRepository(
 
     /**
      * The language picked on the LOGIN screen never reached the account — only
-     * Hesap wrote it. A saved preference BEATS `Accept-Language` (§3), so an
-     * English screen kept getting the server's sentences in the stored Turkish.
-     * Every sign-in now carries the choice to the account when the two differ.
+     * Hesap wrote it — and a saved preference BEATS `Accept-Language` (§3), so
+     * an English screen kept getting the server's sentences in the stored
+     * Turkish.
+     *
+     * But the field is ONE per account and drives the mails and `textLocalized`
+     * everywhere, so Django's rule (2026-09-20) governs what may write it: only
+     * when the account has none saved, or when the person changed the language
+     * inside the app. A device that merely disagrees must never silently
+     * overwrite a choice someone made deliberately on the web.
      */
     suspend fun syncPreferredLanguage() {
         if (_user.value == null) return
@@ -97,9 +104,10 @@ class AuthRepository(
             u["preferredLanguage"]?.jsonPrimitive?.contentOrNull
                 ?: u["preferred_language"]?.jsonPrimitive?.contentOrNull
         }
-        // an ABSENT field counts as different (iOS does the same): the trap is a
-        // stored preference the app never wrote, and staying quiet would keep it
-        if (stored == want) return
+        val picked = Graph.languageWasPicked()
+        if (stored == want) { Graph.clearLanguagePicked(); return }
+        // nothing saved yet → ours to set; otherwise only a deliberate pick speaks
+        if (!stored.isNullOrEmpty() && !picked) return
         setPreferredLanguage(want)
     }
 
@@ -173,8 +181,12 @@ class AuthRepository(
         }
     }
 
-    suspend fun setPreferredLanguage(code: String): ApiResult<Unit> =
-        safeCall(lang()) { applyAuth(api.updateProfile(ProfileUpdateBody(code))) }
+    /** The account now holds what was picked, so the pick has been spent. */
+    suspend fun setPreferredLanguage(code: String): ApiResult<Unit> {
+        val r = safeCall(lang()) { applyAuth(api.updateProfile(ProfileUpdateBody(code))) }
+        if (r is ApiResult.Ok) Graph.clearLanguagePicked()
+        return r
+    }
 
     suspend fun logout() {
         safeCall(lang()) { api.logout() }
@@ -183,6 +195,9 @@ class AuthRepository(
 
     fun signOutLocally() {
         store.clear()
+        // a pick belonging to the session that just ended must not reach the next
+        // account's stored preference
+        Graph.clearLanguagePicked()
         _user.value = null
         _agreementPending.value = null
         runCatching { ai.workis.jowi.Graph.partner.clear() }

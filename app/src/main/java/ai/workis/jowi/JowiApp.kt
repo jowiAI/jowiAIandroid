@@ -67,10 +67,22 @@ object Graph {
         prefs.edit().putString("workis_appearance", value).apply()
     }
 
+    /**
+     * A tap on a language picker is a DELIBERATE choice and is remembered as
+     * one. It matters at sign-in: the login screen has no session to write to,
+     * and Django's rule is that a stored preference — which may have been set
+     * on the web — is never overwritten just because a device disagrees.
+     */
     fun setLanguage(value: String) {
         language.value = value
-        prefs.edit().putString("workis_lang", value).apply()
+        prefs.edit().putString("workis_lang", value).putBoolean(LANG_PICKED, true).apply()
     }
+
+    fun languageWasPicked(): Boolean = prefs.getBoolean(LANG_PICKED, false)
+
+    fun clearLanguagePicked() { prefs.edit().remove(LANG_PICKED).apply() }
+
+    private const val LANG_PICKED = "workis_lang_picked"
 }
 
 class JowiApp : Application() {
