@@ -52,7 +52,7 @@ private sealed interface Block {
     data class Heading(val level: Int, val text: String) : Block
     data class Paragraph(val text: String) : Block
     data class Quote(val text: String) : Block
-    data class ListBlock(val ordered: Boolean, val items: List<String>) : Block
+    data class ListBlock(val ordered: Boolean, val items: List<String>, val marks: List<String> = emptyList()) : Block
     data class Table(val header: List<String>, val rows: List<List<String>>) : Block
 }
 
@@ -105,15 +105,19 @@ private fun parseBlocks(md: String): List<Block> {
                 flushPara()
                 val ordered = line.first().isDigit()
                 val items = mutableListOf<String>()
+                // the ordinal the SOURCE wrote, kept verbatim: a contract's clause
+                // numbers are part of the text, and a blank line between them must
+                // not restart the count at 1
+                val marks = mutableListOf<String>()
                 while (i < lines.size) {
                     val l = lines[i].trim()
                     val m = Regex("""^(\d+[.)]|[-*•])\s+(.*)""").find(l)
-                    if (m != null) { items += m.groupValues[2]; i++ }
+                    if (m != null) { items += m.groupValues[2]; marks += m.groupValues[1]; i++ }
                     else if (l.isNotEmpty() && lines[i].startsWith("  ") && items.isNotEmpty()) {
                         items[items.lastIndex] = items.last() + " " + l; i++ // continuation line
                     } else break
                 }
-                out += Block.ListBlock(ordered, items)
+                out += Block.ListBlock(ordered, items, marks)
             }
             else -> { para.append(line).append(' '); i++ }
         }
@@ -218,7 +222,7 @@ fun MarkdownDocument(markdown: String, modifier: Modifier = Modifier, paper: Boo
                         b.items.forEachIndexed { n, item ->
                             Row(verticalAlignment = Alignment.Top) {
                                 Text(
-                                    if (b.ordered) "${n + 1}." else "•",
+                                    if (b.ordered) (b.marks.getOrNull(n) ?: "${n + 1}.") else "•",
                                     fontFamily = if (b.ordered) WorkisMono else WorkisSans,
                                     fontSize = body, lineHeight = bodyLine, color = colors.muted,
                                     modifier = Modifier.width(26.dp),
