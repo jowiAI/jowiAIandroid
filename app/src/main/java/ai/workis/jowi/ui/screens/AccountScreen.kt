@@ -1,6 +1,5 @@
 package ai.workis.jowi.ui.screens
 
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -50,7 +49,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.os.LocaleListCompat
 import ai.workis.jowi.Graph
 import ai.workis.jowi.data.ScreenContext
 import ai.workis.jowi.R
@@ -145,10 +143,7 @@ private fun AccountHome(onReaccept: () -> Unit, onDeparture: () -> Unit, onOpen:
                     SegmentedButton(
                         selected = lang == code,
                         onClick = {
-                            Graph.setLanguage(code)
-                            AppCompatDelegate.setApplicationLocales(
-                                LocaleListCompat.forLanguageTags(code)
-                            )
+                            Graph.setLanguage(code) // the per-app locale follows it
                             // header alone is insufficient once DB pref is set —
                             // in-app switch must persist preferredLanguage server-side
                             scope.launch { Graph.auth.setPreferredLanguage(code) }

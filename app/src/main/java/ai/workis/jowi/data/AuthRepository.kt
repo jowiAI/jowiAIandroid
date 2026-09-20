@@ -106,8 +106,10 @@ class AuthRepository(
         }
         val picked = Graph.languageWasPicked()
         if (stored == want) { Graph.clearLanguagePicked(); return }
-        // nothing saved yet → ours to set; otherwise only a deliberate pick speaks
-        if (!stored.isNullOrEmpty() && !picked) return
+        // (c) a language is already saved and this device did not pick one: the
+        // app TAKES the account's, so a choice made on the web travels here
+        if (!stored.isNullOrEmpty() && !picked) { Graph.adoptLanguage(stored); return }
+        // (a) a deliberate pick, or (b) an empty preference — ours to write
         setPreferredLanguage(want)
     }
 

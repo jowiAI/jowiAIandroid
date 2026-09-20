@@ -1,6 +1,5 @@
 package ai.workis.jowi.ui.screens
 
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,7 +50,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.os.LocaleListCompat
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.ApiResult
@@ -318,8 +316,7 @@ fun LoginScreen(onApply: () -> Unit = {}) {
                 selected = !showJowi && lang == "tr",
             ) {
                 showJowi = false
-                Graph.setLanguage("tr")
-                AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("tr"))
+                Graph.setLanguage("tr") // the per-app locale follows it
             }
             LangTab(
                 label = stringResource(R.string.lang_en),
@@ -327,8 +324,7 @@ fun LoginScreen(onApply: () -> Unit = {}) {
                 selected = !showJowi && lang == "en",
             ) {
                 showJowi = false
-                Graph.setLanguage("en")
-                AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("en"))
+                Graph.setLanguage("en") // the per-app locale follows it
             }
             LangTab(
                 label = stringResource(R.string.jowi_tab),

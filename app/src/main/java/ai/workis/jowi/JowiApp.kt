@@ -4,6 +4,10 @@ import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import ai.workis.jowi.data.AuthRepository
 import ai.workis.jowi.data.PartnerStore
 import ai.workis.jowi.data.PasskeyService
@@ -76,6 +80,25 @@ object Graph {
     fun setLanguage(value: String) {
         language.value = value
         prefs.edit().putString("workis_lang", value).putBoolean(LANG_PICKED, true).apply()
+        applyLocale(value)
+    }
+
+    /**
+     * Rule (c): the account already holds a language, so this device TAKES it
+     * instead of writing its own over it — that is how a choice made on the web
+     * or on another phone travels here. Not a pick: nothing is sent back.
+     */
+    fun adoptLanguage(value: String) {
+        if (value.isEmpty() || value == language.value) return
+        language.value = value
+        prefs.edit().putString("workis_lang", value).apply()
+        applyLocale(value)
+    }
+
+    /** The per-app locale follows the language, wherever it was decided. */
+    private fun applyLocale(value: String) {
+        val set = Runnable { AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(value)) }
+        if (Looper.myLooper() == Looper.getMainLooper()) set.run() else Handler(Looper.getMainLooper()).post(set)
     }
 
     fun languageWasPicked(): Boolean = prefs.getBoolean(LANG_PICKED, false)
