@@ -55,6 +55,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -974,15 +977,31 @@ private fun TermCard(
             Text("$mark $word", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = tint)
         }
         val display = t.display?.takeIf { it.isNotEmpty() }
-        if (display != null) Text(display, fontSize = 14.sp, lineHeight = 19.sp, color = colors.ink)
-        else t.question?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted) }
-        // a change read out of the yazışma: what it would replace stays in sight
         val prev = t.prevDisplay?.takeIf { it.isNotEmpty() }
-        if (t.amendment == true && prev != null) {
-            Text(
-                stringResource(R.string.term_amendment) + " · " + stringResource(R.string.term_previous) + ": " + prev,
-                fontSize = 12.sp, lineHeight = 17.sp, color = Beige,
-            )
+        val amended = t.amendment == true && prev != null
+        when {
+            // Under a proposal the line reads as ONE sentence, the way the web card
+            // does: the term in force struck through and muted, an arrow, then what
+            // is proposed. Printed plainly they read as two live dates (3.40).
+            amended && display != null -> {
+                val previousWord = stringResource(R.string.term_previous)
+                val proposedWord = stringResource(R.string.term_amendment)
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = colors.faint, textDecoration = TextDecoration.LineThrough)) { append(prev) }
+                        withStyle(SpanStyle(color = colors.faint)) { append("  →  ") }
+                        withStyle(SpanStyle(color = colors.ink)) { append(display) }
+                    },
+                    fontSize = 14.sp, lineHeight = 19.sp,
+                    modifier = Modifier.semantics { contentDescription = "$previousWord: $prev. $proposedWord: $display" },
+                )
+            }
+            display != null -> Text(display, fontSize = 14.sp, lineHeight = 19.sp, color = colors.ink)
+            else -> t.question?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted) }
+        }
+        if (amended) {
+            // the badge stays under the value: what the line IS, then what it means
+            Text(stringResource(R.string.term_amendment), fontSize = 12.sp, lineHeight = 17.sp, color = Beige)
         } else if (prev != null) {
             Text(stringResource(R.string.term_previous) + ": " + prev, fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint)
         }
