@@ -2,6 +2,7 @@ package ai.workis.jowi.ui.screens
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
@@ -143,7 +144,11 @@ fun MainScreen() {
             }
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        // The tab bar's height is already reserved by `padding`. Without saying
+        // so, a screen's own `imePadding()` adds the WHOLE keyboard inset on top
+        // of it and the composer floats a tab-bar's height above the keyboard.
+        // Consuming it lets the inset modifiers below subtract what is spent.
+        Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
             when (current) {
                 MainTab.Panel -> if (isExpert) ExpertRoot() else ai.workis.jowi.ui.screens.console.ConsoleRoot()
                 MainTab.Market -> MarketRoot()
