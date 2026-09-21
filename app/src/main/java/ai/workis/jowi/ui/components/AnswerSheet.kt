@@ -74,7 +74,7 @@ fun AnswerSheet(
                 Switch(
                     checked = teach,
                     onCheckedChange = { teach = it },
-                    colors = SwitchDefaults.colors(checkedTrackColor = Kiremit500),
+                    colors = SwitchDefaults.colors(checkedTrackColor = colors.blue),
                 )
                 Spacer(Modifier.padding(4.dp))
                 Text(stringResource(R.string.teach_toggle), color = colors.ink, fontSize = 14.sp)

@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import ai.workis.jowi.ui.theme.PaperWhite
 import ai.workis.jowi.Graph
 import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisTheme
@@ -72,7 +73,7 @@ fun AuthImage(url: String?, modifier: Modifier = Modifier, corner: Dp = 8.dp, co
         value = if (url == null) null else ImageCache.load(url)
     }
     Box(
-        modifier.clip(RoundedCornerShape(corner)).background(Color(0xFFFFFFFF).copy(alpha = 0.92f)),
+        modifier.clip(RoundedCornerShape(corner)).background(PaperWhite.copy(alpha = 0.92f)),
         contentAlignment = Alignment.Center,
     ) {
         val b = bitmap

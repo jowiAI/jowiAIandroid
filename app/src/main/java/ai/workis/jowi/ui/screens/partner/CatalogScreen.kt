@@ -67,6 +67,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import ai.workis.jowi.ui.theme.PaperWhite
+import ai.workis.jowi.ui.theme.PaperInk
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.CatalogFamilyRow
@@ -277,7 +279,7 @@ fun CatalogScreen(vm: CatalogViewModel, onBack: () -> Unit, onOpenFamily: (Strin
                             selected = segment == i,
                             onClick = { segment = i },
                             shape = SegmentedButtonDefaults.itemShape(index = i, count = segs.size),
-                            colors = SegmentedButtonDefaults.colors(activeContainerColor = colors.surface, activeContentColor = colors.ink, inactiveContentColor = colors.muted),
+                            colors = SegmentedButtonDefaults.colors(activeContainerColor = colors.surface, activeContentColor = colors.ink, inactiveContainerColor = colors.canvas, inactiveContentColor = colors.muted),
                         ) { Text(label, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     }
                 }
@@ -707,10 +709,10 @@ private fun IngestionRow(ing: CatalogIngestion, vm: CatalogViewModel, onPage: (I
 @Composable
 fun SourcePageDialog(url: String, title: String, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(Modifier.fillMaxSize().background(Color(0xFFFFFFFF))) {
+        Column(Modifier.fillMaxSize().background(PaperWhite)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.done), color = Color(0xFF1A1A1F), fontWeight = FontWeight.SemiBold) }
-                Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color(0xFF1A1A1F), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.done), color = PaperInk, fontWeight = FontWeight.SemiBold) }
+                Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = PaperInk, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp)) {
                 AuthImage(url, Modifier.fillMaxWidth().aspectRatio(0.7f), corner = 0.dp)

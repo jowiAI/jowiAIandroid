@@ -18,6 +18,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import ai.workis.jowi.ui.theme.PaperInk
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -63,7 +64,7 @@ suspend fun renderPdfPages(context: Context, data: ByteArray, widthPx: Int): Lis
 
 /** A PDF as a vertical stack of page bitmaps scrolling inside `modifier`'s bounds (paper body / viewer). */
 @Composable
-fun PdfPages(data: ByteArray, modifier: Modifier = Modifier, spinnerColor: Color = Color.Gray) {
+fun PdfPages(data: ByteArray, modifier: Modifier = Modifier, spinnerColor: Color = PaperInk) {
     BoxWithConstraints(modifier) {
         val widthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
             .coerceIn(1, MAX_PAGE_WIDTH_PX)

@@ -45,6 +45,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import ai.workis.jowi.ui.theme.PaperWhite
+import ai.workis.jowi.ui.theme.PaperInk
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.ApiResult
@@ -255,14 +257,14 @@ fun ApplicationDetailScreen(console: ConsoleViewModel, row: ApplicationRow, onBa
             onDismissRequest = { vm.signedPdf = null },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
-            Column(Modifier.fillMaxSize().background(Color(0xFFFFFFFF))) {
+            Column(Modifier.fillMaxSize().background(PaperWhite)) {
                 Row(Modifier.fillMaxWidth().padding(8.dp)) {
                     Spacer(Modifier.weight(1f))
                     IconButton(onClick = { vm.signedPdf = null }) {
-                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.done), tint = Color(0xFF1A1A1F))
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.done), tint = PaperInk)
                     }
                 }
-                PdfPages(data, Modifier.fillMaxSize(), spinnerColor = Color(0xFF1A1A1F))
+                PdfPages(data, Modifier.fillMaxSize(), spinnerColor = PaperInk)
             }
         }
     }

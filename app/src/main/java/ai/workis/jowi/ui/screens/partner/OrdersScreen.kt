@@ -243,7 +243,12 @@ private fun OrderCard(
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(R.string.thread_open), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
                 Spacer(Modifier.weight(1f))
-                (o.unread ?: 0).takeIf { it > 0 }?.let { Badge { Text("$it", fontSize = 10.sp) } }
+                // unread is a NOTICE, not an error: a bare Badge takes the scheme's
+                // error red (and an `onError` the chart never maps). The mark colour
+                // carries it, with the AA pairing the ramp prescribes.
+                (o.unread ?: 0).takeIf { it > 0 }?.let {
+                    Badge(containerColor = Kiremit500, contentColor = OnKiremitFill) { Text("$it", fontSize = 10.sp) }
+                }
             }
             o.terms?.let { t ->
                 val ok = t.ok ?: 0

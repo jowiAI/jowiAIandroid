@@ -26,6 +26,11 @@ val BeigeBg = Color(0xFF45412D)
 val PaperWhite = Color(0xFFFFFFFF)
 val PaperInk = Color(0xFF1A1A1F)
 
+/** The hand that signs a paper, and the cell it is signed in. */
+val PenBlue = Color(0xFF1A47B3)
+val CellYellow = Color(0xFFFFF9D4)
+val CellEdge = Color(0xFFE0C240)
+
 @Immutable
 data class WorkisColors(
     val canvas: Color,

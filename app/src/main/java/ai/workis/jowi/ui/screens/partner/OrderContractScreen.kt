@@ -56,6 +56,7 @@ import ai.workis.jowi.ui.components.MarkdownDocument
 import ai.workis.jowi.ui.components.PdfViewerDialog
 import ai.workis.jowi.ui.components.SignHereBand
 import ai.workis.jowi.ui.screens.console.ConsoleSub
+import ai.workis.jowi.ui.theme.PenBlue
 import ai.workis.jowi.ui.theme.PaperInk
 import ai.workis.jowi.ui.theme.PaperWhite
 import ai.workis.jowi.ui.theme.Kiremit400
@@ -174,7 +175,6 @@ fun OrderContractScreen(orderId: String, seat: String? = null, onBack: () -> Uni
 }
 
 // Pen-and-paper fixed colours: the paper is white in BOTH schemes.
-private val PenBlue = Color(0xFF1A47B3)
 
 @Composable
 private fun ContractPaper(c: OrderContract, vm: OrderContractViewModel) {
