@@ -17,6 +17,15 @@ val SuccessBg = Color(0xFF2C382C)
 val Beige = Color(0xFFD9D2A0)
 val BeigeBg = Color(0xFF45412D)
 
+/**
+ * The document idiom — a paper is paper in both schemes. An agreement, an order
+ * contract, a scanned tax plate and a PDF page are read as the sheet they are,
+ * so they do not flip with the theme; everything AROUND them still does. These
+ * four files each kept their own copy until now.
+ */
+val PaperWhite = Color(0xFFFFFFFF)
+val PaperInk = Color(0xFF1A1A1F)
+
 @Immutable
 data class WorkisColors(
     val canvas: Color,

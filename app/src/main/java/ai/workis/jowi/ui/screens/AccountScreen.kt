@@ -190,27 +190,25 @@ private fun AccountHome(onReaccept: () -> Unit, onDeparture: () -> Unit, onOpen:
         val seatState by Graph.partner.seat.collectAsState()
         val company = (seatState as? ai.workis.jowi.data.PartnerSeatState.Seat)?.company
         val agreementKey = pending?.key?.takeIf { it.isNotEmpty() && pending?.pending != true }
-        if (company != null) {
+        // One group for the doors this seat has. Güvenlik belongs with them
+        // rather than in a card of its own — a second card for a single row
+        // broke the rhythm. Below API 28 there are no platform passkeys, so
+        // that door is not drawn at all; those devices stay on the e-mail code.
+        val security = Graph.passkeys.available
+        if (company != null || agreementKey != null || security) {
             Spacer(Modifier.height(16.dp))
             SettingsCard {
-                DoorRow(WorkisIcons.Building, stringResource(R.string.company_title), company.shortLabel) { onOpen(AccountDest.Company) }
-                RowDivider()
-                DoorRow(Icons.Filled.Settings, stringResource(R.string.settings_title), null) { onOpen(AccountDest.Settings) }
-            }
-        } else if (agreementKey != null) {
-            Spacer(Modifier.height(16.dp))
-            SettingsCard {
-                DoorRow(WorkisIcons.DocText, stringResource(R.string.my_agreement), null) { onOpen(AccountDest.Agreement(agreementKey)) }
-            }
-        }
-
-        // Güvenlik: the passkeys, the one e-mail-code switch, and how this
-        // session was opened. Below API 28 there are no platform passkeys, so
-        // the door is not drawn at all — those devices stay on the e-mail code.
-        if (Graph.passkeys.available) {
-            Spacer(Modifier.height(16.dp))
-            SettingsCard {
-                DoorRow(WorkisIcons.PersonKey, stringResource(R.string.security_title), null) { onOpen(AccountDest.Security) }
+                if (company != null) {
+                    DoorRow(WorkisIcons.Building, stringResource(R.string.company_title), company.shortLabel) { onOpen(AccountDest.Company) }
+                    RowDivider()
+                    DoorRow(Icons.Filled.Settings, stringResource(R.string.settings_title), null) { onOpen(AccountDest.Settings) }
+                } else if (agreementKey != null) {
+                    DoorRow(WorkisIcons.DocText, stringResource(R.string.my_agreement), null) { onOpen(AccountDest.Agreement(agreementKey)) }
+                }
+                if (security) {
+                    if (company != null || agreementKey != null) RowDivider()
+                    DoorRow(WorkisIcons.PersonKey, stringResource(R.string.security_title), null) { onOpen(AccountDest.Security) }
+                }
             }
         }
 

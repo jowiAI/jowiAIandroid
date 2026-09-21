@@ -45,6 +45,8 @@ import ai.workis.jowi.R
 import ai.workis.jowi.data.AgreementSignatures
 import ai.workis.jowi.data.absoluteWorkisUrl
 import ai.workis.jowi.data.shortDate
+import ai.workis.jowi.ui.theme.PaperInk
+import ai.workis.jowi.ui.theme.PaperWhite
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.WorkisMono
 import kotlinx.coroutines.CancellationException
@@ -144,8 +146,6 @@ class AgreementLoader(private val scope: CoroutineScope) {
 }
 
 // Pen-and-paper fixed colors: the paper is white in BOTH schemes.
-private val PaperWhite = Color(0xFFFFFFFF)
-private val PaperInk = Color(0xFF1A1A1F)
 private val PenBlue = Color(0xFF1A47B3)
 private val CellYellow = Color(0xFFFFF9D4)
 private val CellEdge = Color(0xFFE0C240)

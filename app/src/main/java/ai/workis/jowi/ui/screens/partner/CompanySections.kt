@@ -66,6 +66,8 @@ import ai.workis.jowi.ui.components.FormSection
 import ai.workis.jowi.ui.components.PdfViewerDialog
 import ai.workis.jowi.ui.components.looksLikePdf
 import ai.workis.jowi.ui.screens.expert.NoteBand
+import ai.workis.jowi.ui.theme.PaperInk
+import ai.workis.jowi.ui.theme.PaperWhite
 import ai.workis.jowi.ui.theme.SuccessGreen
 import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
@@ -199,6 +201,7 @@ class CompanyViewModel : ViewModel() {
     }
 }
 
+
 /** The web split the Firma page (2026-09-16): "Firma bilgileri" keeps identity + address + tax plate, "Ayarlar" holds Yetkiler + Otonomi. */
 enum class CompanyMode { Company, Settings }
 
@@ -240,65 +243,73 @@ fun CompanySections(mode: CompanyMode = CompanyMode.Company, vm: CompanyViewMode
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         NoteBand(vm.note)
         if (mode == CompanyMode.Settings) {
-            // Yetkiler: the field-lead line + the catalogue-helper switch (only when available)
-            Column {
-                FormSection(stringResource(R.string.permissions_title).uppercase()) {
-                    val lead = c.regionLead ?: c.catalogHelper?.lead
-                    lead?.name?.takeIf { it.isNotEmpty() }?.let {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
-                            Icon(Icons.Filled.Place, contentDescription = null, tint = colors.muted, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.region_lead_label) + ": " + lead.line, fontSize = 13.sp, color = colors.muted)
+            // Yetkiler: the field-lead line + the catalogue-helper switch (only when
+            // available). EVERY row here is conditional, so a seat that has none of
+            // them — a plain buyer — would get a bare heading over an empty card.
+            // The section is drawn only once it has something to say.
+            val lead = c.regionLead ?: c.catalogHelper?.lead
+            val leadLine = lead?.name?.takeIf { it.isNotEmpty() }
+            val relatedFirms = c.catalogHelper?.lead?.relatedFirms.orEmpty()
+            val helper = c.catalogHelper?.takeIf { it.available == true }
+            if (leadLine != null || relatedFirms.isNotEmpty() || helper != null) {
+                Column {
+                    FormSection(stringResource(R.string.permissions_title).uppercase()) {
+                        if (leadLine != null && lead != null) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+                                Icon(Icons.Filled.Place, contentDescription = null, tint = colors.muted, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(stringResource(R.string.region_lead_label) + ": " + lead.line, fontSize = 13.sp, color = colors.muted)
+                            }
                         }
-                    }
-                    // Madde 4/4 + 11/3: the lead's related-firm declaration is read
-                    // BEFORE the switch below — the seller decides knowing it
-                    val firms = c.catalogHelper?.lead?.relatedFirms.orEmpty()
-                    if (firms.isNotEmpty()) {
-                        Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(WorkisIcons.Building, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    stringResource(R.string.related_firms_label) + ": " + firms.joinToString(", "),
-                                    fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, modifier = Modifier.weight(1f, fill = false),
-                                )
-                                if (c.catalogHelper?.lead?.ownFirm == true) {
-                                    Spacer(Modifier.width(4.dp))
+                        // Madde 4/4 + 11/3: the lead's related-firm declaration is read
+                        // BEFORE the switch below — the seller decides knowing it
+                        val firms = relatedFirms
+                        if (firms.isNotEmpty()) {
+                            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(WorkisIcons.Building, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(6.dp))
                                     Text(
-                                        "· " + stringResource(R.string.related_firms_own),
-                                        fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.accentText,
+                                        stringResource(R.string.related_firms_label) + ": " + firms.joinToString(", "),
+                                        fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                    if (c.catalogHelper?.lead?.ownFirm == true) {
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(
+                                            "· " + stringResource(R.string.related_firms_own),
+                                            fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.accentText,
+                                        )
+                                    }
+                                }
+                                Text(
+                                    stringResource(R.string.related_firms_note),
+                                    fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted,
+                                    modifier = Modifier.padding(start = 20.dp),
+                                )
+                            }
+                            Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
+                        }
+                        val h = helper
+                        if (h != null) {
+                            val granted = vm.helperOn ?: (h.granted == true)
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(stringResource(R.string.catalog_helper_toggle), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink)
+                                    Text(
+                                        if (granted) stringResource(R.string.catalog_helper_on) + (h.grantedAt?.take(10)?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: "")
+                                        else stringResource(R.string.catalog_helper_off),
+                                        fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp,
+                                        color = if (granted) SuccessGreen else colors.faint,
                                     )
                                 }
+                                if (vm.tick == "catalogHelper") Text("✓ ", color = SuccessGreen, fontWeight = FontWeight.Bold)
+                                Switch(checked = granted, onCheckedChange = { vm.setCatalogHelper(it) }, colors = SwitchDefaults.colors(checkedTrackColor = colors.blue))
                             }
-                            Text(
-                                stringResource(R.string.related_firms_note),
-                                fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted,
-                                modifier = Modifier.padding(start = 20.dp),
-                            )
-                        }
-                        Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
-                    }
-                    val h = c.catalogHelper
-                    if (h?.available == true) {
-                        val granted = vm.helperOn ?: (h.granted == true)
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
-                            Column(Modifier.weight(1f)) {
-                                Text(stringResource(R.string.catalog_helper_toggle), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink)
-                                Text(
-                                    if (granted) stringResource(R.string.catalog_helper_on) + (h.grantedAt?.take(10)?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: "")
-                                    else stringResource(R.string.catalog_helper_off),
-                                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp,
-                                    color = if (granted) SuccessGreen else colors.faint,
-                                )
-                            }
-                            if (vm.tick == "catalogHelper") Text("✓ ", color = SuccessGreen, fontWeight = FontWeight.Bold)
-                            Switch(checked = granted, onCheckedChange = { vm.setCatalogHelper(it) }, colors = SwitchDefaults.colors(checkedTrackColor = colors.blue))
                         }
                     }
-                }
-                if (c.catalogHelper?.available == true) {
-                    Text(stringResource(R.string.catalog_helper_sub), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
+                    if (helper != null) {
+                        Text(stringResource(R.string.catalog_helper_sub), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
+                    }
                 }
             }
             // autonomy (moved here from the Firma page)
@@ -369,10 +380,10 @@ fun CompanySections(mode: CompanyMode = CompanyMode.Company, vm: CompanyViewMode
         val bytes = vm.taxBytes
         if (bytes != null && vm.taxIsPdf) PdfViewerDialog(stringResource(R.string.tax_plate_title), data = bytes, fileName = "vergi-levhasi.pdf") { showTax = false }
         else Dialog(onDismissRequest = { showTax = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            Box(Modifier.fillMaxSize().background(Color(0xFFFFFFFF)).clickable { showTax = false }, contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxSize().background(PaperWhite).clickable { showTax = false }, contentAlignment = Alignment.Center) {
                 val bmp = bytes?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
                 if (bmp != null) Image(bmp.asImageBitmap(), contentDescription = null, modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()))
-                else CircularProgressIndicator(color = Color(0xFF1A1A1F))
+                else CircularProgressIndicator(color = PaperInk)
             }
         }
     }

@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.FileProvider
+import ai.workis.jowi.ui.theme.PaperInk
+import ai.workis.jowi.ui.theme.PaperWhite
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.absoluteWorkisUrl
@@ -43,8 +45,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-private val PaperWhite = Color(0xFFFFFFFF)
-private val PaperInk = Color(0xFF1A1A1F)
 
 /** Hand a PDF to other apps through the system sheet (save / print / send). */
 fun sharePdf(context: Context, data: ByteArray, fileName: String) {
