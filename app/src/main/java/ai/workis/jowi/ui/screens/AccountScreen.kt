@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.workis.jowi.Graph
 import ai.workis.jowi.data.ScreenContext
+import ai.workis.jowi.data.TeamOutcome
+import ai.workis.jowi.data.teamCall
 import ai.workis.jowi.R
 import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.launch
@@ -61,6 +63,7 @@ private sealed interface AccountDest {
     data object Company : AccountDest
     data object Settings : AccountDest
     data object Security : AccountDest
+    data object Team : AccountDest
     data class Agreement(val key: String) : AccountDest
 }
 
@@ -81,6 +84,7 @@ fun AccountScreen(onReaccept: () -> Unit = {}, onDeparture: () -> Unit = {}) {
             }
         }
         AccountDest.Security -> SecurityScreen { dest = AccountDest.Home }
+        AccountDest.Team -> TeamScreen { dest = AccountDest.Home }
         is AccountDest.Agreement -> ConsoleSub(stringResource(R.string.my_agreement), { dest = AccountDest.Home }) {
             AgreementScreen(d.key)
         }
@@ -97,6 +101,14 @@ private fun AccountHome(onReaccept: () -> Unit, onDeparture: () -> Unit, onOpen:
     val appearance by Graph.appearance.collectAsState()
     val user by Graph.auth.user.collectAsState()
     val pending by Graph.auth.agreementPending.collectAsState()
+
+    // Ekip ships dark: while the switch is off the row does not exist, and a
+    // 404 `off` is the switch rather than a fault — nothing is said either way.
+    var teamEnabled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val r = teamCall(Graph.language.value) { Graph.api.team() }
+        teamEnabled = r is TeamOutcome.Ok && r.value.enabled == true
+    }
 
     Column(
         modifier = Modifier
@@ -195,42 +207,59 @@ private fun AccountHome(onReaccept: () -> Unit, onDeparture: () -> Unit, onOpen:
         // broke the rhythm. Below API 28 there are no platform passkeys, so
         // that door is not drawn at all; those devices stay on the e-mail code.
         val security = Graph.passkeys.available
-        if (company != null || agreementKey != null || security) {
+        if (company != null || agreementKey != null || security || teamEnabled) {
             Spacer(Modifier.height(16.dp))
             SettingsCard {
+                var drawn = false
                 if (company != null) {
                     DoorRow(WorkisIcons.Building, stringResource(R.string.company_title), company.shortLabel) { onOpen(AccountDest.Company) }
                     RowDivider()
                     DoorRow(Icons.Filled.Settings, stringResource(R.string.settings_title), null) { onOpen(AccountDest.Settings) }
+                    drawn = true
                 } else if (agreementKey != null) {
                     DoorRow(WorkisIcons.DocText, stringResource(R.string.my_agreement), null) { onOpen(AccountDest.Agreement(agreementKey)) }
+                    drawn = true
+                }
+                // the firm's colleagues live with the firm's own doors
+                if (teamEnabled) {
+                    if (drawn) RowDivider()
+                    DoorRow(WorkisIcons.PersonKey, stringResource(R.string.team_title), null) { onOpen(AccountDest.Team) }
+                    drawn = true
                 }
                 if (security) {
-                    if (company != null || agreementKey != null) RowDivider()
+                    if (drawn) RowDivider()
                     DoorRow(WorkisIcons.PersonKey, stringResource(R.string.security_title), null) { onOpen(AccountDest.Security) }
                 }
             }
         }
 
-        // §10.2 reminder — stays until the seat re-accepts
-        if (pending?.pending == true) {
-            Spacer(Modifier.height(16.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(BeigeBg, RoundedCornerShape(20.dp))
-                    .clickable(onClick = onReaccept)
-                    .padding(16.dp),
-            ) {
-                Icon(WorkisIcons.DocPlus, contentDescription = null, tint = Beige, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    stringResource(R.string.reaccept_pending_row),
-                    color = Beige, fontSize = 14.sp, lineHeight = 20.sp,
-                    modifier = Modifier.weight(1f),
-                )
-                Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = Beige)
+        // §10.2 reminder — stays until the seat re-accepts. A colleague seat
+        // cannot accept: the paper's only button answers 403 `admin_required`,
+        // so it gets a band it cannot tap, carrying the SERVER's sentence. With
+        // no sentence there is no row — we have none of our own to put there.
+        val reaccept = pending
+        if (reaccept?.pending == true) {
+            val mayAccept = reaccept.canAccept != false
+            val note = reaccept.acceptNote?.takeIf { it.isNotBlank() }
+            if (mayAccept || note != null) {
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(BeigeBg, RoundedCornerShape(20.dp))
+                        .then(if (mayAccept) Modifier.clickable(onClick = onReaccept) else Modifier)
+                        .padding(16.dp),
+                ) {
+                    Icon(WorkisIcons.DocPlus, contentDescription = null, tint = Beige, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        if (mayAccept) stringResource(R.string.reaccept_pending_row) else note.orEmpty(),
+                        color = Beige, fontSize = 14.sp, lineHeight = 20.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (mayAccept) Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = Beige)
+                }
             }
         }
 

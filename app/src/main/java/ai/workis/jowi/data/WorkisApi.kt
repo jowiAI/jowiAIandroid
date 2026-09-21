@@ -518,6 +518,30 @@ interface WorkisApi {
     @POST("workis/text/polish/")
     suspend fun textPolish(@Body body: TextBody): PolishResult
 
+    // --- Ekip: a firm's colleagues (API_CONTRACT "Team seats"); dark while the switch is off ---
+    @GET("workis/team/")
+    suspend fun team(): Team
+
+    @POST("workis/team/invite/")
+    suspend fun teamInvite(@Body body: TeamInviteBody): Team
+
+    @POST("workis/team/invitations/{id}/cancel/")
+    suspend fun teamInvitationCancel(@Path("id") id: String): Team
+
+    @POST("workis/team/seats/{userId}/remove/")
+    suspend fun teamSeatRemove(@Path("userId") userId: String): Team
+
+    /** Admin seat only; the admin seat's OWN scope can never be changed (400 `admin_scope`). */
+    @POST("workis/team/seats/{userId}/scope/")
+    suspend fun teamSeatScope(@Path("userId") userId: String, @Body body: TeamScopeBody): Team
+
+    /** The person's own invitations — one of the writes a view seat may still make. */
+    @GET("workis/team/invitations/mine/")
+    suspend fun myInvitations(): MyInvitations
+
+    @POST("workis/team/invitations/{id}/accept/")
+    suspend fun acceptInvitation(@Path("id") id: String, @Body body: InvitationAcceptBody): InvitationAcceptResult
+
     // --- §10.2 agreement re-acceptance (every seat) ---
     @GET("workis/agreement/pending/")
     suspend fun agreementPending(): AgreementPending

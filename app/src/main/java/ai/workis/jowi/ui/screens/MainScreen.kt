@@ -97,7 +97,14 @@ fun MainScreen() {
     var showReaccept by rememberSaveable { mutableStateOf(false) }
     var reacceptOffered by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { Graph.auth.refreshAgreementPending() }
-    LaunchedEffect(pending?.pending) { if (pending?.pending == true && !reacceptOffered) { reacceptOffered = true; showReaccept = true } }
+    // the paper opens by itself only for a seat that may actually accept it: a
+    // colleague's only button there answers 403, which is a dead end pushed up
+    // at launch. It reads the note in Hesap instead.
+    LaunchedEffect(pending?.pending, pending?.canAccept) {
+        if (pending?.pending == true && pending?.canAccept != false && !reacceptOffered) {
+            reacceptOffered = true; showReaccept = true
+        }
+    }
     if (showReaccept) { AgreementReacceptScreen(onClose = { showReaccept = false }); return }
     // The passkey offer sits over the tab bar the same way — but strictly after
     // the paper: it is asked only once the re-acceptance is out of the way, and

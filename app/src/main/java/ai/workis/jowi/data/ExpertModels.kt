@@ -333,6 +333,13 @@ data class AgreementPending(
     val key: String? = null,
     val pending: Boolean = false,
     val agreement: AgreementPendingMeta? = null,
+    /**
+     * A colleague seat may NOT open the paper — its only button answers 403
+     * `admin_required`. Absent on an older server, where every seat could.
+     */
+    val canAccept: Boolean? = null,
+    /** What a seat that cannot accept should read instead — the server's words. */
+    val acceptNote: String? = null,
 )
 
 @Serializable
