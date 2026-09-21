@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -55,6 +58,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -549,6 +553,7 @@ class JowiViewModel : ViewModel() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun JowiScreen(vm: JowiViewModel = viewModel()) {
     val colors = WorkisTheme.colors
@@ -565,8 +570,27 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
     // replacing the spinner — every one bumps the tick; an older page prepends
     // and leaves the scroll alone. The target is the trailing spacer, which
     // always clears the ask field
-    LaunchedEffect(vm.scrollTick, vm.clarify) {
-        if (vm.lines.isNotEmpty()) listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
+    /**
+     * The newest turn stays at the bottom, the way the web drawer does it.
+     *
+     * One pass is not enough, and that is what left an answer below the fold:
+     * the bubble is measured only AFTER the text replaces the spinner, so a
+     * scroll started at that moment aims at a list that is still short and
+     * lands above the new content. The keyboard does the same from the other
+     * side — it shrinks the viewport without the list being told. So: scroll,
+     * let the frame settle, and if anything is still below, go again.
+     */
+    // the answer replaces the spinner without changing the row count, so the
+    // growing text is a key of its own
+    val lastText = vm.lines.lastOrNull()?.text
+    val imeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(vm.scrollTick, vm.clarify, lastText, imeVisible) {
+        if (vm.lines.isEmpty()) return@LaunchedEffect
+        repeat(3) {
+            listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
+            if (!listState.canScrollForward) return@LaunchedEffect
+            withFrameNanos { }
+        }
     }
     // the list open on the Pazar tab, if any: the standard scope picker
     // [ <list> | Genel ] — "Genel" drops ctxList; no list, no picker

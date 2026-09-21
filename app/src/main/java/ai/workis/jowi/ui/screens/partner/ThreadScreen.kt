@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -40,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -306,6 +310,7 @@ class ThreadViewModel : ViewModel() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ThreadScreen(door: ThreadDoor, onBack: () -> Unit, onContract: (String, String?) -> Unit = { _, _ -> }) {
     val vm: ThreadViewModel = androidx.lifecycle.viewmodel.compose.viewModel(key = "thread-${door.id}")
@@ -323,9 +328,20 @@ fun ThreadScreen(door: ThreadDoor, onBack: () -> Unit, onContract: (String, Stri
     }
     val p = vm.payload
     val messages = p?.messages.orEmpty()
-    LaunchedEffect(messages.size, vm.localLines.size) {
-        val n = messages.size + vm.localLines.size
-        if (n > 0) listState.animateScrollToItem(n + 1)
+    /**
+     * The newest row stays at the bottom. One pass lands short — a row is
+     * measured after it arrives, and the keyboard shrinks the viewport without
+     * the list being told — so this settles until there is nothing below.
+     */
+    val imeVisible = WindowInsets.isImeVisible
+    val lastRow = messages.lastOrNull()?.let { "${it.id}|${it.content?.length}" }
+    LaunchedEffect(messages.size, vm.localLines.size, lastRow, imeVisible) {
+        if (messages.isEmpty() && vm.localLines.isEmpty()) return@LaunchedEffect
+        repeat(3) {
+            listState.animateScrollToItem((listState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0))
+            if (!listState.canScrollForward) return@LaunchedEffect
+            withFrameNanos { }
+        }
     }
     val title = p?.order?.po ?: p?.invitation?.title ?: stringResource(R.string.thread_open)
 
