@@ -26,6 +26,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
+import ai.workis.jowi.data.AuthRepository
 import ai.workis.jowi.data.ApiResult
 import ai.workis.jowi.data.AskOption
 import ai.workis.jowi.data.PasskeyService
@@ -87,6 +90,7 @@ fun LoginScreen(onApply: () -> Unit = {}) {
     var code by remember { mutableStateOf("") }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var confirmSignup by remember { mutableStateOf<AuthRepository.SignIn.ConfirmSignup?>(null) }
     val codeFocus = remember { FocusRequester() }
 
     /**
@@ -122,8 +126,29 @@ fun LoginScreen(onApply: () -> Unit = {}) {
         error = null
         scope.launch {
             when (val r = Graph.auth.verifyOtp(email.trim(), code.trim())) {
-                is ApiResult.Ok -> Unit // root observes isAuthenticated
+                // a correct code, but nobody has an account under this address:
+                // ask before opening one — a mistyped address used to become an
+                // empty Guest seat that nobody ever found again
+                is ApiResult.Ok -> when (val outcome = r.value) {
+                    is AuthRepository.SignIn.Opened -> Unit // root observes isAuthenticated
+                    is AuthRepository.SignIn.ConfirmSignup -> confirmSignup = outcome
+                }
                 is ApiResult.Err -> error = r.message
+            }
+            loading = false
+        }
+    }
+
+    /** "Hesap aç ve devam et" — the only door that creates the account. */
+    fun openAccount(ticket: String) {
+        if (loading) return
+        loading = true
+        error = null
+        scope.launch {
+            when (val r = Graph.auth.confirmSignup(ticket)) {
+                is ApiResult.Ok -> Unit // the session opened; root observes it
+                // a spent or stale ticket: the server's sentence, back to the address
+                is ApiResult.Err -> { error = r.message; step = LoginStep.Email; code = "" }
             }
             loading = false
         }
@@ -346,6 +371,33 @@ fun LoginScreen(onApply: () -> Unit = {}) {
                 selected = showJowi,
             ) { showJowi = true }
         }
+    }
+
+    // The account is opened only here, and only on a yes. "Farklı bir adresle
+    // giriş yap" is the same as closing the window: no call, back to the
+    // address, the code cleared — nothing was created.
+    confirmSignup?.let { ask ->
+        AlertDialog(
+            onDismissRequest = { confirmSignup = null; step = LoginStep.Email; code = "" },
+            containerColor = colors.surface,
+            title = { Text(stringResource(R.string.signup_confirm_title), color = colors.ink) },
+            text = {
+                Text(
+                    ask.email + "\n\n" + stringResource(R.string.signup_confirm_body),
+                    fontSize = 14.sp, lineHeight = 20.sp, color = colors.muted,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirmSignup = null; openAccount(ask.ticket) }) {
+                    Text(stringResource(R.string.signup_confirm_yes), color = colors.accentText, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmSignup = null; step = LoginStep.Email; code = "" }) {
+                    Text(stringResource(R.string.signup_confirm_other), color = colors.muted)
+                }
+            },
+        )
     }
 }
 

@@ -14,13 +14,30 @@ data class AuthResponse(
     val message: String? = null,
     val token: String? = null,
     val user: JsonObject? = null,
+    /**
+     * A verified address with NO account behind it: the person is asked before
+     * one is opened. Decide on THIS, never on the absence of a token — a
+     * missing token means many other things.
+     */
+    val newAccount: Boolean? = null,
+    val signupTicket: String? = null,
+    val email: String? = null,
+    val created: Boolean? = null,
 )
 
 @Serializable
 data class OtpRequestBody(val email: String)
 
 @Serializable
-data class OtpVerifyBody(val email: String, val code: String)
+data class OtpVerifyBody(
+    val email: String,
+    val code: String,
+    /** A build that HAS the asking screen says so; the server's switch decides. */
+    val confirmSignup: Boolean = true,
+)
+
+@Serializable
+data class SignupConfirmBody(val ticket: String)
 
 @Serializable
 data class LoginBody(val email: String, val password: String)

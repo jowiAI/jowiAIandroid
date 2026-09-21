@@ -703,6 +703,10 @@
     <string name="sign_ins_section">Earlier sign-ins</string>
     <string name="sign_out">Sign out</string>
     <string name="signed_pdf">Signed PDF</string>
+    <string name="signup_confirm_body">Your firm\'s account may be registered under another address. Open an account with this address, as a new application?</string>
+    <string name="signup_confirm_other">Sign in with a different address</string>
+    <string name="signup_confirm_title">No account is registered under this address</string>
+    <string name="signup_confirm_yes">Open the account and continue</string>
     <string name="source_page">source page</string>
     <string name="specs_title">Specifications</string>
     <string name="st_accrued">accrued</string>

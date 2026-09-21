@@ -77,11 +77,53 @@ class AuthRepository(
     suspend fun requestOtp(email: String): ApiResult<Unit> =
         safeCall(lang()) { api.otpRequest(OtpRequestBody(normalizedEmail(email))); Unit }
 
-    suspend fun verifyOtp(email: String, code: String): ApiResult<Unit> {
-        val r = safeCall(lang()) { applyAuth(api.otpVerify(OtpVerifyBody(normalizedEmail(email), code.trim()))) }
-        if (r is ApiResult.Ok) syncPreferredLanguage()
-        return r
+    /**
+     * A correct code does not always open a session: an address nobody has an
+     * account under is ASKED first, so that a mistyped address stops becoming
+     * an empty Guest seat. The answer says `newAccount` — the app decides on
+     * that word, never on the absence of a token.
+     */
+    sealed interface SignIn {
+        data object Opened : SignIn
+        data class ConfirmSignup(val ticket: String, val email: String) : SignIn
     }
+
+    suspend fun verifyOtp(email: String, code: String): ApiResult<SignIn> {
+        val r = safeCall(lang()) { api.otpVerify(OtpVerifyBody(normalizedEmail(email), code.trim())) }
+        return when (r) {
+            is ApiResult.Err -> r
+            is ApiResult.Ok -> {
+                val resp = r.value
+                val ticket = resp.signupTicket
+                if (resp.newAccount == true && !ticket.isNullOrEmpty()) {
+                    // nothing is stored: there is no session until the person says yes
+                    ApiResult.Ok(SignIn.ConfirmSignup(ticket, resp.email ?: normalizedEmail(email)))
+                } else {
+                    applyAuth(resp)
+                    syncPreferredLanguage()
+                    ApiResult.Ok(SignIn.Opened)
+                }
+            }
+        }
+    }
+
+    /**
+     * The person said yes. The session opens exactly as an OTP verify does —
+     * the language rule included. A spent, unknown or ten-minute-old ticket
+     * comes back 400 with the sentence to show.
+     */
+    suspend fun confirmSignup(ticket: String): ApiResult<Unit> =
+        try {
+            applyAuth(api.signupConfirm(SignupConfirmBody(ticket)))
+            syncPreferredLanguage()
+            ApiResult.Ok(Unit)
+        } catch (e: HttpException) {
+            ApiResult.Err(e.code(), messageFromBody(e, lang()))
+        } catch (e: java.io.IOException) {
+            ApiResult.Err(null, statusMessage(null, lang()))
+        } catch (e: Exception) {
+            ApiResult.Err(null, statusMessage(-1, lang()))
+        }
 
     /** How this session was opened — the server's word, on every `user` payload. */
     fun signedInWith(): String? = _user.value.signedInWith()

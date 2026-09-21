@@ -23,6 +23,10 @@ interface WorkisApi {
     @POST("auth/otp/verify/")
     suspend fun otpVerify(@Body body: OtpVerifyBody): AuthResponse
 
+    /** The account is opened only after the person says so; answers otp/verify's shape. */
+    @POST("auth/signup/confirm/")
+    suspend fun signupConfirm(@Body body: SignupConfirmBody): AuthResponse
+
     @POST("auth/login/")
     suspend fun login(@Body body: LoginBody): AuthResponse
 

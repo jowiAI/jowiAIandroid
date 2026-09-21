@@ -703,6 +703,10 @@
     <string name="sign_ins_section">Önceki girişler</string>
     <string name="sign_out">Çıkış yap</string>
     <string name="signed_pdf">İmzalı PDF</string>
+    <string name="signup_confirm_body">Firmanızın hesabı başka bir adrese kayıtlı olabilir. Yeni bir başvuru olarak bu adresle hesap açılsın mı?</string>
+    <string name="signup_confirm_other">Farklı bir adresle giriş yap</string>
+    <string name="signup_confirm_title">Bu adresle kayıtlı bir hesap yok</string>
+    <string name="signup_confirm_yes">Hesap aç ve devam et</string>
     <string name="source_page">kaynak sayfa</string>
     <string name="specs_title">Özellikler</string>
     <string name="st_accrued">birikti</string>
