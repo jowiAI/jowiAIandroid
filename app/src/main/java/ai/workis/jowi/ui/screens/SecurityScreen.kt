@@ -153,11 +153,14 @@ class SecurityViewModel : ViewModel() {
      * came in through the code because the phone is lost would otherwise lock
      * themselves out for good.
      */
-    fun setCodeSignIn(context: Context, allowed: Boolean, otherAccount: String) = run {
+    fun setCodeSignIn(context: Context, allowed: Boolean, otherAccount: String, stillRefused: String) = run {
         if (!canChangeCodeSignIn) {
             if (!Graph.auth.reopenWithPasskey(Graph.passkeys.signIn(context))) return@run otherAccount
             fetchList()
-            if (!canChangeCodeSignIn) return@run null // the server still says no; its word stands
+            // the server's word still stands — but two system sheets and then
+            // silence reads as a broken control, so the screen says that much.
+            // It is never sent anyway to collect a refusal.
+            if (!canChangeCodeSignIn) return@run stillRefused
         }
         val now = Graph.passkeys.setCodeSignIn(context, allowed)
         data = data?.copy(codeSignInAllowed = now)
@@ -186,6 +189,7 @@ fun SecurityScreen(onBack: () -> Unit) {
 
     val createdWord = stringResource(R.string.passkey_created)
     val otherAccount = stringResource(R.string.passkey_other_account)
+    val stillRefused = stringResource(R.string.st_error)
 
     ConsoleSub(stringResource(R.string.security_title), onBack, trailing = {
         if (vm.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Kiremit500)
@@ -237,7 +241,7 @@ fun SecurityScreen(onBack: () -> Unit) {
                             // dead only when the change is refused AND there is no
                             // way to a passkey session from here
                             enabled = (vm.canChangeCodeSignIn || vm.canReopen) && !vm.busy,
-                            onCheckedChange = { vm.setCodeSignIn(context, it, otherAccount) },
+                            onCheckedChange = { vm.setCodeSignIn(context, it, otherAccount, stillRefused) },
                             colors = SwitchDefaults.colors(checkedTrackColor = colors.blue),
                         )
                     }
