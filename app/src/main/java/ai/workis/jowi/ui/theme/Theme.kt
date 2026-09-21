@@ -20,6 +20,16 @@ private val LightColorScheme = lightColorScheme(
     onSurfaceVariant = WorkisLightColors.muted,
     outline = WorkisLightColors.border,
     error = WorkisLightColors.danger,
+    // menus, popups and sheets draw on the CONTAINER slots, not on `surface`:
+    // unmapped, a dropdown came up in Material's own lavender (seen on the
+    // login screen's appearance menu). Mapping them here fixes every popup at
+    // once instead of a containerColor at nine call sites.
+    surfaceContainerLowest = WorkisLightColors.surface,
+    surfaceContainerLow = WorkisLightColors.surface,
+    surfaceContainer = WorkisLightColors.surface,
+    surfaceContainerHigh = WorkisLightColors.surface,
+    surfaceContainerHighest = WorkisLightColors.surface,
+    surfaceVariant = WorkisLightColors.surface,
 )
 
 private val DarkColorScheme = darkColorScheme(
@@ -34,6 +44,12 @@ private val DarkColorScheme = darkColorScheme(
     onSurfaceVariant = WorkisDarkColors.muted,
     outline = WorkisDarkColors.border,
     error = WorkisDarkColors.danger,
+    surfaceContainerLowest = WorkisDarkColors.surface,
+    surfaceContainerLow = WorkisDarkColors.surface,
+    surfaceContainer = WorkisDarkColors.surface,
+    surfaceContainerHigh = WorkisDarkColors.surface,
+    surfaceContainerHighest = WorkisDarkColors.surface,
+    surfaceVariant = WorkisDarkColors.surface,
 )
 
 object WorkisTheme {
