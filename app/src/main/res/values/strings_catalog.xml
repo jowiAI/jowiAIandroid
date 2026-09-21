@@ -700,7 +700,7 @@
     <string name="sign_ins_footer">If you see a sign-in you do not recognize, review your passkeys and write to the coordinator.</string>
     <string name="sign_ins_previous">Previous sign-in</string>
     <string name="sign_ins_refused_section">Refused attempts</string>
-    <string name="sign_ins_section">Recent sign-ins</string>
+    <string name="sign_ins_section">Earlier sign-ins</string>
     <string name="sign_out">Sign out</string>
     <string name="signed_pdf">Signed PDF</string>
     <string name="source_page">source page</string>

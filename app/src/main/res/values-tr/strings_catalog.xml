@@ -700,7 +700,7 @@
     <string name="sign_ins_footer">Tanımadığınız bir giriş görürseniz geçiş anahtarlarınızı gözden geçirin ve koordinatöre yazın.</string>
     <string name="sign_ins_previous">Önceki giriş</string>
     <string name="sign_ins_refused_section">Reddedilen denemeler</string>
-    <string name="sign_ins_section">Son girişler</string>
+    <string name="sign_ins_section">Önceki girişler</string>
     <string name="sign_out">Çıkış yap</string>
     <string name="signed_pdf">İmzalı PDF</string>
     <string name="source_page">kaynak sayfa</string>

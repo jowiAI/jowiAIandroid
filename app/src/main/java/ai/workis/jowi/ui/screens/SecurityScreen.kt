@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -91,12 +92,21 @@ class SecurityViewModel : ViewModel() {
     var signIns by mutableStateOf<SignIns?>(null)
         private set
 
+    /**
+     * A code-opened session on an account that HAS a passkey can get to a
+     * passkey session from here — which is why its switch is not dead.
+     */
+    val canReopen get() =
+        Graph.passkeys.available && passkeys.isNotEmpty() && Graph.auth.signedInWith() != "passkey"
+
+    private suspend fun fetchList() {
+        runCatching { Graph.passkeys.list() }
+            .onSuccess { data = it; loadError = null }
+            .onFailure { e -> if (data == null) loadError = (e as? PasskeyService.Refused)?.message }
+    }
+
     fun load() {
-        viewModelScope.launch {
-            runCatching { Graph.passkeys.list() }
-                .onSuccess { data = it; loadError = null }
-                .onFailure { e -> if (data == null) loadError = (e as? PasskeyService.Refused)?.message }
-        }
+        viewModelScope.launch { fetchList() }
         viewModelScope.launch {
             runCatching { Graph.api.signIns() }.onSuccess { if (it.success) signIns = it }
         }
@@ -129,8 +139,26 @@ class SecurityViewModel : ViewModel() {
         null
     }
 
-    /** The switch takes the server's answer as truth, never the tap's optimism. */
-    fun setCodeSignIn(context: Context, allowed: Boolean) = run {
+    /**
+     * The switch takes the server's answer as truth, never the tap's optimism —
+     * and it is never a dead control. In a code-opened session the change is not
+     * allowed yet, but the way there is: touching the switch first re-opens the
+     * session with the passkey, then ASKS AGAIN, and only a server that now says
+     * `canChangeCodeSignIn` gets the change with its own fresh assertion. Two
+     * system sheets in a row, deliberately: the first opens a passkey session,
+     * the second is the proof the change must carry. Nothing is derived — being
+     * touchable only means "you can get there from here".
+     *
+     * Closing the door needs that proof as much as opening it does: someone who
+     * came in through the code because the phone is lost would otherwise lock
+     * themselves out for good.
+     */
+    fun setCodeSignIn(context: Context, allowed: Boolean, otherAccount: String) = run {
+        if (!canChangeCodeSignIn) {
+            if (!Graph.auth.reopenWithPasskey(Graph.passkeys.signIn(context))) return@run otherAccount
+            fetchList()
+            if (!canChangeCodeSignIn) return@run null // the server still says no; its word stands
+        }
         val now = Graph.passkeys.setCodeSignIn(context, allowed)
         data = data?.copy(codeSignInAllowed = now)
         null
@@ -206,8 +234,10 @@ fun SecurityScreen(onBack: () -> Unit) {
                         Spacer(Modifier.width(10.dp))
                         Switch(
                             checked = vm.codeSignInAllowed,
-                            enabled = vm.canChangeCodeSignIn && !vm.busy,
-                            onCheckedChange = { vm.setCodeSignIn(context, it) },
+                            // dead only when the change is refused AND there is no
+                            // way to a passkey session from here
+                            enabled = (vm.canChangeCodeSignIn || vm.canReopen) && !vm.busy,
+                            onCheckedChange = { vm.setCodeSignIn(context, it, otherAccount) },
                             colors = SwitchDefaults.colors(checkedTrackColor = colors.blue),
                         )
                     }
@@ -215,35 +245,40 @@ fun SecurityScreen(onBack: () -> Unit) {
                 Footnote(
                     listOfNotNull(
                         stringResource(R.string.code_sign_in_footer),
-                        stringResource(R.string.passkey_needs_passkey_session).takeIf { !vm.canChangeCodeSignIn },
+                        // said once: while the way out is offered below, "locked"
+                        // is not the whole truth and repeating it is noise
+                        stringResource(R.string.passkey_needs_passkey_session)
+                            .takeIf { !vm.canChangeCodeSignIn && !vm.canReopen },
                     ).joinToString(" "),
                 )
             }
 
-            // how this session was opened — the server's word, on every payload
+            // THIS session lives in one place: how it was opened, when, from
+            // where — and the way to re-open it. Its address was the thing the
+            // screen could not answer while the row hid among the others.
             val openedWithPasskey = Graph.auth.signedInWith() == "passkey"
+            val current = vm.signIns?.recent.orEmpty().firstOrNull { it.current == true }
+            Spacer(Modifier.height(4.dp))
+            Eyebrow(stringResource(R.string.session_opened_with))
             SecurityCard {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                Row(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalAlignment = Alignment.Top) {
                     Icon(
                         if (openedWithPasskey) WorkisIcons.PersonKey else WorkisIcons.Tray,
-                        contentDescription = null, tint = Kiremit500, modifier = Modifier.size(16.dp),
+                        contentDescription = null, tint = Kiremit500, modifier = Modifier.size(16.dp).padding(top = 2.dp),
                     )
                     Spacer(Modifier.width(10.dp))
-                    Text(stringResource(R.string.session_opened_with), fontSize = 14.sp, color = colors.muted)
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        stringResource(if (openedWithPasskey) R.string.session_with_passkey else R.string.session_with_code),
-                        fontSize = 13.sp, color = colors.ink,
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            stringResource(if (openedWithPasskey) R.string.session_with_passkey else R.string.session_with_code),
+                            fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink,
+                        )
+                        // until the history answers — or on a session older than
+                        // the server's `current` — the one line stands alone
+                        current?.let { EventDetail(it) }
+                    }
                 }
             }
-
-            // who opened this account, and when — the section sits under the keys
-            vm.signIns?.let { SignInsSection(it) }
-
-            // a code-opened session on an account WITH a passkey is otherwise a
-            // dead end: the switch is locked and nothing said how to unlock it
-            if (!openedWithPasskey && vm.passkeys.isNotEmpty() && Graph.passkeys.available) {
+            if (!openedWithPasskey && vm.canReopen) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -261,6 +296,9 @@ fun SecurityScreen(onBack: () -> Unit) {
                 }
                 Footnote(stringResource(R.string.session_reopen_footer))
             }
+
+            // the OTHER sign-ins, under their own heading
+            vm.signIns?.let { EarlierSignIns(it, current) }
 
             Spacer(Modifier.height(30.dp))
         }
@@ -310,22 +348,34 @@ private fun PasskeyRow(key: Passkey, canRemove: Boolean, busy: Boolean, onRemove
  * as a shape and words rather than colour alone.
  */
 @Composable
-private fun SignInsSection(s: SignIns) {
+private fun EarlierSignIns(s: SignIns, current: SignInEvent?) {
     val colors = WorkisTheme.colors
+    // this session has its own section above; what is left is everyone else
+    val others = s.recent.orEmpty().filter { it !== current && it.current != true }
+    val previous = s.previous
+    // `previous` is not a row of its own — it IS one of these, matched by the
+    // moment and the method. It only needs a caption when it is not the one
+    // leading the list, i.e. a newer sign-in from another device sits above it.
+    val prevIndex = previous?.let { p -> others.indexOfFirst { it.at == p.at && it.method == p.method } } ?: -1
+    // older than the ten shown: it follows them, captioned
+    val prevBelow = previous.takeIf { it != null && prevIndex < 0 }
+
     Spacer(Modifier.height(4.dp))
     Eyebrow(stringResource(R.string.sign_ins_section))
     SecurityCard {
-        val previous = s.previous
-        Column(Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(stringResource(R.string.sign_ins_previous), fontSize = 13.sp, color = colors.muted)
+        if (others.isEmpty() && prevBelow == null) {
             Text(
-                if (previous == null) stringResource(R.string.sign_ins_first) else eventLine(previous, withMethod = true),
-                fontFamily = WorkisMono, fontSize = 10.sp, lineHeight = 15.sp, color = colors.faint,
+                stringResource(R.string.sign_ins_first),
+                fontSize = 14.sp, color = colors.muted, modifier = Modifier.padding(vertical = 8.dp),
             )
         }
-        s.recent.orEmpty().forEach { e ->
-            Divider()
-            SignInRow(e)
+        others.forEachIndexed { i, e ->
+            if (i > 0) Divider()
+            SignInRow(e, caption = stringResource(R.string.sign_ins_previous).takeIf { i == prevIndex && i > 0 })
+        }
+        prevBelow?.let {
+            if (others.isNotEmpty()) Divider()
+            SignInRow(it, caption = stringResource(R.string.sign_ins_previous))
         }
     }
     Footnote(stringResource(R.string.sign_ins_footer))
@@ -346,21 +396,15 @@ private fun SignInsSection(s: SignIns) {
 }
 
 @Composable
-private fun SignInRow(e: SignInEvent) {
+private fun SignInRow(e: SignInEvent, caption: String? = null) {
     val colors = WorkisTheme.colors
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(methodWord(e.method), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink)
-            // the reader's own line, so nobody reads themselves as a stranger
-            if (e.current == true) {
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    stringResource(R.string.sign_in_current),
-                    fontFamily = WorkisMono, fontSize = 9.sp, letterSpacing = 1.sp, color = Kiremit500,
-                )
-            }
-        }
-        Text(eventLine(e, withMethod = false), fontFamily = WorkisMono, fontSize = 10.sp, lineHeight = 15.sp, color = colors.faint)
+        // no badge marks this session here: it has its own section, and a
+        // coloured mark would read as the app vouching for a row the PERSON
+        // is the one to judge
+        caption?.let { Text(it, fontSize = 12.sp, color = colors.muted) }
+        Text(methodWord(e.method), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink)
+        EventDetail(e)
         // a refusal is a status row: the mark and the word, never the colour alone
         e.refused?.takeIf { it.isNotEmpty() }?.let { reason ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -385,15 +429,30 @@ private fun SignInRow(e: SignInEvent) {
     }
 }
 
-/** "<date time> · <method> · <door> · <device> · <ip>" — the server's words for the last two. */
+/**
+ * "date · door · device", then the address on a LINE OF ITS OWN. As the tail of
+ * one line it wrapped and disappeared — and it is the fact a person comes to
+ * this screen to read. Mono, so digits line up, and selectable, so it can be
+ * carried into a message. (A `172.31.x.x` from before Django's fix is shown as
+ * it arrives; nothing is repaired here.)
+ */
 @Composable
-private fun eventLine(e: SignInEvent, withMethod: Boolean): String = listOfNotNull(
-    listOf(shortDate(e.at), clockOf(e.at)).filter { it.isNotEmpty() }.joinToString(" ").takeIf { it.isNotEmpty() },
-    if (withMethod) methodWord(e.method) else null,
-    stringResource(if (e.door == "web") R.string.sign_in_door_web else R.string.sign_in_door_app),
-    e.device?.takeIf { it.isNotEmpty() },
-    e.ip?.takeIf { it.isNotEmpty() },
-).joinToString(" · ")
+private fun EventDetail(e: SignInEvent) {
+    val colors = WorkisTheme.colors
+    Text(
+        listOfNotNull(
+            listOf(shortDate(e.at), clockOf(e.at)).filter { it.isNotEmpty() }.joinToString(" ").takeIf { it.isNotEmpty() },
+            stringResource(if (e.door == "web") R.string.sign_in_door_web else R.string.sign_in_door_app),
+            e.device?.takeIf { it.isNotEmpty() },
+        ).joinToString(" · "),
+        fontSize = 12.sp, lineHeight = 17.sp, color = colors.muted,
+    )
+    e.ip?.takeIf { it.isNotEmpty() }?.let {
+        SelectionContainer {
+            Text(it, fontFamily = WorkisMono, fontSize = 13.sp, lineHeight = 18.sp, color = colors.faint)
+        }
+    }
+}
 
 /** Google and Apple are names and stay as they are; the rest are ours to say. */
 @Composable
