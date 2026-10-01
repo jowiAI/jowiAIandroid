@@ -266,6 +266,20 @@ object WorkisIcons {
         }
     }
 
+    /** SF "arrow.right.circle" — Jowi's "Bir örnek daha" on a scene answer. */
+    val ArrowRightCircle: ImageVector = stroked("ArrowRightCircle") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(3f, 12f)
+            arcToRelative(9f, 9f, 0f, true, false, 18f, 0f)
+            arcToRelative(9f, 9f, 0f, true, false, -18f, 0f)
+            moveTo(8f, 12f); lineTo(16f, 12f)
+            moveTo(12.5f, 8.5f); lineTo(16f, 12f); lineTo(12.5f, 15.5f)
+        }
+    }
+
     /** SF "hand.thumbsdown" — reviews tile. */
     val ThumbsDown: ImageVector = stroked("ThumbsDown") {
         path(

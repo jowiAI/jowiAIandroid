@@ -1,8 +1,21 @@
 package ai.workis.jowi.data
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.buildClassSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonEncoder
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 // api/v1 responses are camelCase; legacy auth nests snake_case inside `user`,
 // so `user` stays a raw JsonObject (single source of truth, like iOS).
@@ -162,11 +175,131 @@ data class AskBody(
     val visible: List<VisibleItem>? = null,
     /** A console seat asking from a seller's catalogue — whose. */
     val seller: String? = null,
+    /** A tapped chip under a match's one question (2026-10-01): the SAME request again with it. */
+    val hint: String? = null,
+    /** "Teklif topla" on a pick list: the ticked product rows — only ever with `createList`. */
+    val picks: List<AskPick>? = null,
 )
 
-/** "Which one do you mean?" (2026-09-17): `q` is the follow-up to send, null = type again. */
+/**
+ * One ticked row of the match card (2026-10-01): `sku` '' = the family (the
+ * seller decides the variant), `skus` = every variant of the product. No
+ * defaults here on purpose — `encodeDefaults = false` would drop an empty sku.
+ */
 @Serializable
+data class AskPick(
+    val cpid: String,
+    /** A number when the id reads as one, as iOS sends it. */
+    val sellerId: JsonPrimitive,
+    val sku: String,
+    val skus: List<String>,
+    val name: String,
+)
+
+/**
+ * "Which one do you mean?" (2026-09-17): `q` is the follow-up to send, null = type again.
+ * Two shapes share `options` (2026-10-01): the clarify flow's `{label, q}` and a
+ * match answer's bare chip strings — a bare string decodes as `label`, no `q`.
+ */
+@Serializable(with = AskOptionSerializer::class)
 data class AskOption(val label: String = "", val q: String? = null)
+
+object AskOptionSerializer : KSerializer<AskOption> {
+    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("AskOption")
+    override fun deserialize(decoder: Decoder): AskOption {
+        val json = decoder as? JsonDecoder ?: return AskOption(decoder.decodeString())
+        fun text(e: JsonElement?) = (e as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content
+        return when (val el = json.decodeJsonElement()) {
+            is JsonObject -> AskOption(label = text(el["label"]).orEmpty(), q = text(el["q"]))
+            is JsonPrimitive -> AskOption(text(el).orEmpty())
+            else -> AskOption()
+        }
+    }
+    override fun serialize(encoder: Encoder, value: AskOption) {
+        val json = encoder as JsonEncoder
+        json.encodeJsonElement(buildJsonObject {
+            put("label", value.label)
+            value.q?.let { put("q", it) }
+        })
+    }
+}
+
+/**
+ * `next` is ONLY the technical step (Django 77bb5926). A bare string under it
+ * was the transitional scene id — read past it (an empty step), never built on:
+ * the next scene is `nextScene`.
+ */
+object AskNextTolerant : KSerializer<AskNext> {
+    override val descriptor: SerialDescriptor = AskNext.serializer().descriptor
+    override fun deserialize(decoder: Decoder): AskNext {
+        val json = decoder as? JsonDecoder ?: return AskNext.serializer().deserialize(decoder)
+        val el = json.decodeJsonElement()
+        return if (el is JsonObject) json.json.decodeFromJsonElement(AskNext.serializer(), el) else AskNext()
+    }
+    override fun serialize(encoder: Encoder, value: AskNext) = AskNext.serializer().serialize(encoder, value)
+}
+
+/**
+ * One seller's PRODUCT rows on a match (2026-10-01): `{partnerId, seller,
+ * products[…]}`. Every field tolerant — an odd value must never sink the answer.
+ */
+@Serializable
+data class AskProductSeller(
+    @Serializable(with = FlexString::class) val partnerId: String? = null,
+    val seller: String? = null,
+    val products: List<AskProduct>? = null,
+)
+
+/** One product row: its variants sit under a picker; `selectedSku` is what the request's size singled out ('' = nothing). */
+@Serializable
+data class AskProduct(
+    @Serializable(with = FlexString::class) val cpid: String? = null,
+    val name: String? = null,
+    val img: String? = null,
+    val kind: String? = null,
+    @Serializable(with = FlexDouble::class) val score: Double? = null,
+    val currency: String? = null,
+    @Serializable(with = FlexDouble::class) val priceMin: Double? = null,
+    @Serializable(with = FlexDouble::class) val priceMax: Double? = null,
+    @Serializable(with = FlexString::class) val selectedSku: String? = null,
+    val variants: List<AskVariant>? = null,
+)
+
+@Serializable
+data class AskVariant(
+    @Serializable(with = FlexString::class) val sku: String? = null,
+    val label: String? = null,
+    @Serializable(with = FlexDouble::class) val price: Double? = null,
+    val currency: String? = null,
+    /** `[[label, value], …]` — kept raw, read through [attrRows]; any scalar value. */
+    val attrs: JsonElement? = null,
+) {
+    /** The variant's attributes as (label, value), source order; an odd shape = none. */
+    val attrRows: List<Pair<String, String>>
+        get() = (attrs as? JsonArray).orEmpty().mapNotNull { p ->
+            val pair = p as? JsonArray ?: return@mapNotNull null
+            if (pair.size < 2) return@mapNotNull null
+            fun text(e: JsonElement) = (e as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content.orEmpty()
+            text(pair[0]) to text(pair[1])
+        }
+}
+
+/** What Jowi mapped the words onto (2026-10-01) — decoded, never drawn. */
+@Serializable
+data class AskReading(
+    val termTr: String? = null,
+    val families: List<@Serializable(with = FlexString::class) String>? = null,
+    val category: String? = null,
+    val attributes: AskReadingAttributes? = null,
+    val language: String? = null,
+)
+
+@Serializable
+data class AskReadingAttributes(
+    @Serializable(with = FlexString::class) val size: String? = null,
+    @Serializable(with = FlexString::class) val material: String? = null,
+    @Serializable(with = FlexString::class) val type: String? = null,
+)
 
 /** One catalogue row in a match — a PRODUCT, not an offer. Price-blind here. */
 @Serializable
@@ -211,10 +344,21 @@ data class AskResponse(
     // answer policy B: a stamp under the bubble; `kb` present → 👍/👎
     val label: String? = null,
     val kb: String? = null,
-    /** The step after a technical answer (2026-09-15). */
-    val next: AskNext? = null,
-    /** `source: "clarify"` carries tappable options (2026-09-17). */
+    /** The step after a technical answer (2026-09-15) — only that, never a scene id. */
+    @Serializable(with = AskNextTolerant::class) val next: AskNext? = null,
+    /**
+     * `source: "clarify"` carries tappable options (2026-09-17); on a match
+     * (2026-10-01) they are the chips of its one `question`.
+     */
     val options: List<AskOption>? = null,
+    /** A launch SCENE answered (2026-09-27): its id, and the one after it — "Bir örnek daha". */
+    val scene: String? = null,
+    val nextScene: String? = null,
+    /** The match by PRODUCT (2026-10-01): one row per product per seller; `sellers[].offers` stays for the old shelf. */
+    val products: List<AskProductSeller>? = null,
+    val reading: AskReading? = null,
+    /** ONE clarifying question on a match; `options` then carries its chips. */
+    val question: String? = null,
     /** The turn's row ids + `canHide`, so "Soruyu geri çek" works right after sending (2026-09-19). */
     val turn: AskTurn? = null,
     val handedOff: Boolean? = null,
@@ -264,7 +408,19 @@ data class AskLine(
     val kb: String? = null,
     val source: String? = null,
     val surface: String? = null,
-    val next: AskNext? = null,
+    @Serializable(with = AskNextTolerant::class) val next: AskNext? = null,
+    val scene: String? = null, // a scene answer's id (2026-09-27)
+    val nextScene: String? = null,
+    /**
+     * A notification card (`kind: "lines"`, 2026-09-30): `action` = the reader
+     * must act (a quote request); `good` = a closed loop.
+     */
+    val accent: String? = null,
+    // 2026-10-01 match fields — tolerated; history rows do not carry `products` today
+    val products: List<AskProductSeller>? = null,
+    val reading: AskReading? = null,
+    val question: String? = null,
+    val options: List<AskOption>? = null,
 )
 
 /** `nextBefore` only on the archive pages — null once the oldest page is in hand. */

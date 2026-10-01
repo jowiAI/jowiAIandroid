@@ -99,7 +99,21 @@ import ai.workis.jowi.data.ScreenContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import ai.workis.jowi.ui.components.JowiOptions
-import ai.workis.jowi.ui.components.MarkdownText
+import ai.workis.jowi.ui.components.AnswerText
+import ai.workis.jowi.ui.components.AuthImage
+import ai.workis.jowi.data.AskPick
+import ai.workis.jowi.data.AskProduct
+import ai.workis.jowi.data.AskProductSeller
+import ai.workis.jowi.data.AskVariant
+import ai.workis.jowi.data.WorkisMoney
+import ai.workis.jowi.data.catalogImageUrl
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import kotlinx.serialization.json.JsonPrimitive
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.launch
@@ -115,6 +129,14 @@ data class AskMatch(
     val approximate: Boolean,
     val listStage: String?,
     val sellers: List<AskSeller>,
+    /**
+     * The pick list (2026-10-01): one row per product per seller. Empty on
+     * history rows the server logged without it — the old shelf draws then.
+     */
+    val products: List<AskProductSeller> = emptyList(),
+    /** One clarifying question with its chips (bare strings → `AskOption.label`). */
+    val question: String? = null,
+    val options: List<AskOption> = emptyList(),
 ) {
     /** "100 metre · yeşil emici spiral hortum" — `item` no longer carries the quantity. */
     val title: String
@@ -176,6 +198,9 @@ data class JowiLine(
     val verdict: String? = null, // "thanks" | "already"
     val listId: String? = null, // a chat-born purchase list → "Listeyi aç"
     val next: AskNext? = null, // the step after a technical answer
+    val scene: String? = null, // a launch scene answered (2026-09-27)
+    val nextScene: String? = null, // the one after it — "Bir örnek daha"
+    val accent: String? = null, // a notification card: "action" | "good" (2026-09-30)
     val question: String? = null, // the asker's text this reply answers
     val options: List<AskOption>? = null, // "which one do you mean?" (2026-09-17)
     val optionPicked: Boolean = false, // a tapped option closes the set
@@ -223,6 +248,17 @@ class JowiViewModel : ViewModel() {
     var scopeGeneral by mutableStateOf(false)
     var scopeFor: String? = null
 
+    /**
+     * The match card's pick list (2026-10-01): ticks and chosen variants per
+     * product row, keyed by the card's text key + seller + product — `lines` is
+     * rebuilt on every history reload (fresh ids), these survive it. Session
+     * only: history rows carry no `products`. No entry = the server's default
+     * (ticked, unticked when `approximate`; the variant `selectedSku`).
+     */
+    val pickTicks = mutableStateMapOf<String, Boolean>()
+    /** The chosen variant SKU; "" = "leave it to the seller". */
+    val pickSkus = mutableStateMapOf<String, String>()
+
     private var nextId = 1L
     private fun newId() = nextId++
     private val lang get() = Graph.language.value
@@ -236,7 +272,11 @@ class JowiViewModel : ViewModel() {
     private fun ctxList(): String? = if (scopeGeneral) null else ScreenContext.openListId
 
     /** Server rows → lines; each reply remembers the question it answers ("Teklif topla" resends it). */
-    private fun fromServer(rows: List<AskLine>, kept: Map<String, Pair<List<AskOption>, Boolean>> = emptyMap()): List<JowiLine> {
+    private fun fromServer(
+        rows: List<AskLine>,
+        kept: Map<String, Pair<List<AskOption>, Boolean>> = emptyMap(),
+        keptMatch: Map<String, Pair<AskMatch, Boolean>> = emptyMap(),
+    ): List<JowiLine> {
         val out = ArrayList<JowiLine>(rows.size)
         var lastQ: String? = null
         rows.forEach { l ->
@@ -250,18 +290,27 @@ class JowiViewModel : ViewModel() {
             }
             val match = if (l.kind == "match") AskMatch(
                 l.item.orEmpty(), l.qty, l.unit, l.nProducts, l.approximate == true, l.listStage, l.sellers.orEmpty(),
+                products = l.products.orEmpty(), question = l.question, options = l.options.orEmpty(),
             ) else null
             val isUser = l.who == "user"
             var line = JowiLine(
                 id = newId(), who = l.who ?: "jowi", text = l.text.orEmpty(),
                 original = l.qOriginal, href = l.href?.takeIf { it.isNotEmpty() },
                 match = match, source = l.source, surface = l.surface, label = l.label, kb = l.kb,
-                listId = l.listId?.takeIf { it.isNotEmpty() }, next = l.next, question = if (isUser) null else lastQ,
+                listId = l.listId?.takeIf { it.isNotEmpty() }, next = l.next,
+                scene = l.scene, nextScene = l.nextScene?.takeIf { it.isNotEmpty() }, accent = l.accent,
+                question = if (isUser) null else lastQ,
                 at = l.at, serverId = l.id, canHide = l.canHide == true,
             )
             if (!isUser) {
-                kept[lastQ.orEmpty() + "\u001F" + l.text.orEmpty()]?.let { (opts, picked) ->
+                val key = lastQ.orEmpty() + "\u001F" + l.text.orEmpty()
+                kept[key]?.let { (opts, picked) ->
                     line = line.copy(options = opts, optionPicked = picked)
+                }
+                // the match's product rows are not in the history either: this
+                // session's pick list stays on the card it came with
+                if (match != null && match.products.isEmpty()) keptMatch[key]?.let { (m, picked) ->
+                    line = line.copy(match = m, optionPicked = picked)
                 }
             }
             out += line
@@ -280,10 +329,12 @@ class JowiViewModel : ViewModel() {
                     // received on the reply they belong to. The clarify sentence
                     // repeats, so the key carries the question it answers too.
                     val kept = lines.filter { it.who != "user" && it.options != null }
-                        .associate { (it.question.orEmpty() + "\u001F" + it.text) to (it.options!! to it.optionPicked) }
+                        .associate { cardKey(it) to (it.options!! to it.optionPicked) }
+                    val keptMatch = lines.filter { it.who != "user" && it.match?.products?.isNotEmpty() == true }
+                        .associate { cardKey(it) to (it.match!! to it.optionPicked) }
                     lines.clear()
                     nextBefore = null; noOlder = false
-                    lines += fromServer(r.value.lines.orEmpty(), kept)
+                    lines += fromServer(r.value.lines.orEmpty(), kept, keptMatch)
                     // the server keeps a "Teklif topla" resend as its own question +
                     // answer pair; the card that bore the match carries the listId,
                     // so the repeat pair is folded away
@@ -445,6 +496,10 @@ class JowiViewModel : ViewModel() {
         val id = line.id
         val idx = lines.indexOfFirst { it.id == id }
         if (idx < 0 || lines[idx].collecting) return
+        // a card with product rows sends its TICKED rows as `picks` — the list is
+        // created the web way at once (stage ready); nothing ticked, nothing to ask for
+        val picks = line.match?.takeIf { it.products.isNotEmpty() }?.let { tickedPicks(line, it) }
+        if (picks != null && picks.isEmpty()) return
         lines[idx] = lines[idx].copy(collecting = true)
         viewModelScope.launch {
             val ctx = ScreenContext.current
@@ -454,6 +509,7 @@ class JowiViewModel : ViewModel() {
                         q = q, page = askPage(ctx), ctxList = ctxList(),
                         createList = true, screen = ctx?.screen, state = ctx?.state,
                         visible = ctx?.visible?.takeIf { it.isNotEmpty() }, seller = ctx?.seller,
+                        picks = picks,
                     ),
                 )
             }.getOrNull()
@@ -477,7 +533,53 @@ class JowiViewModel : ViewModel() {
         }
     }
 
-    fun send(q: String, original: String?, createList: Boolean = false) {
+    // ---- the pick list (2026-10-01) ----
+
+    /** The card's stable key — the same text key the kept options use. */
+    private fun cardKey(line: JowiLine) = line.question.orEmpty() + "\u001F" + line.text
+
+    fun rowKey(line: JowiLine, s: AskProductSeller, p: AskProduct) =
+        cardKey(line) + "\u001F" + (s.partnerId ?: s.seller.orEmpty()) + "\u001F" + p.cpid.orEmpty()
+
+    /** Rows arrive ticked; unticked when the judge called the result approximate. */
+    fun isTicked(key: String, m: AskMatch) = pickTicks[key] ?: !m.approximate
+
+    /** The chosen variant: the asker's pick, else what the request's size singled out. */
+    fun pickedSku(key: String, p: AskProduct) = pickSkus[key] ?: p.selectedSku.orEmpty()
+
+    fun tickedCount(line: JowiLine, m: AskMatch) =
+        m.products.sumOf { s -> s.products.orEmpty().count { isTicked(rowKey(line, s, it), m) } }
+
+    /** `picks: [{cpid, sellerId, sku ('' = the family), skus[], name}]`. */
+    private fun tickedPicks(line: JowiLine, m: AskMatch): List<AskPick> = m.products.flatMap { s ->
+        val sid = s.partnerId?.takeIf { it.isNotEmpty() } ?: return@flatMap emptyList()
+        s.products.orEmpty().filter { isTicked(rowKey(line, s, it), m) }.map { p ->
+            AskPick(
+                cpid = p.cpid.orEmpty(),
+                sellerId = sid.toLongOrNull()?.let { JsonPrimitive(it) } ?: JsonPrimitive(sid),
+                sku = pickedSku(rowKey(line, s, p), p),
+                skus = p.variants.orEmpty().mapNotNull { v -> v.sku?.takeIf { it.isNotEmpty() } },
+                name = p.name.orEmpty(),
+            )
+        }
+    }
+
+    /**
+     * A chip under the match's one question: the SAME request again with
+     * `hint: <chip>`, as a new turn (the API door does not read `hint` yet —
+     * requested 2026-10-01; the app sends it as told).
+     */
+    fun refine(line: JowiLine, chip: AskOption) {
+        val q = line.question?.takeIf { it.isNotEmpty() } ?: return
+        val idx = lines.indexOfFirst { it.id == line.id }
+        if (idx >= 0) lines[idx] = lines[idx].copy(optionPicked = true)
+        send(q, null, hint = chip.label)
+    }
+
+    /** The newest answer on screen (a withdrawn stub does not count). */
+    fun isLastReply(line: JowiLine) = lines.lastOrNull { it.who != "user" && !it.hidden }?.id == line.id
+
+    fun send(q: String, original: String?, createList: Boolean = false, hint: String? = null) {
         val now = nowStamp()
         val userId = newId()
         lines += JowiLine(id = userId, who = "user", text = q, original = original?.takeIf { it != q }, at = now)
@@ -496,11 +598,12 @@ class JowiViewModel : ViewModel() {
                         page = askPage(ctx), ctxList = ctxList(),
                         createList = if (createList) true else null,
                         screen = ctx?.screen, state = ctx?.state, visible = ctx?.visible?.takeIf { it.isNotEmpty() },
-                        seller = ctx?.seller,
+                        seller = ctx?.seller, hint = hint?.takeIf { it.isNotEmpty() },
                     ),
                 )
                 val match = if (r.kind == "match") AskMatch(
                     r.item.orEmpty(), r.qty, r.unit, r.nProducts, r.approximate == true, r.listStage, r.sellers.orEmpty(),
+                    products = r.products.orEmpty(), question = r.question, options = r.options.orEmpty(),
                 ) else null
                 val guidance = if (r.answer == null) {
                     r.message?.takeIf { it.isNotEmpty() }
@@ -510,7 +613,9 @@ class JowiViewModel : ViewModel() {
                     pending = false, text = r.answer.orEmpty(), error = guidance,
                     source = r.source, surface = r.surface, match = match, label = r.label, kb = r.kb,
                     listId = r.listId?.takeIf { it.isNotEmpty() }, next = r.next,
-                    options = r.options?.takeIf { it.isNotEmpty() },
+                    scene = r.scene, nextScene = r.nextScene?.takeIf { it.isNotEmpty() },
+                    // a match's chips belong to its card (AskMatch.options), not the clarify set
+                    options = r.options?.takeIf { it.isNotEmpty() && r.kind != "match" },
                     serverId = r.turn?.answerIds?.firstOrNull(),
                 )
                 // the row ids ride in the answer (2026-09-19): "Soruyu geri çek"
@@ -850,14 +955,36 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Uni
     Row(Modifier.fillMaxWidth().padding(end = 32.dp), verticalAlignment = Alignment.Top) {
         Text("/", fontFamily = WorkisMono, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Kiremit500, modifier = Modifier.padding(top = 10.dp))
         Spacer(Modifier.width(8.dp))
+        // a notification card is painted apart from the bubbles (2026-09-30):
+        // `action` in the kiremit tint, `good` (a closed loop) in the status green
+        val fill = when {
+            guidance -> BeigeBg
+            line.accent == "action" -> Kiremit500.copy(alpha = 0.08f)
+            line.accent == "good" -> SuccessGreen.copy(alpha = 0.10f)
+            else -> colors.ink.copy(alpha = 0.06f)
+        }
+        val frame = when (line.accent) {
+            "action" -> Kiremit500.copy(alpha = 0.55f)
+            "good" -> SuccessGreen.copy(alpha = 0.6f)
+            else -> colors.border
+        }
         Column(
             modifier = Modifier
                 .weight(1f)
-                .background(if (guidance) BeigeBg else colors.ink.copy(alpha = 0.06f), RoundedCornerShape(18.dp))
-                .border(1.dp, colors.border, RoundedCornerShape(18.dp))
+                .background(fill, RoundedCornerShape(18.dp))
+                .border(1.dp, frame, RoundedCornerShape(18.dp))
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            if (line.accent == "action") {
+                // a request to act on (a quote request) — tagged, so the card is
+                // told apart from the answers by its words too, not its tint alone
+                Text(
+                    stringResource(R.string.quote_request_tag).uppercase(),
+                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp,
+                    color = colors.accentText,
+                )
+            }
             if (line.who == "expert" || line.who == "lead") {
                 // a human answered in the thread — the badge follows the seat
                 Text(
@@ -874,10 +1001,11 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Uni
                     Text(line.error, fontSize = 14.sp, lineHeight = 20.sp, color = Beige)
                 }
                 else -> {
-                    // the server writes **bold** and links — render the inline
-                    // markdown, never the asterisks (2026-09-17)
-                    MarkdownText(line.text, color = colors.ink, fontSize = 15.sp, lineHeight = 22.sp)
-                    line.match?.takeIf { it.sellers.isNotEmpty() }?.let { MatchCard(it, line, vm) }
+                    // the server writes **bold**, numbered steps, bullets and (on a
+                    // long answer) a title line — the md_lite grammar (2026-09-27);
+                    // never the asterisks (2026-09-17)
+                    AnswerText(line.text, color = colors.ink, fontSize = 15.sp, lineHeight = 22.sp)
+                    line.match?.takeIf { it.sellers.isNotEmpty() || it.products.isNotEmpty() }?.let { MatchCard(it, line, vm) }
                     // the chat-born list opens natively; else the step after a technical answer
                     val listId = line.listId
                     if (listId != null && line.match == null) {
@@ -889,7 +1017,23 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Uni
                             Spacer(Modifier.width(6.dp))
                             Text(stringResource(R.string.open_list), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
                         }
-                    } else line.next?.takeIf { !it.text.isNullOrEmpty() }?.let { NextCard(it, line, vm) }
+                    } else if (!line.next?.text.isNullOrEmpty()) {
+                        NextCard(line.next!!, line, vm)
+                    } else if (line.nextScene != null && vm.isLastReply(line)) {
+                        // a launch scene with one after it: the phrase goes out as the
+                        // next question and the server continues from THIS scene in
+                        // the thread context — so only the latest scene offers it
+                        val busy = vm.lines.any { it.pending }
+                        val more = stringResource(R.string.jowi_more_example)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable(enabled = !busy) { vm.send(more, null) }.padding(vertical = 4.dp),
+                        ) {
+                            Icon(WorkisIcons.ArrowRightCircle, contentDescription = null, tint = if (busy) colors.faint else colors.accentText, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(more, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (busy) colors.faint else colors.accentText)
+                        }
+                    }
                     line.href?.let { href ->
                         Text(
                             "↗ " + stringResource(R.string.jowi_open_link),
@@ -1070,7 +1214,8 @@ private fun MatchCard(m: AskMatch, line: JowiLine, vm: JowiViewModel) {
             Text(stringResource(R.string.match_header).uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.faint)
         }
         Text(m.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, color = colors.ink)
-        m.sellers.take(5).forEach { s ->
+        if (m.products.isNotEmpty()) PickList(m, line, vm)
+        else m.sellers.take(5).forEach { s ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -1126,14 +1271,160 @@ private fun MatchCard(m: AskMatch, line: JowiLine, vm: JowiViewModel) {
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.collect_quotes), fontSize = 13.sp, color = colors.faint)
             }
-            else -> Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.clickable { vm.collectQuotesOnCard(line) }.padding(vertical = 4.dp),
-            ) {
-                Icon(WorkisIcons.Sparkle, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.collect_quotes), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.accentText)
+            else -> {
+                // a pick list with nothing ticked has nothing to ask for
+                val live = vm.lines.none { it.pending } && (m.products.isEmpty() || vm.tickedCount(line, m) > 0)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable(enabled = live) { vm.collectQuotesOnCard(line) }.padding(vertical = 4.dp),
+                ) {
+                    Icon(WorkisIcons.Sparkle, contentDescription = null, tint = if (live) colors.accentText else colors.faint, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.collect_quotes), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (live) colors.accentText else colors.faint)
+                }
             }
         }
     }
+}
+
+/**
+ * The pick list (2026-10-01): the one question with its chips, then per seller
+ * ONE row per product — a tick, the photo, the name, the price range and, with
+ * more than one variant, the variant picker. Prices are JSON numbers here.
+ */
+@Composable
+private fun PickList(m: AskMatch, line: JowiLine, vm: JowiViewModel) {
+    val colors = WorkisTheme.colors
+    val q = m.question
+    if (!q.isNullOrEmpty() && m.options.isNotEmpty()) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 2.dp)) {
+            Text(q, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
+            // a chip is the SAME request again with `hint` — never a follow-up of its own
+            JowiOptions(
+                m.options.map { it.copy(q = it.label) }, line.optionPicked,
+                enabled = vm.lines.none { it.pending } && line.question != null,
+            ) { o -> vm.refine(line, o) }
+        }
+    }
+    m.products.forEach { s ->
+        val sid = s.partnerId
+        val row = m.sellers.firstOrNull { sid != null && it.partnerId == sid }
+        val items = s.products.orEmpty()
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 4.dp).semantics { contentDescription = listOfNotNull(row?.name ?: s.seller, row?.city).joinToString(" · ") },
+            ) {
+                Text((row?.rowName ?: s.seller.orEmpty()).ifEmpty { "?" }, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                row?.city?.takeIf { it.isNotEmpty() }?.let {
+                    Spacer(Modifier.width(8.dp))
+                    Text(it, fontSize = 12.sp, color = colors.faint)
+                }
+                Spacer(Modifier.weight(1f))
+                Text("${items.size} " + stringResource(R.string.match_offers), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.muted)
+            }
+            items.forEach { p -> PickRow(p, s, m, line, vm) }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.ink.copy(alpha = 0.08f)))
+        }
+    }
+}
+
+@Composable
+private fun PickRow(p: AskProduct, s: AskProductSeller, m: AskMatch, line: JowiLine, vm: JowiViewModel) {
+    val colors = WorkisTheme.colors
+    val key = vm.rowKey(line, s, p)
+    val ticked = vm.isTicked(key, m)
+    val sku = vm.pickedSku(key, p)
+    val variants = p.variants.orEmpty()
+    val variant = if (variants.size == 1) variants.first() else variants.firstOrNull { sku.isNotEmpty() && it.sku == sku }
+    // the list is made (or being made): the picks are settled
+    val locked = line.listId != null || line.collecting
+    Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        // the tick says itself to TalkBack: the product's name + checked state
+        Checkbox(
+            checked = ticked,
+            onCheckedChange = { vm.pickTicks[key] = it },
+            enabled = !locked,
+            colors = CheckboxDefaults.colors(checkedColor = Kiremit500, uncheckedColor = colors.faint),
+            modifier = Modifier.size(28.dp).semantics { contentDescription = p.name.orEmpty() },
+        )
+        Spacer(Modifier.width(8.dp))
+        p.img?.takeIf { it.isNotEmpty() }?.let {
+            AuthImage(catalogImageUrl(it, "thumb"), Modifier.size(44.dp))
+            Spacer(Modifier.width(10.dp))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(p.name.orEmpty(), fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, color = colors.ink, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            priceRange(p)?.let {
+                Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.muted)
+            }
+            if (variants.size > 1) VariantPicker(variants, sku, enabled = !locked) { vm.pickSkus[key] = it }
+            variant?.attrRows?.takeIf { it.isNotEmpty() }?.forEach { (label, value) ->
+                // label faint, value ink — the catalogue's attribute idiom
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = colors.faint)) { append("$label: ") }
+                        withStyle(SpanStyle(color = colors.ink)) { append(value) }
+                    },
+                    fontSize = 11.sp, lineHeight = 15.sp,
+                )
+            }
+        }
+    }
+}
+
+/** "Seçin — ya da satıcıya bırakın" until a variant is chosen; "" sends the family. */
+@Composable
+private fun VariantPicker(variants: List<AskVariant>, sku: String, enabled: Boolean, onPick: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    var open by remember { mutableStateOf(false) }
+    val chosen = variants.firstOrNull { sku.isNotEmpty() && it.sku == sku }
+    Box {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .border(1.dp, colors.border, RoundedCornerShape(10.dp))
+                .clickable(enabled = enabled) { open = true }
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+        ) {
+            Text(
+                chosen?.let { variantText(it) } ?: stringResource(R.string.match_variant_unset),
+                fontSize = 13.sp, color = if (chosen != null) colors.ink else colors.muted,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text("▾", fontSize = 12.sp, color = colors.faint)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.match_variant_unset), fontSize = 14.sp, color = colors.muted) },
+                onClick = { open = false; onPick("") },
+            )
+            variants.filter { !it.sku.isNullOrEmpty() }.forEach { v ->
+                DropdownMenuItem(
+                    text = { Text(variantText(v), fontSize = 14.sp, color = colors.ink) },
+                    onClick = { open = false; onPick(v.sku.orEmpty()) },
+                )
+            }
+        }
+    }
+}
+
+/** `priceMin`–`priceMax` with the currency; one price when they are equal. */
+private fun priceRange(p: AskProduct): String? {
+    val cur = p.currency?.takeIf { it.isNotEmpty() }
+    val lo = p.priceMin
+    val hi = p.priceMax
+    return when {
+        lo != null && hi != null && lo != hi -> WorkisMoney.text(lo, null) + " – " + WorkisMoney.text(hi, cur)
+        lo != null -> WorkisMoney.text(lo, cur)
+        hi != null -> WorkisMoney.text(hi, cur)
+        else -> null
+    }
+}
+
+private fun variantText(v: AskVariant): String {
+    val label = v.label?.takeIf { it.isNotEmpty() } ?: v.sku.orEmpty()
+    val price = v.price ?: return label
+    return label + " · " + WorkisMoney.text(price, v.currency?.takeIf { it.isNotEmpty() })
 }

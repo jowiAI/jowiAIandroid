@@ -36,6 +36,7 @@ import ai.workis.jowi.data.JowiAnsweredRow
 import ai.workis.jowi.data.JowiSource
 import ai.workis.jowi.data.JowiTopic
 import ai.workis.jowi.ui.components.WorkisMark
+import ai.workis.jowi.ui.components.answerExcerpt
 import ai.workis.jowi.ui.theme.Beige
 import ai.workis.jowi.ui.theme.BeigeBg
 import ai.workis.jowi.ui.theme.Kiremit500
@@ -215,7 +216,8 @@ private fun LaneRow(row: JowiAnsweredRow, labels: Map<String, String>, onOpenThr
         }
         Text("“${row.question.orEmpty()}”", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
         row.answerExcerpt?.takeIf { it.isNotEmpty() }?.let {
-            Text(it, fontSize = 13.sp, lineHeight = 19.sp, color = colors.muted, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            // a clipped answer: md_lite's plain form, the bold still bold — never the asterisks
+            Text(answerExcerpt(it), fontSize = 13.sp, lineHeight = 19.sp, color = colors.muted, maxLines = 4, overflow = TextOverflow.Ellipsis)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             val short = row.company?.short

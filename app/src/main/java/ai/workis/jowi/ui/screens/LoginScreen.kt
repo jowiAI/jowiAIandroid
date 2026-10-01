@@ -62,7 +62,7 @@ import ai.workis.jowi.ui.components.JowiOptions
 import ai.workis.jowi.data.VisStyle
 import ai.workis.jowi.data.vis
 import ai.workis.jowi.data.ApplyAskBody
-import ai.workis.jowi.ui.components.MarkdownText
+import ai.workis.jowi.ui.components.AnswerText
 import ai.workis.jowi.data.safeCall
 import ai.workis.jowi.ui.components.WorkisMark
 import ai.workis.jowi.ui.components.openInApp
@@ -728,8 +728,8 @@ private fun PublicAskContent() {
                 .border(1.dp, colors.border, RoundedCornerShape(20.dp))
                 .padding(16.dp),
         ) {
-            // the public answer carries inline markdown too
-            MarkdownText(it, color = colors.ink, fontSize = 15.sp, lineHeight = 21.sp)
+            // the public answer carries the md_lite grammar too (2026-09-27)
+            AnswerText(it, color = colors.ink, fontSize = 15.sp, lineHeight = 21.sp)
             options?.let { opts ->
                 Spacer(Modifier.height(10.dp))
                 JowiOptions(opts, optionPicked, enabled = !asking) { o ->
