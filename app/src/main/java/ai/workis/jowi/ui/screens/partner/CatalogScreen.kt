@@ -26,7 +26,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -50,6 +53,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +62,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,11 +79,14 @@ import ai.workis.jowi.ui.theme.PaperInk
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.CatalogFamilyRow
+import ai.workis.jowi.data.CatalogAttr
 import ai.workis.jowi.data.CatalogIngestion
 import ai.workis.jowi.data.CatalogLiveRow
 import ai.workis.jowi.data.CatalogPage
+import ai.workis.jowi.data.CatalogPlanSection
 import ai.workis.jowi.data.CatalogWeb
 import ai.workis.jowi.data.ScreenContext
+import ai.workis.jowi.data.SimpleResult
 import ai.workis.jowi.data.VisStyle
 import ai.workis.jowi.data.vis
 import ai.workis.jowi.data.WorkisMoney
@@ -98,6 +108,8 @@ import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -155,7 +167,12 @@ class CatalogViewModel : ViewModel() {
         (r != null && r.success != false) to (r?.error ?: err)
     }
 
-    fun upload(bytes: ByteArray, name: String, kind: String, pages: String, brand: String) = act {
+    /**
+     * The same file again never starts a second run: `resumed` → the note says the
+     * existing row continues (no new row is waited for); `planned` → the row's
+     * checklist waits for the section choice (2026-09-27). The list reloads either way.
+     */
+    fun upload(bytes: ByteArray, name: String, kind: String, pages: String, brand: String, resumedNote: String, plannedNote: String) = act {
         val fields = buildMap {
             if (kind != "auto") put("kind", kind.toRequestBody("text/plain".toMediaType()))
             if (pages.isNotBlank()) put("pages", pages.trim().toRequestBody("text/plain".toMediaType()))
@@ -163,7 +180,40 @@ class CatalogViewModel : ViewModel() {
         }
         val part = MultipartBody.Part.createFormData("file", name, bytes.toRequestBody("application/pdf".toMediaType()))
         val (r, err) = partnerCall(lang) { Graph.api.catalogUpload(part, fields, seller) }
-        (r != null && r.success != false) to (r?.error ?: r?.message ?: err)
+        if (r == null || r.success == false) false to (r?.error ?: r?.message ?: err)
+        else true to (if (r.resumed == true) resumedNote else if (r.planned == true) plannedNote else null)
+    }
+
+    /** The row whose run door is in flight — every door waits for it. */
+    var doorBusy by mutableStateOf<String?>(null)
+        private set
+    /** The plan checklist's ticks, per document (the row is rebuilt on every poll). */
+    val ticked = mutableStateMapOf<String, Set<Int>>()
+
+    fun toggleSection(ingestionId: String, n: Int) {
+        val s = ticked[ingestionId].orEmpty()
+        ticked[ingestionId] = if (n in s) s - n else s + n
+    }
+
+    /** A run door: the list reloads on success; `words` turns a 409 code into a sentence, a server sentence stays as sent. */
+    private fun door(id: String, words: (String?) -> String?, call: suspend () -> SimpleResult) {
+        doorBusy = id; note = null
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { call() }
+            doorBusy = null
+            if (r?.success == true) { ticked.remove(id); load() } else note = words(r?.error ?: r?.message ?: err)
+        }
+    }
+
+    fun resume(id: String, words: (String?) -> String?) = door(id, words) { Graph.api.catalogIngestionResume(id, seller) }
+    fun cancel(id: String, words: (String?) -> String?) = door(id, words) { Graph.api.catalogIngestionCancel(id, seller) }
+    fun delete(id: String, words: (String?) -> String?) = door(id, words) { Graph.api.catalogIngestionDelete(id, seller) }
+
+    /** The ticked sections (numbers, not strings) or `{all: true}`. */
+    fun readSections(id: String, all: Boolean, words: (String?) -> String?) = door(id, words) {
+        val body = if (all) jsonBody("all" to true)
+        else jsonBody("sections" to JsonArray(ticked[id].orEmpty().sorted().map { JsonPrimitive(it) }))
+        Graph.api.catalogIngestionSections(id, body, seller)
     }
 
     /** → the error sentence, or null when created. */
@@ -233,13 +283,37 @@ fun WorkisChip(spec: ChipSpec) {
     }
 }
 
+/** The web's per-status label (`panel_products.html`), keyed by `effectiveStatus`. */
 @Composable
 fun ingestionStatusText(s: String?): String = when (s) {
-    "created" -> stringResource(R.string.ing_created)
+    "created", "queued" -> stringResource(R.string.ing_created)
     "running" -> stringResource(R.string.ing_running)
+    "stalled" -> stringResource(R.string.ing_stalled)
+    "cancelled" -> stringResource(R.string.ing_cancelled)
+    "plan" -> stringResource(R.string.ing_plan)
     "review" -> stringResource(R.string.ing_review)
     "failed" -> stringResource(R.string.ing_failed)
     else -> s.orEmpty()
+}
+
+/** The first non-empty text — server strings arrive as "" more often than null. */
+private fun firstNonEmpty(vararg s: String?): String = s.firstOrNull { !it.isNullOrEmpty() }.orEmpty()
+
+/** A variant's attributes as small `label: value` lines, in the order given — all of them, never filters (2026-09-27). */
+@Composable
+fun AttrLines(rows: List<CatalogAttr>) {
+    val colors = WorkisTheme.colors
+    Column(Modifier.padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        rows.forEach { a ->
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = colors.faint)) { append("${a.label}: ") }
+                    withStyle(SpanStyle(color = colors.ink)) { append(a.value) }
+                },
+                fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 // MARK: - Ürünler
@@ -327,6 +401,9 @@ private fun PublishCatalogContext(vm: CatalogViewModel, segment: Int) {
                 add(vis(stringResource(R.string.ingestions_title)))
                 add(vis(stringResource(R.string.web_fetch_start), VisStyle.SECONDARY)); add(vis(stringResource(R.string.web_fetch_resume), VisStyle.SECONDARY))
                 add(vis(stringResource(R.string.source_page)))
+                add(vis(stringResource(R.string.ing_resume), VisStyle.SECONDARY)); add(vis(stringResource(R.string.ing_cancel), VisStyle.SECONDARY))
+                add(vis(stringResource(R.string.ing_delete), VisStyle.DESTRUCTIVE))
+                add(vis(stringResource(R.string.ing_read_selected), VisStyle.SECONDARY)); add(vis(stringResource(R.string.ing_read_all), VisStyle.SECONDARY))
             }
         }
     }
@@ -472,6 +549,7 @@ private fun LiveSections(page: CatalogPage, vm: CatalogViewModel) {
                                 ).joinToString(" "),
                                 fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             )
+                            r.attrs?.rows?.takeIf { it.isNotEmpty() }?.let { AttrLines(it) }
                         }
                     }
                 }
@@ -491,13 +569,16 @@ private fun LiveSections(page: CatalogPage, vm: CatalogViewModel) {
     }
 }
 
-/** Live offer cells: price · currency · name · lead time · stock · visible — currency/toggle at once, text cells on Done. */
+/** Live offer cells: price · discount % · currency · name · lead time · stock · visible — currency/toggle at once, text cells on Done. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun OfferEditSheet(row: CatalogLiveRow, vm: CatalogViewModel, onClose: () -> Unit) {
     val colors = WorkisTheme.colors
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var price by remember { mutableStateOf(WorkisMoney.qty(row.price)) }
+    // the seller's usual rate (2026-10-01, `field: discountPct`): the live row does not
+    // carry it, so the field starts empty and an empty field is never sent — it would clear the rate
+    var discount by remember { mutableStateOf("") }
     var currency by remember { mutableStateOf(row.currency ?: "TRY") }
     var name by remember { mutableStateOf(row.name.orEmpty()) }
     var leadTime by remember { mutableStateOf(row.leadTimeDays?.toString().orEmpty()) }
@@ -519,6 +600,7 @@ private fun OfferEditSheet(row: CatalogLiveRow, vm: CatalogViewModel, onClose: (
                         busy = true
                         val pending = buildList<Pair<String, Any>> {
                             if (price != WorkisMoney.qty(row.price)) add("price" to price.replace(',', '.'))
+                            discount.trim().takeIf { it.isNotEmpty() }?.let { add("discountPct" to it.replace(',', '.')) }
                             if (name != row.name.orEmpty()) add("displayName" to name)
                             if (leadTime != row.leadTimeDays?.toString().orEmpty()) add("leadTimeDays" to leadTime)
                             if (stock != row.stock.orEmpty()) add("stock" to stock)
@@ -533,6 +615,7 @@ private fun OfferEditSheet(row: CatalogLiveRow, vm: CatalogViewModel, onClose: (
             Text(row.sku.orEmpty(), fontFamily = WorkisMono, fontSize = 11.sp, color = colors.faint)
             FormSection(null) {
                 FormRow(stringResource(R.string.unit_price_field), price, { price = it }, {}, false, placeholder = "—", mono = true, keyboardType = KeyboardType.Decimal)
+                FormRow(stringResource(R.string.discount_pct_field), discount, { discount = it }, {}, false, placeholder = "—", mono = true, keyboardType = KeyboardType.Decimal)
                 PickerRowSimple("CUR", currency, listOf("TRY", "USD", "EUR")) { currency = it; if (it != row.currency) saveNow("currency", it) }
                 FormRow(stringResource(R.string.product_name), name, { name = it }, {}, false, stacked = true, maxLines = 3)
                 FormRow(stringResource(R.string.lead_time_field), leadTime, { leadTime = it }, {}, false, placeholder = "—", mono = true, keyboardType = KeyboardType.Number)
@@ -583,6 +666,8 @@ private fun UploadSections(page: CatalogPage, vm: CatalogViewModel) {
         "flyer" to stringResource(R.string.kind_flyer), "manual" to stringResource(R.string.kind_manual),
         "spare_parts_list" to stringResource(R.string.kind_spare_parts), "certificate" to stringResource(R.string.kind_certificate),
     )
+    val resumedNote = stringResource(R.string.upload_resumed)
+    val plannedNote = stringResource(R.string.upload_planned)
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@rememberLauncherForActivityResult
@@ -591,7 +676,7 @@ private fun UploadSections(page: CatalogPage, vm: CatalogViewModel) {
             val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
             if (idx >= 0 && c.moveToFirst()) name = c.getString(idx) ?: name
         }
-        vm.upload(bytes, name, kind, pages, brand)
+        vm.upload(bytes, name, kind, pages, brand, resumedNote, plannedNote)
     }
 
     SectionHeader(stringResource(R.string.upload_title).uppercase())
@@ -632,43 +717,87 @@ private fun UploadSections(page: CatalogPage, vm: CatalogViewModel) {
     }
     Text(stringResource(R.string.upload_sub), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
 
-    val ings = page.ingestions.orEmpty()
+    val all = page.ingestions.orEmpty()
+    // as on the web: a planned document stays on the list while a section is still
+    // to be chosen; once every section has its own row the sections stand for it
+    val ings = all.filter { ing ->
+        val plan = ing.plan.orEmpty()
+        ing.state != "plan" || plan.isEmpty() || plan.any { it.ingestionId.isNullOrEmpty() }
+    }
+    var deleteTarget by remember { mutableStateOf<CatalogIngestion?>(null) }
     if (ings.isNotEmpty()) {
         Spacer(Modifier.height(8.dp))
         SectionHeader(stringResource(R.string.ingestions_title).uppercase())
         SurfaceCard {
             ings.forEachIndexed { i, ing ->
-                IngestionRow(ing, vm) { p -> ing.id?.let { sourceUrl = catalogSourceUrl(it, p, vm.seller) } }
+                val parent = ing.parentId?.takeIf { it.isNotEmpty() }?.let { pid -> all.firstOrNull { it.id == pid } }
+                IngestionRow(ing, parent, vm, onDelete = { deleteTarget = ing }) { p -> ing.id?.let { sourceUrl = catalogSourceUrl(it, p, vm.seller) } }
                 if (i < ings.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
             }
         }
     }
 
+    // a document goes with its sections and its unapproved families — the server
+    // refuses while it runs or when approved families came from it (its sentence is shown)
+    deleteTarget?.let { ing ->
+        val words = doorWords()
+        ConfirmDialog(stringResource(R.string.ing_delete), stringResource(R.string.ing_delete_confirm), destructive = true, onDismiss = { deleteTarget = null }) {
+            ing.id?.let { vm.delete(it, words) }
+        }
+    }
     if (showNew) NewProductSheet(vm) { showNew = false }
     sourceUrl?.let { SourcePageDialog(it, stringResource(R.string.source_page)) { sourceUrl = null } }
 }
 
+/** A run door's 409 code becomes our words; anything else (the delete refusal) is shown as the server sent it. */
 @Composable
-private fun IngestionRow(ing: CatalogIngestion, vm: CatalogViewModel, onPage: (Int) -> Unit) {
+private fun doorWords(): (String?) -> String? {
+    val notResumable = stringResource(R.string.ing_not_resumable)
+    val notRunning = stringResource(R.string.ing_not_running)
+    return { code -> when (code) { "not_resumable" -> notResumable; "not_running" -> notRunning; else -> code } }
+}
+
+@Composable
+private fun IngestionRow(ing: CatalogIngestion, parent: CatalogIngestion?, vm: CatalogViewModel, onDelete: () -> Unit, onPage: (Int) -> Unit) {
     val colors = WorkisTheme.colors
+    val state = ing.state
+    val words = doorWords()
+    // a section run is named by its title; the document it belongs to goes on the
+    // small line where a whole document shows its kind
+    val name = if (ing.isSection) firstNonEmpty(ing.sectionTitle, ing.label, ing.id) else firstNonEmpty(ing.label, ing.filename, ing.id)
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.Top) {
-            Text(ing.filename ?: ing.id.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text(name, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(6.dp))
             if (ing.isRunning) { CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp, color = colors.faint); Spacer(Modifier.width(6.dp)) }
             Text(
-                ingestionStatusText(ing.status), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp,
-                color = when (ing.status) { "review" -> SuccessGreen; "failed" -> colors.danger; else -> colors.faint },
+                ingestionStatusText(state), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp,
+                color = when (state) { "review" -> SuccessGreen; "failed" -> colors.danger; "stalled", "cancelled" -> Beige; else -> colors.faint },
             )
         }
         Text(
             listOfNotNull(
-                ing.kind?.takeIf { it.isNotEmpty() },
+                if (parent != null) firstNonEmpty(parent.label, parent.filename) else ing.kind?.takeIf { it.isNotEmpty() },
                 if (ing.currentPage != null && ing.totalPages != null) "· " + stringResource(R.string.page_word) + " ${ing.currentPage}/${ing.totalPages}" else null,
-                ing.brandHint?.takeIf { it.isNotEmpty() }?.let { "· $it" },
-            ).joinToString(" "),
+                if (!ing.isSection) ing.brandHint?.takeIf { it.isNotEmpty() }?.let { "· $it" } else null,
+            ).filter { it.isNotEmpty() }.joinToString(" "),
             fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint,
         )
+        // why it stopped, and what a resume retries first — in words, the colour above is never the only sign
+        if (state == "failed") ing.runError?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.danger) }
+        if (state == "stalled" && (ing.errorPages ?: 0) > 0) Text("${ing.errorPages} " + stringResource(R.string.ing_stalled_retry), fontSize = 12.sp, color = Beige)
+        val plan = ing.plan.orEmpty()
+        if (state == "plan" && plan.isNotEmpty() && ing.id != null) PlanChecklist(ing.id, plan, vm, words)
+        // the doors: open when the server's flag says so — never read off the status
+        if (ing.canResume == true || ing.canCancel == true || ing.canDelete == true) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                val id = ing.id.orEmpty()
+                if (ing.canResume == true) DoorButton(stringResource(R.string.ing_resume), Icons.Filled.PlayArrow, vm.doorBusy == null) { vm.resume(id, words) }
+                if (ing.canCancel == true) DoorButton(stringResource(R.string.ing_cancel), WorkisIcons.Cross, vm.doorBusy == null) { vm.cancel(id, words) }
+                if (ing.canDelete == true) DoorButton(stringResource(R.string.ing_delete), Icons.Filled.Delete, vm.doorBusy == null, destructive = true, onClick = onDelete)
+                if (vm.doorBusy == ing.id) CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp, color = colors.faint)
+            }
+        }
         val wf = ing.webFetch
         if (wf != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -680,7 +809,7 @@ private fun IngestionRow(ing: CatalogIngestion, vm: CatalogViewModel, onPage: (I
                     Text(stringResource(R.string.web_fetch_resume), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable { ing.id?.let { vm.webFetch(it, resume = true) } })
                 }
             }
-        } else if (ing.status == "review") {
+        } else if (state == "review") {
             Text(stringResource(R.string.web_fetch_start), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable { ing.id?.let { vm.webFetch(it, resume = false) } })
         }
         // the page map as a horizontal strip — each chip opens the source page
@@ -702,6 +831,57 @@ private fun IngestionRow(ing: CatalogIngestion, vm: CatalogViewModel, onPage: (I
                 }
             }
         }
+    }
+}
+
+/**
+ * The contents page as a checklist (`status: plan`, 2026-09-27): tick sections and
+ * read them — each becomes its own row under this document and runs in turn. A
+ * section that already has a row is drawn done, not tickable.
+ */
+@Composable
+private fun PlanChecklist(id: String, plan: List<CatalogPlanSection>, vm: CatalogViewModel, words: (String?) -> String?) {
+    val colors = WorkisTheme.colors
+    val sel = vm.ticked[id].orEmpty()
+    Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        plan.forEach { sec ->
+            val n = sec.n ?: 0
+            val taken = !sec.ingestionId.isNullOrEmpty()
+            val on = taken || n in sel
+            Row(
+                verticalAlignment = Alignment.Top,
+                modifier = Modifier.fillMaxWidth().clickable(enabled = !taken && vm.doorBusy == null) { vm.toggleSection(id, n) },
+            ) {
+                if (on) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = if (taken) colors.faint else colors.accentText, modifier = Modifier.size(18.dp))
+                else Box(Modifier.size(18.dp).padding(1.5.dp).border(1.5.dp, colors.faint, CircleShape))
+                Spacer(Modifier.width(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(firstNonEmpty(sec.title, "$n"), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (taken) colors.faint else colors.ink)
+                    val meta = listOfNotNull(
+                        sec.cats?.filter { it.isNotEmpty() }?.takeIf { it.isNotEmpty() }?.joinToString(" · "),
+                        if (sec.pageFrom != null && sec.pageTo != null) stringResource(R.string.page_word) + " ${sec.pageFrom}–${sec.pageTo}" else null,
+                        sec.pages?.let { "· $it " + stringResource(R.string.ing_pages_word) },
+                    )
+                    if (meta.isNotEmpty()) Text(meta.joinToString(" "), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            DoorButton(stringResource(R.string.ing_read_selected), WorkisIcons.Checklist, vm.doorBusy == null && sel.isNotEmpty()) { vm.readSections(id, all = false, words) }
+            DoorButton(stringResource(R.string.ing_read_all), WorkisIcons.Book, vm.doorBusy == null) { vm.readSections(id, all = true, words) }
+        }
+    }
+}
+
+/** A run door: icon + words, an accent link (destructive = danger); faint while another door is in flight. */
+@Composable
+private fun DoorButton(title: String, icon: ImageVector, enabled: Boolean, destructive: Boolean = false, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    val tint = if (!enabled) colors.faint else if (destructive) colors.danger else colors.accentText
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(enabled = enabled, onClick = onClick).padding(vertical = 4.dp)) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(title, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = tint)
     }
 }
 

@@ -67,19 +67,50 @@ data class CatalogPageMapEntry(
     val imgBad: Int? = null,
 )
 
+/** One section of a big document's contents page (`status == "plan"`); `ingestionId` is set once it has its own row. */
+@Serializable
+data class CatalogPlanSection(
+    val n: Int? = null,
+    val title: String? = null,
+    val cats: List<String>? = null,
+    val pageFrom: Int? = null,
+    val pageTo: Int? = null,
+    val pages: Int? = null,
+    @Serializable(with = FlexString::class) val ingestionId: String? = null,
+)
+
 @Serializable
 data class CatalogIngestion(
     @Serializable(with = FlexString::class) val id: String? = null,
+    /** The document's NAME (Django 2026-09-22) — never assembled from filename / kind / brandHint. */
+    val label: String? = null,
     val filename: String? = null,
     val kind: String? = null,
-    val status: String? = null, // created | running | review | failed
+    val status: String? = null, // created | running | review | failed | plan | queued | cancelled
+    /** `status`, or `stalled` when a running row's heartbeat is > 3 min old (2026-09-27) — the label and the polling read THIS. */
+    val effectiveStatus: String? = null,
+    // which doors are open — the server's word, never derived from the status
+    val canResume: Boolean? = null,
+    val canCancel: Boolean? = null,
+    val canDelete: Boolean? = null,
     val currentPage: Int? = null,
     val totalPages: Int? = null,
+    val errorPages: Int? = null, // pages that failed — retried first on resume
+    val heartbeatAt: String? = null,
+    val runError: String? = null, // why a failed run failed (server-localized)
+    /** A SECTION run of a big document: `parentId` = the document, `sectionTitle` = the row's name. */
+    @Serializable(with = FlexString::class) val parentId: String? = null,
+    val sectionTitle: String? = null,
+    val plan: List<CatalogPlanSection>? = null,
     val brandHint: String? = null,
     val webFetch: CatalogWebFetch? = null,
     val pageMap: List<CatalogPageMapEntry>? = null,
 ) {
-    val isRunning get() = status == "created" || status == "running"
+    /** `effectiveStatus` first, the raw status for a row from before the field existed. */
+    val state: String get() = effectiveStatus?.takeIf { it.isNotEmpty() } ?: status.orEmpty()
+    /** Pages are still being read (or wait their turn) — keep polling. */
+    val isRunning get() = state == "created" || state == "running" || state == "queued"
+    val isSection get() = !parentId.isNullOrEmpty()
 }
 
 @Serializable
@@ -137,6 +168,58 @@ object CatalogWebSerializer : KSerializer<CatalogWeb> {
     override fun serialize(encoder: Encoder, value: CatalogWeb) = encoder.encodeString(value.url ?: value.confidence.orEmpty())
 }
 
+/** One attribute of a variant (Django 2026-09-27: every attribute is shown, no filters). */
+data class CatalogAttr(val label: String, val value: String)
+
+/**
+ * `live[].attrs` arrives as ready rows `[{label, value}]` in source order; the
+ * family detail's `variants[].attrs` is still the raw dictionary (snake_case
+ * keys, any scalar value) — read here as rows too, a snake_case key spaced
+ * (`size_mm` → "size mm"), a page header kept as printed. kotlinx keeps a JSON
+ * object's key order, so the dictionary keeps the server's order here (iOS
+ * loses it and sorts). Anything else decodes to no rows.
+ */
+@Serializable(with = CatalogAttrsSerializer::class)
+data class CatalogAttrs(val rows: List<CatalogAttr> = emptyList())
+
+object CatalogAttrsSerializer : KSerializer<CatalogAttrs> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("CatalogAttrs", PrimitiveKind.STRING)
+
+    /** A value as printed: "15.2", "3X", "238x370x87"; a bool as ✓ / ✗. */
+    private fun scalar(el: JsonElement?): String? {
+        val p = el as? JsonPrimitive ?: return null
+        if (p is JsonNull) return null
+        if (!p.isString) {
+            p.booleanOrNull?.let { return if (it) "✓" else "✗" }
+            p.content.toDoubleOrNull()?.let { return WorkisMoney.qty(it) }
+        }
+        return p.content
+    }
+
+    override fun deserialize(decoder: Decoder): CatalogAttrs {
+        val json = decoder as? JsonDecoder ?: return CatalogAttrs()
+        val rows = when (val el = json.decodeJsonElement()) {
+            is JsonArray -> el.mapNotNull { r ->
+                val o = r as? JsonObject ?: return@mapNotNull null
+                val l = scalar(o["label"])?.trim().orEmpty()
+                val v = scalar(o["value"])?.trim().orEmpty()
+                if (l.isEmpty() || v.isEmpty()) null else CatalogAttr(l, v)
+            }
+            is JsonObject -> el.mapNotNull { (k, raw) ->
+                val key = k.trim()
+                val v = scalar(raw)?.trim().orEmpty()
+                if (key.isEmpty() || v.isEmpty()) return@mapNotNull null
+                val isSnake = key.all { it.isLowerCase() || it.isDigit() || it == '_' }
+                CatalogAttr(if (isSnake) key.replace('_', ' ') else key, v)
+            }
+            else -> emptyList()
+        }
+        return CatalogAttrs(rows)
+    }
+
+    override fun serialize(encoder: Encoder, value: CatalogAttrs) = encoder.encodeString(value.rows.joinToString { "${it.label}: ${it.value}" })
+}
+
 @Serializable
 data class CatalogFamilyRow(
     @Serializable(with = FlexString::class) val id: String? = null,
@@ -174,6 +257,7 @@ data class CatalogLiveRow(
     val imgSrc: String? = null,
     val web: CatalogWeb? = null,
     val webPasted: Boolean? = null,
+    val attrs: CatalogAttrs? = null, // every attribute of the variant, ready rows (2026-09-27)
 )
 
 @Serializable
@@ -188,6 +272,7 @@ data class CatalogVariant(
     val priceOnRequest: Boolean? = null,
     val kind: String? = null,
     @Serializable(with = FlexString::class) val row: String? = null, // "" or an int
+    val attrs: CatalogAttrs? = null, // the raw dictionary today — see CatalogAttrs
 )
 
 @Serializable
@@ -243,8 +328,20 @@ data class CatalogWebProgress(val success: Boolean? = null, val error: String? =
 @Serializable
 data class CatalogTeachResult(val success: Boolean? = null, val error: String? = null, val count: Int? = null)
 
+/**
+ * `POST upload/` (2026-09-27): `resumed` = the same file (sha256) was uploaded
+ * before and ITS run continues — no new row; `planned` = a multi-section
+ * document waits for the section choice.
+ */
 @Serializable
-data class CatalogUploadResult(val success: Boolean? = null, val error: String? = null, val message: String? = null, @Serializable(with = FlexString::class) val ingestionId: String? = null)
+data class CatalogUploadResult(
+    val success: Boolean? = null,
+    val error: String? = null,
+    val message: String? = null,
+    @Serializable(with = FlexString::class) val ingestionId: String? = null,
+    val resumed: Boolean? = null,
+    val planned: Boolean? = null,
+)
 
 /** GET console/catalog/sellers/ (Phase C, 2026-09-16): role 3 every seller with a seat, role 4 only the sellers with an active helper grant. */
 @Serializable

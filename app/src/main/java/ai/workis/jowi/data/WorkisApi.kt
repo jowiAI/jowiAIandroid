@@ -393,6 +393,20 @@ interface WorkisApi {
     @POST("workis/seller/catalog/ingestions/{id}/web/")
     suspend fun catalogIngestionWebStart(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject, @Query("seller") seller: String? = null): CatalogWebProgress
 
+    // the run doors (2026-09-27) — shown only by the row's can* flag; 409 `{error: code}` (resume / cancel) or a server sentence (delete)
+    @POST("workis/seller/catalog/ingestions/{id}/resume/")
+    suspend fun catalogIngestionResume(@Path("id") id: String, @Query("seller") seller: String? = null): SimpleResult
+
+    @POST("workis/seller/catalog/ingestions/{id}/cancel/")
+    suspend fun catalogIngestionCancel(@Path("id") id: String, @Query("seller") seller: String? = null): SimpleResult
+
+    @POST("workis/seller/catalog/ingestions/{id}/delete/")
+    suspend fun catalogIngestionDelete(@Path("id") id: String, @Query("seller") seller: String? = null): SimpleResult
+
+    /** `{sections:[n…]}` | `{all:true}` → each ticked section becomes its own child row. */
+    @POST("workis/seller/catalog/ingestions/{id}/sections/")
+    suspend fun catalogIngestionSections(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject, @Query("seller") seller: String? = null): SimpleResult
+
     /** `{success, family:{…}}` on prod — decoded by `decodeFamily`. */
     @GET("workis/seller/catalog/families/{id}/")
     suspend fun catalogFamily(@Path("id") id: String, @Query("seller") seller: String? = null): kotlinx.serialization.json.JsonObject

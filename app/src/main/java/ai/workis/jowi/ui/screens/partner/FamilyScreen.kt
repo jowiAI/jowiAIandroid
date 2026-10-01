@@ -356,16 +356,20 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
                 FormSection(stringResource(R.string.variants_title).uppercase() + " · ${variants.size}") {
                     variants.forEachIndexed { i, v ->
                         SwipeDelete(stringResource(R.string.delete_row), { v.code?.let { vm.deleteRow(it) } }) {
-                            Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth().background(colors.surface).clickable { editVariant = v }.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(v.label ?: v.code ?: "—", fontSize = 13.sp, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                    Text(v.code.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
+                            Column(Modifier.fillMaxWidth().background(colors.surface).clickable { editVariant = v }.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(verticalAlignment = Alignment.Top) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(v.label ?: v.code ?: "—", fontSize = 13.sp, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        Text(v.code.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
+                                    }
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        if (v.priceOnRequest == true || v.price == null) stringResource(R.string.price_on_request) else WorkisMoney.text(v.price, v.currency),
+                                        fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink,
+                                    )
                                 }
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    if (v.priceOnRequest == true || v.price == null) stringResource(R.string.price_on_request) else WorkisMoney.text(v.price, v.currency),
-                                    fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink,
-                                )
+                                // every attribute, under the price, as the web draws it
+                                v.attrs?.rows?.takeIf { it.isNotEmpty() }?.let { AttrLines(it) }
                             }
                         }
                         Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
