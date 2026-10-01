@@ -532,6 +532,10 @@ interface WorkisApi {
     @POST("workis/lists/{id}/award/")
     suspend fun listAward(@Path("id") id: String): AwardResult
 
+    /** `{selections: {itemId: {skip: true}}}` leaves those items on the list (2026-10-01); at least one is ordered (400). */
+    @POST("workis/lists/{id}/award/")
+    suspend fun listAwardSelections(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): AwardResult
+
     @GET("workis/seller/invitations/")
     suspend fun sellerInvitations(): SellerInvitations
 
@@ -544,6 +548,14 @@ interface WorkisApi {
 
     @POST("workis/seller/invitations/{id}/quote/revise/")
     suspend fun sellerQuoteRevise(@Path("id") id: String): SimpleResult
+
+    /** The quote form as typed, kept SERVER-side (a colleague seat sees it) → `{draft, at}`; the stored draft is snake_case. */
+    @GET("workis/seller/invitations/{id}/quote/draft/")
+    suspend fun sellerQuoteDraft(@Path("id") id: String): kotlinx.serialization.json.JsonObject
+
+    /** Autosave with the send body; Send clears it server-side. */
+    @POST("workis/seller/invitations/{id}/quote/draft/")
+    suspend fun sellerQuoteDraftSave(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): kotlinx.serialization.json.JsonObject
 
     /** Jowi's rewrite of a note / letter — a suggestion the user applies or ignores (never automatic). */
     @POST("workis/text/polish/")

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +49,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -64,6 +68,8 @@ import ai.workis.jowi.data.NoteBody
 import ai.workis.jowi.data.PLAssignment
 import ai.workis.jowi.data.PLCandidate
 import ai.workis.jowi.data.PLItem
+import ai.workis.jowi.data.PLProposal
+import ai.workis.jowi.data.PLQuoteTerm
 import ai.workis.jowi.data.PLSearchResult
 import ai.workis.jowi.data.PLSendRow
 import ai.workis.jowi.data.PLSuggestion
@@ -91,6 +97,8 @@ import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 class ListDetailViewModel : ViewModel() {
     var detail by mutableStateOf<PurchaseListDetail?>(null)
@@ -168,7 +176,14 @@ class ListDetailViewModel : ViewModel() {
         }
     }
     fun chase() = act { Graph.api.listChase(id!!).let { true to (it.message ?: it.error) } }
-    fun award() = act { Graph.api.listAward(id!!).let { (it.success != false) to (it.message ?: it.error) } }
+    /** `skips` = the unticked items, sent as `selections = {itemId: {skip: true}}`; the rest get the server's proposal. */
+    fun award(skips: Set<String>, onAwarded: () -> Unit) = act {
+        val sel = JsonObject(skips.associateWith { JsonObject(mapOf("skip" to JsonPrimitive(true))) })
+        Graph.api.listAwardSelections(id!!, if (sel.isEmpty()) JsonObject(emptyMap()) else jsonBody("selections" to sel)).let {
+            if (!it.orderIds.isNullOrEmpty()) onAwarded()
+            (it.success != false) to (it.message ?: it.error)
+        }
+    }
     fun rfqPdfUrl(sellerId: String?): String = WORKIS_BASE_URL + "workis/lists/$id/rfq-pdf/" + (sellerId?.let { "?seller=$it" } ?: "")
 }
 
@@ -200,6 +215,8 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
     var showAdd by remember { mutableStateOf(false) }
     var showSend by remember { mutableStateOf(false) }
     var showAward by remember { mutableStateOf(false) }
+    // items the buyer unticked before the award (2026-10-01); every other item is ordered as proposed
+    var awardSkips by remember { mutableStateOf(setOf<String>()) }
     var rfqPdf by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(d?.isWorking) { while (vm.detail?.isWorking == true) { delay(4_000); vm.load() } }
 
@@ -243,7 +260,7 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
                         ItemsSegment(d, vm, onPick = { pickItem = it }, onAdd = { showAdd = true })
                         ChatInvitesSection(d, onThread)
                     }
-                    else RfqSegment(d, vm, onRfqPdf = { rfqPdf = vm.rfqPdfUrl(it) }, onAward = { showAward = true })
+                    else RfqSegment(d, vm, awardSkips, onToggleSkip = { awardSkips = if (it in awardSkips) awardSkips - it else awardSkips + it }, onRfqPdf = { rfqPdf = vm.rfqPdfUrl(it) }, onAward = { showAward = true })
                 }
                 vm.error != null -> Text(vm.error.orEmpty(), color = colors.danger, fontSize = 13.sp)
                 else -> Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) { WorkisMark(size = 26, breathing = true) }
@@ -262,7 +279,7 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
             containerColor = colors.surface,
             title = { Text(stringResource(R.string.award_action), color = colors.ink) },
             text = { Text(stringResource(R.string.award_confirm), fontSize = 14.sp, lineHeight = 20.sp, color = colors.muted) },
-            confirmButton = { TextButton(onClick = { showAward = false; vm.award() }) { Text(stringResource(R.string.award_action), color = colors.accentText, fontWeight = FontWeight.SemiBold) } },
+            confirmButton = { TextButton(onClick = { showAward = false; vm.award(awardSkips.filter { s -> d?.proposal?.assignments.orEmpty().any { it.itemId == s } }.toSet()) { awardSkips = emptySet() } }) { Text(stringResource(R.string.award_action), color = colors.accentText, fontWeight = FontWeight.SemiBold) } },
             dismissButton = { TextButton(onClick = { showAward = false }) { Text(stringResource(R.string.cancel), color = colors.muted) } },
         )
     }
@@ -457,7 +474,7 @@ private fun NoteLetterSection(d: PurchaseListDetail, vm: ListDetailViewModel) {
 // ---------- Teklif süreci ----------
 
 @Composable
-private fun RfqSegment(d: PurchaseListDetail, vm: ListDetailViewModel, onRfqPdf: (sellerId: String?) -> Unit, onAward: () -> Unit) {
+private fun RfqSegment(d: PurchaseListDetail, vm: ListDetailViewModel, awardSkips: Set<String>, onToggleSkip: (String) -> Unit, onRfqPdf: (sellerId: String?) -> Unit, onAward: () -> Unit) {
     val colors = WorkisTheme.colors
     val groups = sendGroups(d)
     val invited = groups.count { it.key != "~uncovered" }
@@ -502,7 +519,7 @@ private fun RfqSegment(d: PurchaseListDetail, vm: ListDetailViewModel, onRfqPdf:
         }
         Text(stringResource(R.string.virtual_sub), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
     }
-    ProposalSection(d, vm, onAward)
+    ProposalSection(d, vm, awardSkips, onToggleSkip, onAward)
     val orders = d.orders.orEmpty()
     if (orders.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Eyebrow(stringResource(R.string.orders_title).uppercase())
@@ -556,18 +573,67 @@ private fun SendRowLine(r: PLSendRow, uncovered: Boolean) {
     }
 }
 
+/**
+ * The quote's term sheet for one seller block: the quote whose seller is the block's
+ * (through the seller totals' label), or the only quote when there is one seller.
+ */
+private fun termSheet(d: PurchaseListDetail, p: PLProposal, seller: String, single: Boolean): List<PLQuoteTerm>? {
+    val quotes = p.quotes?.takeIf { it.isNotEmpty() } ?: return null
+    val sid = (p.sellerTotals ?: d.sellerTotals)?.firstOrNull { it.lbl?.short == seller }?.sellerId
+    val sheet = quotes.firstOrNull { sid != null && it.seller == sid } ?: (if (single && quotes.size == 1) quotes[0] else null)
+    return sheet?.terms
+}
+
+/**
+ * The term sheet the buyer reads next to the price (2026-09-30), registry order: a term
+ * settled in the yazışma wears the kiremit frame, a conflict the warning colour — each with
+ * its words, never the colour alone.
+ */
 @Composable
-private fun ProposalSection(d: PurchaseListDetail, vm: ListDetailViewModel, onAward: () -> Unit) {
+private fun TermSheet(terms: List<PLQuoteTerm>) {
+    val colors = WorkisTheme.colors
+    Column(Modifier.padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        terms.forEach { t ->
+            val conflict = t.conflict == true
+            val fromChat = t.isFromChat
+            val frame = when {
+                fromChat -> Modifier.border(1.dp, Kiremit500.copy(alpha = 0.55f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp)
+                conflict -> Modifier.border(1.dp, Beige.copy(alpha = 0.7f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp)
+                else -> Modifier
+            }
+            Row(frame, verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text((t.label ?: t.key.orEmpty()) + ":", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, modifier = Modifier.padding(top = 2.dp))
+                Text(
+                    buildString {
+                        append(t.text?.takeIf { it.isNotEmpty() } ?: "—")
+                        if (conflict) append(" · ").append(stringResource(R.string.term_conflict))
+                        else if (fromChat) append(" · ").append(stringResource(R.string.term_from_chat))
+                    },
+                    fontSize = 12.sp, lineHeight = 16.sp, color = if (conflict) Beige else colors.ink, modifier = Modifier.weight(1f, fill = false),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProposalSection(d: PurchaseListDetail, vm: ListDetailViewModel, awardSkips: Set<String>, onToggleSkip: (String) -> Unit, onAward: () -> Unit) {
     val colors = WorkisTheme.colors
     val p = d.proposal
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Eyebrow(stringResource(if (d.list?.status == "ordered") R.string.awarded_title else R.string.proposal_title).uppercase())
         SurfaceCard {
             if (p != null && ((p.nQuotes ?: 0) > 0 || !p.assignments.isNullOrEmpty())) {
-                p.assignments.orEmpty().groupBy { it.sellerName }.toSortedMap().forEach { (seller, rows) ->
+                val bySeller = p.assignments.orEmpty().groupBy { it.sellerName }.toSortedMap()
+                bySeller.forEach { (seller, rows) ->
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
                         Text(seller.uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 1.sp, color = colors.accentText)
-                        rows.forEach { AssignmentRow(it) }
+                        rows.forEach { a ->
+                            // a tick per item while quoting (2026-10-01): unticked = left on the list, not ordered
+                            val ticked = a.itemId?.let { it !in awardSkips } ?: true
+                            AssignmentRow(a, tick = if (d.isQuoting && a.itemId != null) ticked else null, tickEnabled = !vm.busy) { a.itemId?.let(onToggleSkip) }
+                        }
+                        termSheet(d, p, seller, single = bySeller.size == 1)?.takeIf { it.isNotEmpty() }?.let { TermSheet(it) }
                     }
                 }
                 p.totalsByCurrency?.takeIf { it.isNotEmpty() }?.let { totals ->
@@ -575,9 +641,12 @@ private fun ProposalSection(d: PurchaseListDetail, vm: ListDetailViewModel, onAw
                 }
                 p.uncovered?.takeIf { it.isNotEmpty() }?.let { u -> Text(stringResource(R.string.uncovered_group) + ": " + u.mapNotNull { it.name }.joinToString(", "), fontSize = 12.sp, color = colors.faint) }
                 if (d.isQuoting) {
-                    Row(Modifier.fillMaxWidth().clickable(enabled = !vm.busy, onClick = onAward).padding(vertical = 8.dp), horizontalArrangement = Arrangement.Center) {
+                    // at least one item must be ordered (400 otherwise)
+                    val anyTicked = p.assignments.orEmpty().any { a -> a.itemId?.let { it !in awardSkips } ?: true }
+                    val enabled = !vm.busy && anyTicked
+                    Row(Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onAward).padding(vertical = 8.dp), horizontalArrangement = Arrangement.Center) {
                         if (vm.busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = colors.accentText)
-                        else Text("✓ " + stringResource(R.string.award_action), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = colors.accentText)
+                        else Text("✓ " + stringResource(R.string.award_action), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (enabled) colors.accentText else colors.faint)
                     }
                 }
             } else {
@@ -587,10 +656,22 @@ private fun ProposalSection(d: PurchaseListDetail, vm: ListDetailViewModel, onAw
     }
 }
 
+/** `tick` null = no tick (not quoting); true/false = ordered at award or left on the list. */
 @Composable
-private fun AssignmentRow(a: PLAssignment) {
+private fun AssignmentRow(a: PLAssignment, tick: Boolean? = null, tickEnabled: Boolean = true, onToggle: () -> Unit = {}) {
     val colors = WorkisTheme.colors
     Row(verticalAlignment = Alignment.Top) {
+        if (tick != null) {
+            Box(
+                Modifier.padding(top = 1.dp, end = 10.dp).size(20.dp)
+                    .toggleable(value = tick, enabled = tickEnabled, role = Role.Checkbox, onValueChange = { onToggle() })
+                    .semantics { contentDescription = a.name ?: a.itemName.orEmpty() },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (tick) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(20.dp))
+                else Box(Modifier.size(17.dp).border(1.5.dp, colors.faint, CircleShape))
+            }
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             // the quoted PRODUCT leads; the buyer's generic name follows as "İstenen: …"
             val product = a.name?.takeIf { it.isNotEmpty() && it != a.itemName }

@@ -1,5 +1,6 @@
 package ai.workis.jowi.data
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import java.text.NumberFormat
@@ -278,6 +279,36 @@ data class PLSellerTotal(@Serializable(with = FlexString::class) val sellerId: S
 @Serializable
 data class PLUncovered(@Serializable(with = FlexString::class) val itemId: String? = null, val name: String? = null, val qty: Double? = null, val unit: String? = null)
 
+/**
+ * One term of a quote's sheet (2026-09-30), in registry order — what the buyer reads next
+ * to the price. `fromChat` = settled in the yazışma (kiremit frame); `conflict` = the sheet
+ * and the yazışma disagree (warning). The proposal is passed through as computed, so the
+ * snake_case spelling is read beside camelCase.
+ */
+@Serializable
+data class PLQuoteTerm(
+    val key: String? = null,
+    val label: String? = null,
+    @Serializable(with = FlexString::class) val text: String? = null,
+    val fromChat: Boolean? = null,
+    @SerialName("from_chat") val fromChatSnake: Boolean? = null,
+    val conflict: Boolean? = null,
+) {
+    val isFromChat get() = (fromChat ?: fromChatSnake) == true
+}
+
+/** A quote's term sheet on the comparison — matched to a seller block through `sellerId`. */
+@Serializable
+data class PLQuoteSheet(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    @Serializable(with = FlexString::class) val sellerId: String? = null,
+    @SerialName("seller_id") @Serializable(with = FlexString::class) val sellerIdSnake: String? = null,
+    val number: String? = null,
+    val terms: List<PLQuoteTerm>? = null,
+) {
+    val seller get() = sellerId ?: sellerIdSnake
+}
+
 @Serializable
 data class PLProposal(
     val assignments: List<PLAssignment>? = null,
@@ -285,6 +316,7 @@ data class PLProposal(
     val totalsByCurrency: Map<String, Double>? = null,
     val uncovered: List<PLUncovered>? = null,
     val nQuotes: Int? = null,
+    val quotes: List<PLQuoteSheet>? = null, // each quote's term sheet (2026-09-30)
 )
 
 @Serializable
@@ -408,8 +440,20 @@ data class AwardResult(val success: Boolean? = null, val orderIds: List<@Seriali
 @Serializable
 data class InvBuyer(val short: String? = null, val city: String? = null, val hover: String? = null)
 
+/**
+ * `listPrice` (2026-09-30) = the seller's own catalogue price for this candidate — it
+ * pre-fills an EMPTY unit price on a single-candidate item, never on alternatives.
+ * `discountPct` (2026-10-01) = the seller's usual rate on it, a percentage (12 = 12 %).
+ */
 @Serializable
-data class SellerProduct(val sku: String? = null, val name: String? = null)
+data class SellerProduct(val sku: String? = null, val name: String? = null, val listPrice: Double? = null, val discountPct: Double? = null)
+
+/**
+ * The terms born with the quote (2026-09-30), frozen at award for both seats.
+ * `warrantyMonths` 0 = "garanti yok", null = not stated; empty `returnsText` = platform standard.
+ */
+@Serializable
+data class QuoteTerms(val packaging: String? = null, val warrantyMonths: Int? = null, val warrantyText: String? = null, val returnsText: String? = null)
 
 /**
  * `requirements` = the buyer's demands for THIS item ("1 inç", "yeşil"); `alts` are the
@@ -424,8 +468,17 @@ data class InvListItem(
     val requirements: List<String>? = null,
 )
 
+/** `listPrice` + `discountPct` echo what the line was priced against (2026-10-01). */
 @Serializable
-data class QuoteLine(val sku: String? = null, val name: String? = null, val qty: Double? = null, val unitPrice: Double? = null, val amount: Double? = null)
+data class QuoteLine(
+    val sku: String? = null,
+    val name: String? = null,
+    val qty: Double? = null,
+    val unitPrice: Double? = null,
+    val amount: Double? = null,
+    val listPrice: Double? = null,
+    val discountPct: Double? = null,
+)
 
 @Serializable
 data class SellerQuote(
@@ -445,6 +498,7 @@ data class SellerQuote(
     val lines: List<QuoteLine>? = null,
     val total: Double? = null,
     val pdfUrl: String? = null,
+    val terms: QuoteTerms? = null, // echoes what was sent (2026-09-30)
 )
 
 @Serializable
@@ -489,6 +543,8 @@ data class SellerInvitation(
     val isListRfq: Boolean? = null,
     val shortlist: List<SellerProduct>? = null,
     val listItems: List<InvListItem>? = null,
+    /** The request's own delivery term (the list's project site, else the buyer's address; 2026-09-30). */
+    val deliveryPlace: String? = null,
     val defaultLetter: String? = null,
     val rfqPdfUrl: String? = null,
     val quote: SellerQuote? = null,
@@ -525,6 +581,36 @@ object WorkisMoney {
         if (value == null) return ""
         return if (value == Math.rint(value)) value.toLong().toString() else value.toString()
     }
+
+    /** A percentage figure (12.5 = 12,5 %) in the app locale, one decimal at most: "12", "5,5". */
+    fun pct(value: Double?): String {
+        if (value == null) return ""
+        val f = NumberFormat.getNumberInstance(
+            if (ai.workis.jowi.Graph.language.value == "en") Locale.US else Locale("tr", "TR"),
+        ).apply { minimumFractionDigits = 0; maximumFractionDigits = 1 }
+        return f.format(java.math.BigDecimal.valueOf(value).setScale(1, java.math.RoundingMode.HALF_UP))
+    }
+
+    /**
+     * A typed amount with either decimal mark ("1.234,50", "1234.5", "12,5") → BigDecimal;
+     * the last mark is the decimal one, the other is a thousands separator. Null when not a number.
+     */
+    fun parse(text: String?): java.math.BigDecimal? {
+        var s = text.orEmpty().trim().replace(" ", "")
+        if (s.isEmpty()) return null
+        val lastDot = s.lastIndexOf('.')
+        val lastComma = s.lastIndexOf(',')
+        s = when {
+            lastDot >= 0 && lastComma >= 0 ->
+                if (lastComma > lastDot) s.replace(".", "").replace(',', '.') else s.replace(",", "")
+            else -> s.replace(',', '.')
+        }
+        return s.toBigDecimalOrNull()
+    }
+
+    /** A BigDecimal as the plain figure a field holds: "88.5", "100" (no exponent, no trailing zeros). */
+    fun plain(value: java.math.BigDecimal): String =
+        value.stripTrailingZeros().let { if (it.scale() < 0) it.setScale(0) else it }.toPlainString()
 }
 
 /** Strips the sanitized HTML of the RFQ letter into readable lines. */

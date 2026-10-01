@@ -1,6 +1,23 @@
 package ai.workis.jowi.ui.screens.partner
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import ai.workis.jowi.data.WORKIS_BASE_URL
+import ai.workis.jowi.ui.components.FormRow
+import ai.workis.jowi.ui.components.FormSection
+import java.math.BigDecimal
+import java.math.RoundingMode
+import kotlinx.coroutines.delay
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.booleanOrNull
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -121,6 +138,21 @@ class QuotesViewModel : ViewModel() {
         return if (r != null && looksLikePdf(r)) r to null else null to (err ?: statusText())
     }
 
+    /**
+     * The server-side draft (`quote/draft/`, 2026-09-30). It is NOT on the invitation payload,
+     * so every open asks for it; the stored draft is snake_case (the reader takes both).
+     */
+    suspend fun draft(id: String): JsonObject? =
+        partnerCall(lang) { Graph.api.sellerQuoteDraft(id) }.first?.get("draft") as? JsonObject
+
+    /** Autosave with the send body — in the model's scope, so a close-without-Send still lands. */
+    fun saveDraft(id: String, body: JsonObject, onSaved: () -> Unit) {
+        viewModelScope.launch {
+            val (r, _) = partnerCall(lang) { Graph.api.sellerQuoteDraftSave(id, body) }
+            if (r != null && (r["success"] as? JsonPrimitive)?.booleanOrNull != false) onSaved()
+        }
+    }
+
     suspend fun polish(text: String): Pair<String?, String?> {
         val (r, err) = partnerCall(lang) { Graph.api.textPolish(TextBody(text)) }
         val s = r?.suggestion?.takeIf { it.isNotEmpty() }
@@ -187,6 +219,7 @@ private fun InvitationCard(inv: SellerInvitation, onCompose: () -> Unit, onPdf: 
             Spacer(Modifier.weight(1f))
             inv.createdAt?.let { Text(it.take(10), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
         }
+        DeliveryPlaceLine(inv.deliveryPlace)
         val items = inv.listItems.orEmpty()
         if (items.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items.forEach { li -> ListItemBlock(li) }
@@ -246,6 +279,22 @@ private fun ListItemBlock(li: InvListItem) {
     }
 }
 
+/** The sent quote's PDF through the token-auth door (`quotes/{id}/pdf/`); the web `pdfUrl` when there is no id. */
+private fun quotePdfUrl(q: SellerQuote): String? =
+    q.id?.takeIf { it.isNotEmpty() }?.let { WORKIS_BASE_URL + "workis/quotes/$it/pdf/" } ?: q.pdfUrl?.takeIf { it.isNotEmpty() }
+
+/** "Teslim yeri: …" with a pin — the request's own delivery term (2026-09-30). */
+@Composable
+private fun DeliveryPlaceLine(place: String?) {
+    val p = place?.takeIf { it.isNotEmpty() } ?: return
+    val colors = WorkisTheme.colors
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(Icons.Filled.Place, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(stringResource(R.string.delivery_place_label) + ": " + p, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, maxLines = 2)
+    }
+}
+
 @Composable
 private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onPdf: (String, String) -> Unit, onRevise: () -> Unit) {
     val colors = WorkisTheme.colors
@@ -254,7 +303,7 @@ private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onPdf: (String, St
             Text("✓ " + stringResource(R.string.quote_sent), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = SuccessGreen)
             q.number?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
             Spacer(Modifier.weight(1f))
-            q.pdfUrl?.takeIf { it.isNotEmpty() }?.let { url -> val t = stringResource(R.string.quote_pdf); Text("↗ $t", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable { onPdf(url, t) }) }
+            quotePdfUrl(q)?.let { url -> val t = stringResource(R.string.quote_pdf); Text("↗ $t", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable { onPdf(url, t) }) }
         }
         q.lines.orEmpty().forEach { l ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -262,6 +311,13 @@ private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onPdf: (String, St
                 Text(WorkisMoney.qty(l.qty) + " × " + WorkisMoney.text(l.unitPrice, null), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
                 Spacer(Modifier.width(8.dp))
                 Text(WorkisMoney.text(l.amount, null), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
+            }
+            // what the line was priced against (2026-10-01): "liste X · −Y %"
+            l.listPrice?.let { lp ->
+                Text(
+                    stringResource(R.string.quote_list_word) + " " + WorkisMoney.text(lp, null) + (l.discountPct?.let { " · −" + WorkisMoney.pct(it) + " %" } ?: ""),
+                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint,
+                )
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -274,6 +330,12 @@ private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onPdf: (String, St
                 fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, modifier = Modifier.weight(1f),
             )
             Text(stringResource(R.string.total_label) + ": " + WorkisMoney.text(q.total ?: q.price, q.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
+        }
+        // the terms the quote was sent with (2026-09-30), one muted line
+        q.terms?.let { tm ->
+            val warranty = tm.warrantyMonths?.let { if (it == 0) stringResource(R.string.warranty_none) else "$it " + stringResource(R.string.months_word) }
+            val parts = listOf(tm.packaging, warranty, tm.warrantyText, tm.returnsText).filterNotNull().filter { it.isNotEmpty() }
+            if (parts.isNotEmpty()) Text(parts.joinToString(" · "), fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, maxLines = 3)
         }
         if (inv.order == null && inv.lost != true && inv.rfqStatus != "awarded") {
             Text(stringResource(R.string.quote_revise), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable(onClick = onRevise))
@@ -324,7 +386,51 @@ private fun OrderLine(icon: androidx.compose.ui.graphics.vector.ImageVector, tex
 
 // ---------- Composer ----------
 
-private data class PriceRow(val sku: String, val name: String, val group: String?, val qty: Double?, val unit: String?)
+/**
+ * One priceable product of mine. `listPrice` = my catalogue price (2026-09-30), `discountPct`
+ * my usual rate on it (2026-10-01); `single` = the item's ONLY candidate — the one that pre-fills.
+ */
+private data class PriceRow(
+    val sku: String, val name: String, val group: String?, val qty: Double?, val unit: String?,
+    val listPrice: Double? = null, val discountPct: Double? = null, val single: Boolean = false,
+) {
+    val list: BigDecimal? get() = listPrice?.takeIf { it > 0 }?.let { BigDecimal.valueOf(it) }
+}
+
+private val HUNDRED = BigDecimal(100)
+
+/** Moving the discount sets the unit price: list × (1 − pct/100), 2 decimals (BigDecimal, never Double). */
+private fun unitFromDiscount(list: BigDecimal, pct: BigDecimal): String =
+    WorkisMoney.plain(list.multiply(BigDecimal.ONE - pct.divide(HUNDRED)).setScale(2, RoundingMode.HALF_UP))
+
+/** Typing a unit price writes the discount it implies: (1 − unit/list) × 100, 1 decimal, never below 0. */
+private fun discountFromUnit(list: BigDecimal, unit: BigDecimal): String =
+    WorkisMoney.plain((BigDecimal.ONE - unit.divide(list, 10, RoundingMode.HALF_UP)).multiply(HUNDRED).max(BigDecimal.ZERO).setScale(1, RoundingMode.HALF_UP))
+
+/**
+ * The catalogue price pre-fills an EMPTY unit price on a single-candidate item only — on
+ * alternatives the seller says which one is the quote. The usual rate applies at once.
+ * → (unit price, discount text or null).
+ */
+private fun prefillOf(r: PriceRow): Pair<String, String?>? {
+    if (!r.single) return null
+    val list = r.list ?: return null
+    val pct = r.discountPct?.takeIf { it > 0 }?.let { BigDecimal.valueOf(it) }
+    return if (pct != null) unitFromDiscount(list, pct) to WorkisMoney.plain(pct) else WorkisMoney.plain(list) to null
+}
+
+/** A draft value as text — numbers and strings alike, the first spelling present; JSON null and "" are absent. */
+private fun JsonObject.text(vararg keys: String): String? {
+    for (k in keys) {
+        val v = this[k] as? JsonPrimitive ?: continue
+        if (v is JsonNull) continue
+        v.content.takeIf { it.isNotEmpty() }?.let { return it }
+    }
+    return null
+}
+
+/** A typed figure as the API reads it (dot decimal); left as typed when it is not a number. */
+private fun apiNumber(text: String): String = WorkisMoney.parse(text)?.let { WorkisMoney.plain(it) } ?: text
 
 /** The quote composer — own products only (the competitor wall is the server's); Jowi's polish is a suggestion the user applies (§0). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -337,40 +443,139 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
     if (inv == null) { onClose(); return }
     val rows = remember(inv) {
         val li = inv.listItems.orEmpty()
-        if (li.isNotEmpty()) li.flatMap { item -> item.alts.orEmpty().mapNotNull { a -> a.sku?.let { PriceRow(it, a.name ?: it, item.itemName, item.qty, item.unit) } } }
+        if (li.isNotEmpty()) li.flatMap { item ->
+            val alts = item.alts.orEmpty()
+            alts.mapNotNull { a -> a.sku?.let { PriceRow(it, a.name ?: it, item.itemName, item.qty, item.unit, a.listPrice, a.discountPct, single = alts.size == 1) } }
+        }
         else inv.shortlist.orEmpty().mapNotNull { p -> p.sku?.let { PriceRow(it, p.name ?: it, null, inv.qty, null) } }
     }
     var tab by rememberSaveable { mutableStateOf(0) }
-    val prices = remember { mutableStateMapOf<String, String>() }
+    val prices = remember { mutableStateMapOf<String, String>().apply { rows.forEach { r -> prefillOf(r)?.let { put(r.sku, it.first) } } } }
+    // sku → discount % text (rows with a list price)
+    val discounts = remember { mutableStateMapOf<String, String>().apply { rows.forEach { r -> prefillOf(r)?.second?.let { put(r.sku, it) } } } }
     val qtys = remember { mutableStateMapOf<String, String>().apply { rows.forEach { put(it.sku, WorkisMoney.qty(it.qty)) } } }
     var leadTime by rememberSaveable { mutableStateOf("") }
     var validDays by rememberSaveable { mutableStateOf("30") }
     var vade by rememberSaveable { mutableStateOf(0) }
     var delivery by rememberSaveable { mutableStateOf("workis_kargo") }
+    // the terms born with the quote (2026-09-30)
+    var packaging by rememberSaveable { mutableStateOf("") }
+    var warrantyMonths by rememberSaveable { mutableStateOf("") }
+    var warrantyText by rememberSaveable { mutableStateOf("") }
+    var returnsText by rememberSaveable { mutableStateOf("") }
     var note by rememberSaveable { mutableStateOf("") }
     var letter by rememberSaveable(inv.id) { mutableStateOf(inv.defaultLetter.orEmpty()) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var previewPdf by remember { mutableStateOf<ByteArray?>(null) }
     var suggestion by remember { mutableStateOf<Pair<String, String>?>(null) } // target to text
+    // The server-side draft (`quote/draft/`): restored on open, autosaved 1.5 s after the
+    // last edit and on close-without-Send — never per keystroke. Send clears it on the server.
+    var draftReady by remember { mutableStateOf(false) }
+    var lastSaved by remember { mutableStateOf("") }
+    var draftTick by remember { mutableStateOf(false) }
+    var sent by remember { mutableStateOf(false) }
+
+    fun setDiscount(r: PriceRow, text: String) {
+        discounts[r.sku] = text
+        val list = r.list ?: return
+        val pct = WorkisMoney.parse(text) ?: return
+        prices[r.sku] = unitFromDiscount(list, pct)
+    }
+    fun setPrice(r: PriceRow, text: String) {
+        prices[r.sku] = text
+        val list = r.list ?: return
+        val unit = WorkisMoney.parse(text)
+        discounts[r.sku] = if (unit == null) "" else discountFromUnit(list, unit)
+    }
 
     fun pricedLines(): JsonArray = JsonArray(rows.mapNotNull { r ->
         val p = prices[r.sku].orEmpty().trim(); if (p.isEmpty()) return@mapNotNull null
         val q = qtys[r.sku].orEmpty().trim().ifEmpty { WorkisMoney.qty(r.qty).ifEmpty { "1" } }
-        buildJsonObject { put("sku", JsonPrimitive(r.sku)); put("qty", JsonPrimitive(q)); put("unitPrice", JsonPrimitive(p)) }
+        buildJsonObject {
+            put("sku", JsonPrimitive(r.sku)); put("qty", JsonPrimitive(q)); put("unitPrice", JsonPrimitive(apiNumber(p)))
+            // the reference the price came from rides beside it (2026-10-01)
+            r.list?.let { lp ->
+                put("listPrice", JsonPrimitive(WorkisMoney.plain(lp)))
+                discounts[r.sku].orEmpty().trim().takeIf { it.isNotEmpty() }?.let { put("discountPct", JsonPrimitive(apiNumber(it))) }
+            }
+        }
     })
+    // only what was stated
+    fun terms(): JsonObject = jsonBody(
+        "packaging" to packaging.trim().ifEmpty { null }, "warrantyMonths" to warrantyMonths.trim().toIntOrNull(),
+        "warrantyText" to warrantyText.trim().ifEmpty { null }, "returnsText" to returnsText.trim().ifEmpty { null },
+    )
     fun body(): JsonObject = jsonBody(
         "lines" to pricedLines(), "vadeDays" to vade, "deliveryMode" to delivery,
         "leadTimeDays" to leadTime.toIntOrNull(), "validDays" to validDays.toIntOrNull(),
         "note" to note.ifBlank { null }, "letter" to letter.ifBlank { null },
+        "terms" to terms().takeIf { it.isNotEmpty() },
     )
+    // the web's Send guard: packaging and warranty months become the order's terms at award
+    val termsMissing = packaging.isBlank() || warrantyMonths.trim().toIntOrNull() == null
+    // Σ qty × unit price over the priced rows — a preview, never the amount of record
+    val runningTotal: BigDecimal? = rows.mapNotNull { r ->
+        val p = WorkisMoney.parse(prices[r.sku]) ?: return@mapNotNull null
+        p * (WorkisMoney.parse(qtys[r.sku]) ?: r.qty?.let { BigDecimal.valueOf(it) } ?: BigDecimal.ONE)
+    }.takeIf { it.isNotEmpty() }?.fold(BigDecimal.ZERO, BigDecimal::add)
+
+    fun signature(): String = body().toString()
+    /** A draft is what the seller typed: it wins over the prefill, never over an edit made meanwhile. */
+    fun applyDraft(d: JsonObject) {
+        (d["lines"] as? JsonArray)?.forEach { el ->
+            val l = el as? JsonObject ?: return@forEach
+            val sku = l.text("sku")?.takeIf { s -> rows.any { it.sku == s } } ?: return@forEach
+            val p = l.text("unit_price", "unitPrice")
+            if (p != null) { prices[sku] = p; discounts[sku] = l.text("discount_pct", "discountPct").orEmpty() }
+            l.text("qty")?.let { qtys[sku] = it }
+        }
+        d.text("lead_time_days", "leadTimeDays")?.let { leadTime = it }
+        d.text("valid_days", "validDays")?.let { validDays = it }
+        d.text("vade_days", "vadeDays")?.toIntOrNull()?.takeIf { it in listOf(0, 30, 45, 60, 90) }?.let { vade = it }
+        d.text("delivery_mode", "deliveryMode")?.takeIf { it == "workis_kargo" || it == "satici_teslim" }?.let { delivery = it }
+        d.text("note")?.let { note = it }
+        d.text("letter")?.let { letter = it }
+        (d["terms"] as? JsonObject)?.let { tm ->
+            tm.text("packaging")?.let { packaging = it }
+            tm.text("warranty_months", "warrantyMonths")?.let { warrantyMonths = it }
+            tm.text("warranty_text", "warrantyText")?.let { warrantyText = it }
+            tm.text("returns_text", "returnsText")?.let { returnsText = it }
+        }
+    }
+    fun saveDraftNow() {
+        val sig = signature()
+        if (!draftReady || sent || sig == lastSaved) return
+        vm.saveDraft(invitationId, body()) {
+            lastSaved = sig; draftTick = true
+            scope.launch { delay(2_000); draftTick = false }
+        }
+    }
+    LaunchedEffect(invitationId) {
+        val untouched = signature()
+        val d = vm.draft(invitationId)
+        if (d != null && signature() == untouched) applyDraft(d)
+        lastSaved = signature(); draftReady = true
+    }
+    val sig = signature()
+    LaunchedEffect(sig, draftReady) { if (draftReady && !sent) { delay(1_500); saveDraftNow() } }
+    DisposableEffect(Unit) { onDispose { saveDraftNow() } }
+
+    val guardText = stringResource(R.string.quote_terms_guard)
     val canSend = pricedLines().isNotEmpty() && !busy
     val fc = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue)
 
     ConsoleSub(
         title = stringResource(R.string.send_quote), onBack = onClose,
         trailing = {
-            Button(onClick = { busy = true; error = null; scope.launch { val (ok, msg) = vm.submit(invitationId, body()); busy = false; if (ok) onClose() else error = msg } }, enabled = canSend, colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill, disabledContainerColor = colors.surface, disabledContentColor = colors.faint), modifier = Modifier.height(36.dp)) {
+            Button(
+                onClick = {
+                    // the web refuses Send without packaging and warranty months — the same here
+                    if (termsMissing) { error = guardText; tab = 0 }
+                    else { busy = true; error = null; scope.launch { val (ok, msg) = vm.submit(invitationId, body()); busy = false; if (ok) { sent = true; onClose() } else error = msg } }
+                },
+                enabled = canSend, colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill, disabledContainerColor = colors.surface, disabledContentColor = colors.faint), modifier = Modifier.height(36.dp),
+            ) {
                 if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = OnKiremitFill) else Text(stringResource(R.string.send_quote), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
         },
@@ -378,6 +583,16 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(inv.caseTitle ?: inv.request.orEmpty(), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
             Text(inv.buyer?.short.orEmpty() + (inv.buyer?.city?.let { " ($it)" } ?: ""), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+            // the request's own term, above the price grid
+            DeliveryPlaceLine(inv.deliveryPlace)
+            // the autosave tick: icon + word, never colour alone
+            AnimatedVisibility(visible = draftTick, enter = fadeIn(), exit = fadeOut()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.quote_draft_saved), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = SuccessGreen)
+                }
+            }
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 listOf(stringResource(R.string.prices_tab), stringResource(R.string.letter_note_tab)).forEachIndexed { i, label ->
                     SegmentedButton(selected = tab == i, onClick = { tab = i }, shape = SegmentedButtonDefaults.itemShape(index = i, count = 2), colors = SegmentedButtonDefaults.colors(activeContainerColor = colors.surface, activeContentColor = colors.ink, inactiveContainerColor = colors.canvas, inactiveContentColor = colors.muted)) { Text(label, fontSize = 13.sp) }
@@ -385,6 +600,7 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
             }
             error?.let { Text(it, color = colors.danger, fontSize = 13.sp) }
             if (tab == 0) {
+                val discountLabel = stringResource(R.string.discount_pct_field)
                 rows.groupBy { it.group.orEmpty() }.toSortedMap().forEach { (g, rs) ->
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Eyebrow((g.ifEmpty { stringResource(R.string.shortlist_label) }).uppercase())
@@ -397,10 +613,19 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Text(r.name, fontSize = 13.sp, color = colors.ink)
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(r.sku, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, modifier = Modifier.weight(1f))
+                                        Text(r.sku, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, modifier = Modifier.weight(1f))
                                         OutlinedTextField(value = qtys[r.sku].orEmpty(), onValueChange = { qtys[r.sku] = it }, placeholder = { Text(stringResource(R.string.qty_field), color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontSize = 13.sp, color = colors.ink), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(76.dp))
                                         r.unit?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint) }
-                                        OutlinedTextField(value = prices[r.sku].orEmpty(), onValueChange = { prices[r.sku] = it }, placeholder = { Text(stringResource(R.string.unit_price_field), color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(120.dp))
+                                    }
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        val list = r.list
+                                        if (list != null) {
+                                            // the list price, faint; the discount moves the unit price
+                                            Text(stringResource(R.string.quote_list_word) + " " + WorkisMoney.text(list.toDouble(), null), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, modifier = Modifier.weight(1f))
+                                            OutlinedTextField(value = discounts[r.sku].orEmpty(), onValueChange = { setDiscount(r, it) }, placeholder = { Text("%", color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(72.dp).semantics { contentDescription = discountLabel })
+                                            Text("%", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
+                                        } else Spacer(Modifier.weight(1f))
+                                        OutlinedTextField(value = prices[r.sku].orEmpty(), onValueChange = { setPrice(r, it) }, placeholder = { Text(stringResource(R.string.unit_price_field), color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(120.dp))
                                     }
                                 }
                             }
@@ -408,11 +633,32 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
                         if (g.isNotEmpty() && rs.size > 1) Text(stringResource(R.string.alts_hint), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
                     }
                 }
+                // the quote total follows the typing — a preview of the sum the server will write
+                runningTotal?.let { total ->
+                    SurfaceCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(stringResource(R.string.quote_total_label), fontSize = 13.sp, color = colors.muted, modifier = Modifier.weight(1f))
+                            Text(WorkisMoney.text(total.toDouble(), null), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
+                        }
+                    }
+                }
                 SurfaceCard {
                     NumberRow(stringResource(R.string.lead_time_field), leadTime, "—") { leadTime = it }
                     NumberRow(stringResource(R.string.valid_days_field), validDays, "30") { validDays = it }
                     PickerRow(stringResource(R.string.vade_field), if (vade == 0) stringResource(R.string.vade_advance) else "$vade " + stringResource(R.string.vade_days_word), listOf(0, 30, 45, 60, 90).map { d -> (if (d == 0) stringResource(R.string.vade_advance) else "$d " + stringResource(R.string.vade_days_word)) to { vade = d } })
                     PickerRow(stringResource(R.string.delivery_field), stringResource(if (delivery == "workis_kargo") R.string.delivery_workis else R.string.delivery_seller), listOf(stringResource(R.string.delivery_workis) to { delivery = "workis_kargo" }, stringResource(R.string.delivery_seller) to { delivery = "satici_teslim" }))
+                }
+                // born with the quote, frozen at award for both seats — a fresh order opens 7/7;
+                // cell exit saves the draft at once (the 1.5 s timer covers the rest)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FormSection(stringResource(R.string.quote_terms_title).uppercase()) {
+                        FormRow(stringResource(R.string.term_packaging), packaging, { packaging = it }, onCommit = { saveDraftNow() }, tick = false, stacked = true, maxLines = 3)
+                        FormRow(stringResource(R.string.term_warranty_months), warrantyMonths, { warrantyMonths = it.filter(Char::isDigit) }, onCommit = { saveDraftNow() }, tick = false, placeholder = "—", keyboardType = KeyboardType.Number, mono = true)
+                        FormRow(stringResource(R.string.term_warranty_text), warrantyText, { warrantyText = it }, onCommit = { saveDraftNow() }, tick = false, stacked = true, maxLines = 3)
+                        FormRow(stringResource(R.string.term_returns), returnsText, { returnsText = it }, onCommit = { saveDraftNow() }, tick = false, stacked = true, maxLines = 3)
+                    }
+                    Text(stringResource(R.string.quote_terms_hint), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
+                    Text(stringResource(R.string.term_returns_hint), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
                 }
                 Text("🔍 " + stringResource(R.string.preview_pdf), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (canSend) colors.accentText else colors.faint, modifier = Modifier.clickable(enabled = canSend) { busy = true; error = null; scope.launch { val (b, msg) = vm.preview(invitationId, body()); busy = false; if (b != null) previewPdf = b else error = msg } }.padding(horizontal = 4.dp))
                 Text(stringResource(R.string.preview_hint), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
