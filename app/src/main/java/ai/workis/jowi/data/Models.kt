@@ -284,23 +284,6 @@ data class AskVariant(
         }
 }
 
-/** What Jowi mapped the words onto (2026-10-01) — decoded, never drawn. */
-@Serializable
-data class AskReading(
-    val termTr: String? = null,
-    val families: List<@Serializable(with = FlexString::class) String>? = null,
-    val category: String? = null,
-    val attributes: AskReadingAttributes? = null,
-    val language: String? = null,
-)
-
-@Serializable
-data class AskReadingAttributes(
-    @Serializable(with = FlexString::class) val size: String? = null,
-    @Serializable(with = FlexString::class) val material: String? = null,
-    @Serializable(with = FlexString::class) val type: String? = null,
-)
-
 /** One catalogue row in a match — a PRODUCT, not an offer. Price-blind here. */
 @Serializable
 data class AskOffer(val sku: String? = null, val name: String? = null)
@@ -356,7 +339,8 @@ data class AskResponse(
     val nextScene: String? = null,
     /** The match by PRODUCT (2026-10-01): one row per product per seller; `sellers[].offers` stays for the old shelf. */
     val products: List<AskProductSeller>? = null,
-    val reading: AskReading? = null,
+    /** What Jowi mapped the words onto (`{termTr, families, category, attributes, language}`) — kept raw, never drawn: a model-written shape must not sink the answer. */
+    val reading: JsonElement? = null,
     /** ONE clarifying question on a match; `options` then carries its chips. */
     val question: String? = null,
     /** The turn's row ids + `canHide`, so "Soruyu geri çek" works right after sending (2026-09-19). */
@@ -418,7 +402,7 @@ data class AskLine(
     val accent: String? = null,
     // 2026-10-01 match fields — tolerated; history rows do not carry `products` today
     val products: List<AskProductSeller>? = null,
-    val reading: AskReading? = null,
+    val reading: JsonElement? = null,
     val question: String? = null,
     val options: List<AskOption>? = null,
 )

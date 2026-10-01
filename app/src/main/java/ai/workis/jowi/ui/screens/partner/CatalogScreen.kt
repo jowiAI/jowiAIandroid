@@ -109,6 +109,7 @@ import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -211,8 +212,9 @@ class CatalogViewModel : ViewModel() {
 
     /** The ticked sections (numbers, not strings) or `{all: true}`. */
     fun readSections(id: String, all: Boolean, words: (String?) -> String?) = door(id, words) {
+        // built by hand: jsonBody reads a JsonArray as a List and would send the numbers as strings
         val body = if (all) jsonBody("all" to true)
-        else jsonBody("sections" to JsonArray(ticked[id].orEmpty().sorted().map { JsonPrimitive(it) }))
+        else JsonObject(mapOf("sections" to JsonArray(ticked[id].orEmpty().sorted().map { JsonPrimitive(it) })))
         Graph.api.catalogIngestionSections(id, body, seller)
     }
 

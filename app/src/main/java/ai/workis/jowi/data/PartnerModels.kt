@@ -451,9 +451,23 @@ data class SellerProduct(val sku: String? = null, val name: String? = null, val 
 /**
  * The terms born with the quote (2026-09-30), frozen at award for both seats.
  * `warrantyMonths` 0 = "garanti yok", null = not stated; empty `returnsText` = platform standard.
+ * The sent quote echoes them AS STORED — snake_case (`warranty_months`) on Django today
+ * (`_serialize_quote` passes `metadata.terms` through) — so both spellings are read.
  */
 @Serializable
-data class QuoteTerms(val packaging: String? = null, val warrantyMonths: Int? = null, val warrantyText: String? = null, val returnsText: String? = null)
+data class QuoteTerms(
+    val packaging: String? = null,
+    @SerialName("warrantyMonths") @Serializable(with = FlexString::class) private val monthsCamel: String? = null,
+    @SerialName("warranty_months") @Serializable(with = FlexString::class) private val monthsSnake: String? = null,
+    @SerialName("warrantyText") private val warrantyTextCamel: String? = null,
+    @SerialName("warranty_text") private val warrantyTextSnake: String? = null,
+    @SerialName("returnsText") private val returnsTextCamel: String? = null,
+    @SerialName("returns_text") private val returnsTextSnake: String? = null,
+) {
+    val warrantyMonths: Int? get() = (monthsCamel ?: monthsSnake)?.trim()?.toIntOrNull()
+    val warrantyText: String? get() = warrantyTextCamel ?: warrantyTextSnake
+    val returnsText: String? get() = returnsTextCamel ?: returnsTextSnake
+}
 
 /**
  * `requirements` = the buyer's demands for THIS item ("1 inç", "yeşil"); `alts` are the
