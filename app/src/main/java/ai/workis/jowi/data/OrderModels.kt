@@ -90,21 +90,12 @@ data class PartnerOrder(
     val dispatchState: String? = null, // "" | satici_teslim | broadcast | accepted | fallback
     /** The buyer may pick the cargo level (and the carrier) until dispatch starts. */
     val canPickCargo: Boolean? = null,
-    /**
-     * The seller's "Kargoya teslim" as the server's call (requested 2026-09-30).
-     * Absent on an older server — then the card derives it (the one exception).
-     */
+    /** The seller's "Kargoya teslim" is the server's call (`order_seat.serialize`) — never derived from role / mode / dispatchState. */
     val canReady: Boolean? = null,
     /** Why the goods may not leave yet — the server's sentence; "" when not worth a line. */
     val readyHint: String? = null,
 ) {
     val isCarrier get() = role == "carrier"
-
-    /**
-     * The flag wins when it arrives; until then role seller · workis_kargo ·
-     * no dispatch state. The server still refuses a wrong call in its words.
-     */
-    val showsReady get() = canReady ?: (role == "seller" && deliveryMode == "workis_kargo" && dispatchState.isNullOrEmpty())
 }
 
 @Serializable

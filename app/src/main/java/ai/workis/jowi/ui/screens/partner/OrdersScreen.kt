@@ -381,13 +381,12 @@ private fun OrderCard(
                 )
             }
         }
-        // Seller: "Kargoya teslim" opens the job to the carrier pool — the
-        // server's `canReady` when it arrives, else derived (PartnerOrder.showsReady)
-        if (!o.isCarrier && o.showsReady) {
+        // Seller: "Kargoya teslim" opens the job to the carrier pool — ONLY on the
+        // server's `canReady`; while the door is closed its `readyHint` stands in
+        // its place, the server's sentence (like `fundHint`)
+        if (o.canReady == true) {
             DoorRow(WorkisIcons.ShippingBox, stringResource(R.string.order_ready_action), enabled = !vm.busy, onClick = onReady)
-        }
-        // why the goods may not leave yet — the server's sentence
-        o.readyHint?.takeIf { it.isNotEmpty() }?.let {
+        } else o.readyHint?.takeIf { it.isNotEmpty() }?.let {
             Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
         }
         // Buyer: the cargo level (and the manual carrier pick) until dispatch starts
