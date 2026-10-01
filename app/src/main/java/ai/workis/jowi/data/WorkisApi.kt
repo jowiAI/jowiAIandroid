@@ -288,6 +288,23 @@ interface WorkisApi {
     @POST("workis/shipments/{id}/review/")
     suspend fun shipmentReview(@Path("id") id: String, @Body body: ReviewBody): SimpleResult
 
+    // the dispatch doors (2026-09-30) — the PDFs (`orders/{id}/po-pdf/`,
+    // `shipments/{id}/label/`) go through `download` with the token
+    /** Seller: "Kargoya teslim" — the job opens to the carrier pool on `readyDate`. */
+    @POST("workis/orders/{id}/ready/")
+    suspend fun orderReady(@Path("id") id: String, @Body body: OrderReadyBody): OrderDoorResult
+
+    @GET("workis/orders/{id}/carrier-options/")
+    suspend fun orderCarrierOptions(@Path("id") id: String): CarrierOptions
+
+    /** Buyer: the cargo level; refused once dispatch started. */
+    @POST("workis/orders/{id}/service-level/")
+    suspend fun orderServiceLevel(@Path("id") id: String, @Body body: ServiceLevelBody): OrderDoorResult
+
+    /** Buyer: the carrier picked by hand. */
+    @POST("workis/orders/{id}/dispatch/")
+    suspend fun orderDispatch(@Path("id") id: String, @Body body: DispatchBody): OrderDoorResult
+
     // the two threads — one screen, two doors
     @GET("workis/orders/{id}/thread/")
     suspend fun orderThread(@Path("id") id: String): ThreadPayload

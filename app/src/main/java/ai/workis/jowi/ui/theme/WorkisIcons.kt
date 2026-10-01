@@ -62,11 +62,29 @@ object WorkisIcons {
         }
     }
 
+    /** The receiver's delivery code on the order card (SF `key`). */
+    val Key: ImageVector = stroked("Key") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(3f, 12f); arcToRelative(4f, 4f, 0f, true, false, 8f, 0f); arcToRelative(4f, 4f, 0f, true, false, -8f, 0f)
+            moveTo(11f, 12f); lineTo(21f, 12f); lineTo(21f, 15f)
+            moveTo(17f, 12f); lineTo(17f, 14.5f)
+        }
+    }
+
     val DocText: ImageVector = stroked("DocText") {
         path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
             moveTo(6f, 3f); lineTo(14f, 3f); lineTo(19f, 8f); lineTo(19f, 21f); lineTo(6f, 21f); close()
             moveTo(14f, 3f); lineTo(14f, 8f); lineTo(19f, 8f)
             moveTo(9f, 12f); lineTo(16f, 12f); moveTo(9f, 15.5f); lineTo(16f, 15.5f); moveTo(9f, 19f); lineTo(13f, 19f)
+        }
+    }
+
+    /** The shipment label (SF `printer`). */
+    val Printer: ImageVector = stroked("Printer") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(7f, 8f); lineTo(7f, 3f); lineTo(17f, 3f); lineTo(17f, 8f)
+            moveTo(7f, 17f); lineTo(4f, 17f); lineTo(4f, 8f); lineTo(20f, 8f); lineTo(20f, 17f); lineTo(17f, 17f)
+            moveTo(7f, 14f); lineTo(17f, 14f); lineTo(17f, 21f); lineTo(7f, 21f); close()
         }
     }
 

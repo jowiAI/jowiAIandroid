@@ -468,6 +468,7 @@ data class SellerOrder(
     val dispatch: String? = null,
     val chatUrl: String? = null,
     val shipment: InvShipment? = null,
+    val lines: List<SellerOrderLine>? = null, // canMarkDelivered (2026-10-01) — data/OrderModels.kt
 )
 
 @Serializable

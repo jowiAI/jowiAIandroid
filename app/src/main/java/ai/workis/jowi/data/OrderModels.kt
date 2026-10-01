@@ -33,7 +33,17 @@ data class OrderShipment(
     val promised: String? = null,
     val trackingNo: String? = null,
     val carrier: OrderParty? = null,
-)
+    /**
+     * The 6-digit code the RECEIVER reads to the carrier at the door — the
+     * server puts it on the receiver's card only; the app draws what arrives
+     * and never derives it. Both spellings are read (2026-09-30).
+     */
+    @Serializable(with = FlexString::class) val deliveryCode: String? = null,
+    @kotlinx.serialization.SerialName("delivery_code")
+    @Serializable(with = FlexString::class) val deliveryCodeSnake: String? = null,
+) {
+    val code get() = listOfNotNull(deliveryCode, deliveryCodeSnake).firstOrNull { it.isNotEmpty() && it != "null" }
+}
 
 /** "7/7 koşul kesinleşti" — the server counts, the app prints. */
 @Serializable
@@ -71,12 +81,114 @@ data class PartnerOrder(
     val contract: OrderContractBadge? = null,
     @Serializable(with = FlexString::class) val listId: String? = null,
     @Serializable(with = FlexString::class) val invitationId: String? = null,
+    // one order card, as the web's (2026-09-30)
+    /** The PO PDF exists — `orders/{id}/po-pdf/`, token auth. */
+    val poPdf: Boolean? = null,
+    val nLines: Int? = null,
+    val deliveryMode: String? = null, // workis_kargo | satici_teslim
+    val serviceLevel: String? = null, // acil45 | ayni_gun | ertesi_gun
+    val dispatchState: String? = null, // "" | satici_teslim | broadcast | accepted | fallback
+    /** The buyer may pick the cargo level (and the carrier) until dispatch starts. */
+    val canPickCargo: Boolean? = null,
+    /**
+     * The seller's "Kargoya teslim" as the server's call (requested 2026-09-30).
+     * Absent on an older server — then the card derives it (the one exception).
+     */
+    val canReady: Boolean? = null,
+    /** Why the goods may not leave yet — the server's sentence; "" when not worth a line. */
+    val readyHint: String? = null,
 ) {
     val isCarrier get() = role == "carrier"
+
+    /**
+     * The flag wins when it arrives; until then role seller · workis_kargo ·
+     * no dispatch state. The server still refuses a wrong call in its words.
+     */
+    val showsReady get() = canReady ?: (role == "seller" && deliveryMode == "workis_kargo" && dispatchState.isNullOrEmpty())
 }
 
 @Serializable
 data class PartnerOrders(val orders: List<PartnerOrder>? = null)
+
+// ---------- the dispatch doors (2026-09-30, "The missing doors, all at once")
+
+@Serializable
+data class OrderReadyBody(val readyDate: String? = null) // 'YYYY-MM-DD', ≤ 30 days
+
+@Serializable
+data class ServiceLevelBody(val level: String)
+
+@Serializable
+data class DispatchBody(val carrierId: String, val serviceLevel: String)
+
+/**
+ * `ready/` · `service-level/` · `dispatch/` replies. No `success` key on these —
+ * a 2xx is the yes, `message` is the note, a refusal comes as `error`.
+ */
+@Serializable
+data class OrderDoorResult(
+    val success: Boolean? = null,
+    val message: String? = null,
+    val error: String? = null,
+    val dispatchState: String? = null,
+    val serviceLevel: String? = null,
+    val number: String? = null,
+)
+
+/**
+ * One carrier covering both districts (`order_seat.carrier_options`). `levels`
+ * = level code → fee in `currency` (the platform tariff, a JSON number — read
+ * tolerantly in case one arrives as a string).
+ */
+@Serializable
+data class CarrierOption(
+    @Serializable(with = FlexString::class) val carrierId: String? = null,
+    val short: String? = null,
+    val hover: String? = null,
+    val city: String? = null,
+    val rating: Double? = null,
+    val nReviews: Int? = null,
+    val api: Boolean? = null,
+    val levels: Map<String, kotlinx.serialization.json.JsonElement>? = null,
+    val currency: String? = null,
+) {
+    val fees: Map<String, Double>
+        get() = levels.orEmpty().mapNotNull { (k, v) ->
+            ((v as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull())?.let { k to it }
+        }.toMap()
+}
+
+@Serializable
+data class CarrierOptions(
+    val pickupDistrict: String? = null,
+    val dropoffDistrict: String? = null,
+    val options: List<CarrierOption>? = null,
+)
+
+/** The service-level codes in the platform's order (`shipping.SERVICE_LABELS`). */
+val CargoLevelOrder = listOf("acil45", "ayni_gun", "ertesi_gun")
+
+fun orderedLevels(codes: Collection<String>): List<String> =
+    codes.sortedWith(compareBy<String>({ CargoLevelOrder.indexOf(it).let { i -> if (i < 0) 99 else i } }, { it }))
+
+/**
+ * A line of the seller's order (`seller/invitations/` → `order.lines[]`).
+ * `canMarkDelivered` = the seller's own hand delivery only (escrow held AND no
+ * Workis shipment, 2026-10-01) — decoded; the app draws no such door.
+ */
+@Serializable
+data class SellerOrderLine(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val stageLabel: String? = null,
+    @Serializable(with = FlexString::class) val quantity: String? = null,
+    val amount: Double? = null,
+    val escrowState: String? = null,
+    val escrowStateLabel: String? = null,
+    val plannedDeliveryDate: String? = null,
+    val deliveredAt: String? = null,
+    val confirmedAt: String? = null,
+    val canMarkDelivered: Boolean? = null,
+)
 
 @Serializable
 data class OrderFundResult(val success: Boolean = false, val message: String? = null, val error: String? = null, val order: PartnerOrder? = null)

@@ -17,10 +17,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -44,12 +49,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
+import ai.workis.jowi.data.CarrierOption
+import ai.workis.jowi.data.CarrierOptions
+import ai.workis.jowi.data.DispatchBody
+import ai.workis.jowi.data.OrderReadyBody
 import ai.workis.jowi.data.PartnerOrder
 import ai.workis.jowi.data.ReviewBody
+import ai.workis.jowi.data.ServiceLevelBody
+import ai.workis.jowi.data.WORKIS_BASE_URL
 import ai.workis.jowi.data.WorkisMoney
+import ai.workis.jowi.data.orderedLevels
 import ai.workis.jowi.data.partnerCall
+import ai.workis.jowi.data.shortDate
 import ai.workis.jowi.ui.components.FormRow
 import ai.workis.jowi.ui.components.FormSection
+import ai.workis.jowi.ui.components.PdfViewerDialog
 import ai.workis.jowi.ui.screens.console.ConsoleSub
 import ai.workis.jowi.ui.screens.expert.NoteBand
 import ai.workis.jowi.ui.theme.Beige
@@ -61,6 +75,9 @@ import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 /**
  * Siparişler — one card per order per seat the firm holds (Django §5). The
@@ -107,6 +124,41 @@ class OrdersViewModel : ViewModel() {
         (r?.success == true) to (r?.error ?: r?.message ?: err)
     }
 
+    /**
+     * The dispatch doors answer without `success`: a 2xx is the yes and its
+     * `message` the note; a refusal is the server's sentence, kept in the sheet.
+     */
+    private suspend fun door(call: suspend () -> ai.workis.jowi.data.OrderDoorResult): Pair<Boolean, String?> {
+        val (r, err) = partnerCall(lang) { call() }
+        val ok = r != null && r.success != false
+        return ok to (if (ok) r?.message else (r?.error ?: r?.message ?: err))
+    }
+
+    /** One door at a time from a sheet; `onResult(ok, sentence)` — ok closes the sheet and reloads. */
+    private fun sheetDoor(onResult: (Boolean, String?) -> Unit, call: suspend () -> ai.workis.jowi.data.OrderDoorResult) {
+        if (busy) return
+        busy = true
+        viewModelScope.launch {
+            val (ok, msg) = door(call)
+            busy = false
+            if (ok) { note = msg; load() }
+            onResult(ok, msg)
+        }
+    }
+
+    /** Seller: "Kargoya teslim" on `readyDate` ('YYYY-MM-DD'). */
+    fun ready(id: String, readyDate: String, onResult: (Boolean, String?) -> Unit) =
+        sheetDoor(onResult) { Graph.api.orderReady(id, OrderReadyBody(readyDate)) }
+
+    fun serviceLevel(id: String, level: String, onResult: (Boolean, String?) -> Unit) =
+        sheetDoor(onResult) { Graph.api.orderServiceLevel(id, ServiceLevelBody(level)) }
+
+    fun dispatch(id: String, carrierId: String, level: String, onResult: (Boolean, String?) -> Unit) =
+        sheetDoor(onResult) { Graph.api.orderDispatch(id, DispatchBody(carrierId, level)) }
+
+    suspend fun carrierOptions(id: String): Pair<CarrierOptions?, String?> =
+        partnerCall(lang) { Graph.api.orderCarrierOptions(id) }
+
     /** `savedWord` is the catalogue's "Your rating was saved." — the caller reads it. */
     fun review(shipmentId: String, rating: Int, comment: String, savedWord: String) = act {
         val (r, err) = partnerCall(lang) { Graph.api.shipmentReview(shipmentId, ReviewBody(rating, comment.ifBlank { null })) }
@@ -119,6 +171,10 @@ fun OrdersScreen(vm: OrdersViewModel, onBack: () -> Unit, onThread: (PartnerOrde
     val colors = WorkisTheme.colors
     var reviewFor by remember { mutableStateOf<PartnerOrder?>(null) }
     var confirmFund by remember { mutableStateOf<PartnerOrder?>(null) }
+    var readyFor by remember { mutableStateOf<PartnerOrder?>(null) }
+    var cargoFor by remember { mutableStateOf<PartnerOrder?>(null) }
+    /** A token-walled PDF door: (title, url, file name). */
+    var pdfDoor by remember { mutableStateOf<Triple<String, String, String>?>(null) }
     LaunchedEffect(Unit) { ai.workis.jowi.data.ScreenContext.setPage("orders"); vm.load() } // Jowi's page (2026-09-19)
     ConsoleSub(stringResource(R.string.orders_screen_title), onBack, trailing = {
         if (vm.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Kiremit500)
@@ -139,6 +195,9 @@ fun OrdersScreen(vm: OrdersViewModel, onBack: () -> Unit, onThread: (PartnerOrde
                         onContract = { onContract(o) },
                         onFund = { confirmFund = o },
                         onReview = { reviewFor = o },
+                        onReady = { readyFor = o },
+                        onCargo = { cargoFor = o },
+                        onPdf = { pdfDoor = it },
                     )
                 }
                 Spacer(Modifier.height(30.dp))
@@ -151,6 +210,9 @@ fun OrdersScreen(vm: OrdersViewModel, onBack: () -> Unit, onThread: (PartnerOrde
         }
     }
     reviewFor?.let { o -> ReviewSheet(o, vm) { reviewFor = null } }
+    readyFor?.let { o -> ReadySheet(o, vm) { readyFor = null } }
+    cargoFor?.let { o -> CargoLevelSheet(o, vm) { cargoFor = null } }
+    pdfDoor?.let { (title, url, file) -> PdfViewerDialog(title, url = url, fileName = file) { pdfDoor = null } }
 }
 
 @Composable
@@ -161,6 +223,9 @@ private fun OrderCard(
     onContract: () -> Unit,
     onFund: () -> Unit,
     onReview: () -> Unit,
+    onReady: () -> Unit,
+    onCargo: () -> Unit,
+    onPdf: (Triple<String, String, String>) -> Unit,
 ) {
     val colors = WorkisTheme.colors
     SurfaceCard {
@@ -206,6 +271,26 @@ private fun OrderCard(
             ).joinToString(" → "),
             fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
         )
+        // one order card, as the web's (2026-09-30): how it ships, how many lines
+        val mode = o.deliveryMode?.takeIf { it.isNotEmpty() }
+        val nLines = o.nLines ?: 0
+        if (mode != null || nLines > 0) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                mode?.let { dm ->
+                    WorkisChip(
+                        ChipSpec(
+                            WorkisIcons.ShippingBox,
+                            listOfNotNull(
+                                stringResource(if (dm == "satici_teslim") R.string.delivery_seller else R.string.delivery_workis),
+                                o.serviceLevel?.takeIf { it.isNotEmpty() }?.let { cargoLevelWord(it) },
+                            ).joinToString(" · "),
+                            colors.muted,
+                        ),
+                    )
+                }
+                if (nLines > 0) WorkisChip(ChipSpec(WorkisIcons.Checklist, "$nLines " + stringResource(R.string.order_lines_word), colors.muted))
+            }
+        }
         o.shipment?.let { s ->
             Text(
                 listOfNotNull(
@@ -215,6 +300,20 @@ private fun OrderCard(
                 ).joinToString(" · "),
                 fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp, color = colors.faint,
             )
+            // the receiver's delivery code (Senaryo 4.25), read to the carrier at
+            // the door — it arrives on the receiver's card only, so it is drawn
+            // wherever it arrives and never derived
+            s.code?.let { code ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                    Icon(WorkisIcons.Key, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.order_delivery_code) + ":", fontSize = 12.sp, color = colors.muted)
+                    Spacer(Modifier.width(6.dp))
+                    SelectionContainer {
+                        Text(code, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
+                    }
+                }
+            }
         }
         // the virtual supplier's lines — "I received it" per line
         o.vlines.orEmpty().forEach { l ->
@@ -282,6 +381,34 @@ private fun OrderCard(
                 )
             }
         }
+        // Seller: "Kargoya teslim" opens the job to the carrier pool — the
+        // server's `canReady` when it arrives, else derived (PartnerOrder.showsReady)
+        if (!o.isCarrier && o.showsReady) {
+            DoorRow(WorkisIcons.ShippingBox, stringResource(R.string.order_ready_action), enabled = !vm.busy, onClick = onReady)
+        }
+        // why the goods may not leave yet — the server's sentence
+        o.readyHint?.takeIf { it.isNotEmpty() }?.let {
+            Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
+        }
+        // Buyer: the cargo level (and the manual carrier pick) until dispatch starts
+        if (o.canPickCargo == true) {
+            DoorRow(WorkisIcons.Clock, stringResource(R.string.cargo_level_action), enabled = !vm.busy, onClick = onCargo)
+        }
+        val poTitle = stringResource(R.string.order_po_form_pdf)
+        if (o.poPdf == true && !o.id.isNullOrEmpty()) {
+            DoorRow(WorkisIcons.DocText, poTitle) {
+                onPdf(Triple(poTitle, WORKIS_BASE_URL + "workis/orders/${o.id}/po-pdf/", (o.po?.takeIf { it.isNotEmpty() } ?: "siparis") + ".pdf"))
+            }
+        }
+        // The label: the seller prints it, the buyer may read it. The carrier's
+        // own labels live on its Kargo screen, so its card skips the door.
+        val labelTitle = stringResource(R.string.shipment_label_pdf)
+        val shipmentId = o.shipment?.id?.takeIf { it.isNotEmpty() }
+        if (!o.isCarrier && shipmentId != null) {
+            DoorRow(WorkisIcons.Printer, labelTitle) {
+                onPdf(Triple(labelTitle, WORKIS_BASE_URL + "workis/shipments/$shipmentId/label/", (o.shipment.number?.takeIf { it.isNotEmpty() } ?: "etiket") + ".pdf"))
+            }
+        }
         if (o.canReview == true && o.myRating == null && o.shipment?.id != null) {
             Text(
                 stringResource(R.string.order_rate_carrier), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText,
@@ -336,5 +463,243 @@ private fun ReviewSheet(order: PartnerOrder, vm: OrdersViewModel, onClose: () ->
                 FormRow("", comment, { comment = it }, {}, false, placeholder = stringResource(R.string.order_comment), stacked = true, minLines = 2, maxLines = 5, keyboardType = KeyboardType.Text)
             }
         }
+    }
+}
+
+/** A door on the card: icon + words in the accent ink, like the thread and contract rows. */
+@Composable
+private fun DoorRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, enabled: Boolean = true, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick)) {
+        Icon(icon, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(text, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
+    }
+}
+
+/** The service-level code in words (`shipping.SERVICE_LABELS`); an unknown code as the server sent it. */
+@Composable
+private fun cargoLevelWord(code: String): String = when (code) {
+    "acil45" -> stringResource(R.string.cargo_level_acil45)
+    "ayni_gun" -> stringResource(R.string.cargo_level_ayni_gun)
+    "ertesi_gun" -> stringResource(R.string.cargo_level_ertesi_gun)
+    else -> code
+}
+
+/** The sheet's title row: the title, then a spinner while a door is in flight. */
+@Composable
+private fun SheetTitle(title: String, busy: Boolean, trailing: @Composable () -> Unit = {}) {
+    val colors = WorkisTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(title, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = colors.ink, modifier = Modifier.weight(1f))
+        if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Kiremit500) else trailing()
+    }
+}
+
+/**
+ * Seller: "Kargoya teslim" — the ready day (today … +30 days), then the job
+ * opens to the carrier pool. The reply's `message` becomes the screen note; a
+ * refusal stays in the sheet in the server's words.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReadySheet(order: PartnerOrder, vm: OrdersViewModel, onClose: () -> Unit) {
+    val colors = WorkisTheme.colors
+    val today = remember { LocalDate.now() }
+    val last = remember { today.plusDays(30) }
+    var day by remember { mutableStateOf(today) }
+    var picking by remember { mutableStateOf(false) }
+    var errorText by remember { mutableStateOf<String?>(null) }
+    val failWord = stringResource(R.string.st_error)
+    ModalBottomSheet(onDismissRequest = onClose, containerColor = colors.surface) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SheetTitle(stringResource(R.string.order_ready_action), vm.busy) {
+                TextButton(onClick = {
+                    val id = order.id ?: return@TextButton
+                    errorText = null
+                    // 'YYYY-MM-DD', the calendar day as picked
+                    vm.ready(id, day.toString()) { ok, msg -> if (ok) onClose() else errorText = msg ?: failWord }
+                }) { Text(stringResource(R.string.order_ready_action), color = colors.accentText, fontWeight = FontWeight.SemiBold) }
+            }
+            Text(order.po.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
+            FormSection(null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().clickable(enabled = !vm.busy) { picking = true }.padding(horizontal = 14.dp, vertical = 12.dp),
+                ) {
+                    Icon(WorkisIcons.Calendar, contentDescription = null, tint = colors.muted, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.order_ready_date), fontSize = 14.sp, color = colors.ink, modifier = Modifier.weight(1f))
+                    Text(shortDate(day.toString()), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.accentText)
+                }
+            }
+            Text(stringResource(R.string.order_ready_hint), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
+            errorText?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.danger) }
+        }
+    }
+    if (picking) {
+        // the picker speaks UTC midnights; the day is a calendar day, so UTC both ways
+        val state = rememberDatePickerState(
+            initialSelectedDateMillis = day.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    val d = Instant.ofEpochMilli(utcTimeMillis).atZone(ZoneOffset.UTC).toLocalDate()
+                    return !d.isBefore(today) && !d.isAfter(last)
+                }
+                override fun isSelectableYear(year: Int): Boolean = year in today.year..last.year
+            },
+        )
+        DatePickerDialog(
+            onDismissRequest = { picking = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { day = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate() }
+                    picking = false
+                }) { Text(stringResource(R.string.done), color = colors.accentText, fontWeight = FontWeight.SemiBold) }
+            },
+            dismissButton = { TextButton(onClick = { picking = false }) { Text(stringResource(R.string.cancel), color = colors.muted) } },
+        ) { DatePicker(state) }
+    }
+}
+
+/**
+ * Buyer: the cargo level (`service-level/`) from the platform tariff, and —
+ * the fallback path, secondary — the carrier picked by hand (`dispatch/`).
+ * Money is neutral here: fees in mono ink (a JSON number → WorkisMoney), no
+ * coloured control. A refusal stays in the sheet in the server's words.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CargoLevelSheet(order: PartnerOrder, vm: OrdersViewModel, onClose: () -> Unit) {
+    val colors = WorkisTheme.colors
+    var data by remember { mutableStateOf<CarrierOptions?>(null) }
+    var loadError by remember { mutableStateOf<String?>(null) }
+    var errorText by remember { mutableStateOf<String?>(null) }
+    var manualOpen by remember { mutableStateOf(false) }
+    var carrierId by remember { mutableStateOf<String?>(null) }
+    var manualLevel by remember { mutableStateOf("") }
+    val failWord = stringResource(R.string.st_error)
+    val id = order.id.orEmpty()
+    LaunchedEffect(id) {
+        val (r, err) = vm.carrierOptions(id)
+        if (r != null) data = r else loadError = err ?: failWord
+    }
+    val done: (Boolean, String?) -> Unit = { ok, msg -> if (ok) onClose() else errorText = msg ?: failWord }
+
+    ModalBottomSheet(onDismissRequest = onClose, containerColor = colors.surface) {
+        Column(
+            Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 30.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SheetTitle(stringResource(R.string.cargo_level_action), vm.busy)
+            val d = data
+            when {
+                d != null -> {
+                    Text(
+                        "${d.pickupDistrict?.takeIf { it.isNotEmpty() } ?: "—"} → ${d.dropoffDistrict?.takeIf { it.isNotEmpty() } ?: "—"}",
+                        fontSize = 14.sp, color = colors.ink,
+                    )
+                    errorText?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.danger) }
+                    // the tariff: the first option that states a level carries it
+                    val options = d.options.orEmpty()
+                    val seen = linkedMapOf<String, Pair<Double, String?>>()
+                    options.forEach { o -> o.fees.forEach { (k, v) -> if (k !in seen) seen[k] = v to o.currency } }
+                    FormSection(stringResource(R.string.cargo_levels_header)) {
+                        if (seen.isEmpty()) {
+                            Text(stringResource(R.string.cargo_no_carriers), fontSize = 13.sp, color = colors.muted, modifier = Modifier.padding(14.dp))
+                        }
+                        orderedLevels(seen.keys).forEach { code ->
+                            val (fee, cur) = seen.getValue(code)
+                            LevelRow(cargoLevelWord(code), WorkisMoney.text(fee, cur), current = order.serviceLevel == code, enabled = !vm.busy) {
+                                errorText = null
+                                vm.serviceLevel(id, code, done)
+                            }
+                        }
+                    }
+                    Text(stringResource(R.string.cargo_levels_hint), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
+                    if (options.isNotEmpty()) {
+                        FormSection(stringResource(R.string.cargo_carriers_header)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().clickable { manualOpen = !manualOpen }.padding(horizontal = 14.dp, vertical = 12.dp),
+                            ) {
+                                Text(stringResource(R.string.cargo_pick_carrier), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink, modifier = Modifier.weight(1f))
+                                Text(if (manualOpen) "▴" else "▾", fontSize = 13.sp, color = colors.faint)
+                            }
+                            if (manualOpen) {
+                                options.forEach { o ->
+                                    CarrierRow(o, picked = carrierId != null && carrierId == o.carrierId) {
+                                        carrierId = o.carrierId; manualLevel = ""
+                                    }
+                                }
+                                val chosen = options.firstOrNull { carrierId != null && it.carrierId == carrierId }
+                                val fees = chosen?.fees.orEmpty()
+                                if (chosen != null && fees.isNotEmpty()) {
+                                    orderedLevels(fees.keys).forEach { code ->
+                                        LevelRow(
+                                            cargoLevelWord(code), WorkisMoney.text(fees.getValue(code), chosen.currency),
+                                            current = manualLevel == code, enabled = !vm.busy,
+                                        ) { manualLevel = code }
+                                    }
+                                    TextButton(
+                                        onClick = {
+                                            val cid = carrierId ?: return@TextButton
+                                            errorText = null
+                                            vm.dispatch(id, cid, manualLevel, done)
+                                        },
+                                        enabled = manualLevel.isNotEmpty() && !vm.busy,
+                                        modifier = Modifier.padding(horizontal = 4.dp),
+                                    ) {
+                                        Text(
+                                            stringResource(R.string.cargo_dispatch_action), fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                                            color = if (manualLevel.isNotEmpty() && !vm.busy) colors.accentText else colors.faint,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                loadError != null -> Text(loadError.orEmpty(), fontSize = 13.sp, color = colors.danger)
+                else -> Box(Modifier.fillMaxWidth().padding(vertical = 20.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Kiremit500)
+                }
+            }
+        }
+    }
+}
+
+/** A tariff row: level words · fee in mono ink · a check on the one in force (a glyph, not a colour). */
+@Composable
+private fun LevelRow(word: String, fee: String, current: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        Text(word, fontSize = 14.sp, color = colors.ink, modifier = Modifier.weight(1f))
+        Text(fee, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
+        if (current) {
+            Spacer(Modifier.width(8.dp))
+            Icon(WorkisIcons.Check, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+/** short · city · rating · n reviews — the carrier as the buyer picks it. */
+@Composable
+private fun CarrierRow(o: CarrierOption, picked: Boolean, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(o.short?.takeIf { it.isNotEmpty() } ?: "—", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink)
+            val rating = o.rating?.let { "★ " + String.format(java.util.Locale.ROOT, "%.1f", it) + " · ${o.nReviews ?: 0} " + stringResource(R.string.cargo_reviews_word) }
+            val line = listOfNotNull(o.city?.takeIf { it.isNotEmpty() }, rating).joinToString(" · ")
+            if (line.isNotEmpty()) Text(line, fontSize = 12.sp, color = colors.muted)
+        }
+        if (picked) Icon(WorkisIcons.Check, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
     }
 }
