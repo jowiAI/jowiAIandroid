@@ -66,6 +66,8 @@ dependencies {
     // passkeys: the system holds the key, the app only carries JSON (API 28+)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services)
+    // the carrier's label scan: Google's code scanner UI — no camera permission in this app
+    implementation(libs.play.services.code.scanner)
     implementation(libs.retrofit)
     implementation(libs.retrofit.kotlinx.serialization)
     implementation(libs.okhttp)

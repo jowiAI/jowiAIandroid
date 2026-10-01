@@ -585,6 +585,41 @@ interface WorkisApi {
     @POST("workis/team/invitations/{id}/accept/")
     suspend fun acceptInvitation(@Path("id") id: String, @Body body: InvitationAcceptBody): InvitationAcceptResult
 
+    // --- "the missing doors" (2026-09-30): badges · Cari · Takvim · the carrier seat — money a JSON number ---
+    /** The web menu poll verbatim; read once per Pazar visit, no timer. */
+    @GET("workis/badges/")
+    suspend fun badges(): PartnerBadges
+
+    @GET("workis/ledger/")
+    suspend fun ledger(): LedgerReply
+
+    @GET("workis/calendar/")
+    suspend fun calendar(): CalendarBoard
+
+    /** Carrier seat only: open jobs + own shipments (§7.1 — never the goods' prices). */
+    @GET("workis/cargo/")
+    suspend fun cargoBoard(): CargoBoard
+
+    /** First accept wins — 409 carries the server's "somebody was faster". */
+    @POST("workis/cargo/jobs/{orderId}/accept/")
+    suspend fun cargoAccept(@Path("orderId") orderId: String): CargoActionResult
+
+    /** `status` only from the shipment's `nextStatuses`; delivery is never this door. */
+    @POST("workis/cargo/shipments/{id}/status/")
+    suspend fun cargoStatus(@Path("id") id: String, @Body body: CargoStatusBody): CargoActionResult
+
+    /** Before pickup only (`canDrop`). */
+    @POST("workis/cargo/shipments/{id}/drop/")
+    suspend fun cargoDrop(@Path("id") id: String, @Body body: CargoDropBody): CargoActionResult
+
+    /** The label's QR is the WSH number; 403 unless the shipment is the carrier's own. */
+    @GET("workis/cargo/scan/")
+    suspend fun cargoScan(@Query("code") code: String): CargoScanReply
+
+    /** The receiver's 6-digit code closes the delivery. */
+    @POST("workis/shipments/{id}/deliver/")
+    suspend fun cargoDeliver(@Path("id") id: String, @Body body: CargoDeliverBody): CargoActionResult
+
     // --- §10.2 agreement re-acceptance (every seat) ---
     @GET("workis/agreement/pending/")
     suspend fun agreementPending(): AgreementPending

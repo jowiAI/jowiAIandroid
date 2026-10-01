@@ -34,12 +34,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.ui.components.WorkisMark
 import androidx.compose.foundation.layout.Box
+import ai.workis.jowi.data.PartnerBadges
 import ai.workis.jowi.data.PartnerSeatState
+import ai.workis.jowi.data.partnerCall
+import kotlinx.coroutines.launch
 import ai.workis.jowi.data.ScreenContext
 import ai.workis.jowi.ui.screens.console.ConsoleSub
 import ai.workis.jowi.ui.theme.Beige
@@ -63,6 +68,28 @@ sealed interface MarketDest {
     data class Thread(val door: ThreadDoor, val back: MarketDest) : MarketDest
     /** `seat` comes from the door that opened the paper — the reader's own acceptance card. */
     data class Contract(val orderId: String, val back: MarketDest, val seat: String? = null) : MarketDest
+    data object Ledger : MarketDest
+    data object Calendar : MarketDest
+    /** The carrier seat's board. */
+    data object Cargo : MarketDest
+}
+
+/**
+ * The menu circles (`GET badges/`, the web poll's one reading) — read each
+ * time Pazar opens, never on a timer.
+ */
+class BadgesViewModel : ViewModel() {
+    var badges by mutableStateOf<PartnerBadges?>(null)
+        private set
+
+    fun load() {
+        viewModelScope.launch {
+            val (r, _) = partnerCall(Graph.language.value) { Graph.api.badges() }
+            if (r != null) badges = r
+        }
+    }
+
+    fun page(tag: String): Int? = badges?.pages?.get(tag)
 }
 
 @Composable
@@ -73,6 +100,10 @@ fun MarketRoot() {
     val catalogVm: CatalogViewModel = viewModel()
     val ordersVm: OrdersViewModel = viewModel()
     val approvalsVm: ApprovalsViewModel = viewModel()
+    val badgesVm: BadgesViewModel = viewModel()
+    val ledgerVm: LedgerViewModel = viewModel()
+    val calendarVm: CalendarViewModel = viewModel()
+    val cargoVm: CargoViewModel = viewModel()
     BackHandler(enabled = dest != MarketDest.Home) {
         dest = when (val d = dest) {
             is MarketDest.ListDetail -> MarketDest.Lists
@@ -84,7 +115,10 @@ fun MarketRoot() {
         }
     }
     when (val d = dest) {
-        MarketDest.Home -> MarketHome(listsVm, quotesVm, catalogVm, ordersVm, approvalsVm) { dest = it }
+        MarketDest.Home -> MarketHome(listsVm, quotesVm, catalogVm, ordersVm, approvalsVm, badgesVm, cargoVm) { dest = it }
+        MarketDest.Ledger -> LedgerScreen(ledgerVm, onBack = { dest = MarketDest.Home })
+        MarketDest.Calendar -> CalendarScreen(calendarVm, onBack = { dest = MarketDest.Home })
+        MarketDest.Cargo -> CarrierScreen(cargoVm, onBack = { dest = MarketDest.Home })
         MarketDest.Orders -> OrdersScreen(
             ordersVm,
             onBack = { dest = MarketDest.Home },
@@ -130,6 +164,8 @@ private fun MarketHome(
     catalogVm: CatalogViewModel,
     ordersVm: OrdersViewModel,
     approvalsVm: ApprovalsViewModel,
+    badgesVm: BadgesViewModel,
+    cargoVm: CargoViewModel,
     onOpen: (MarketDest) -> Unit,
 ) {
     // a tab root: no seller screen is open (2026-09-17)
@@ -137,7 +173,10 @@ private fun MarketHome(
     val colors = WorkisTheme.colors
     val seat by Graph.partner.seat.collectAsState()
     val c = (seat as? PartnerSeatState.Seat)?.company
-    LaunchedEffect(c?.isBuyer, c?.isSeller) {
+    LaunchedEffect(c?.isBuyer, c?.isSeller, c?.isCarrier) {
+        // the menu circles, one reading per visit (`feed.badges`) — no timer
+        if (c != null) badgesVm.load()
+        if (c?.isCarrier == true) cargoVm.load()
         if (c?.isBuyer == true) listsVm.load()
         if (c?.isSeller == true) { quotesVm.load(); catalogVm.load() }
         // the order loop is every seat's — a carrier sees only these two
@@ -171,7 +210,8 @@ private fun MarketHome(
         val cat = catalogVm.page
         val inv = quotesVm.invitations
         val orders = ordersVm.orders
-        val unread = ordersVm.unreadTotal
+        // the server's badge when it came; the cards' own counts until then
+        val unread = badgesVm.badges?.ordersUnread ?: ordersVm.unreadTotal
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             // the hero is the one emphasis on this screen — a beige note band,
             // content and not a coloured button; the number says the state
@@ -192,12 +232,14 @@ private fun MarketHome(
                         number = inv?.count { it.isOpen },
                         label = stringResource(R.string.quotes_title),
                         icon = WorkisIcons.Sparkle,
+                        badge = newLine(badgesVm.page("quotes")),
                     ) { onOpen(MarketDest.Quotes) }
                 } else if (c.isBuyer) {
                     CapsuleTile(
                         number = lists?.size,
                         label = stringResource(R.string.lists_title),
                         icon = WorkisIcons.Tray,
+                        badge = newLine(badgesVm.page("lists")),
                     ) { onOpen(MarketDest.Lists) }
                 }
             }
@@ -210,7 +252,8 @@ private fun MarketHome(
                     HalfTile(
                         number = lists?.size,
                         label = stringResource(R.string.lists_title),
-                        sub = lists?.let { l -> "${l.count { it.status == "quoting" }} " + stringResource(R.string.ls_quoting).lowercase() },
+                        sub = newLine(badgesVm.page("lists"))
+                            ?: lists?.let { l -> "${l.count { it.status == "quoting" }} " + stringResource(R.string.ls_quoting).lowercase() },
                         icon = WorkisIcons.Tray,
                         modifier = Modifier.weight(1f),
                     ) { onOpen(MarketDest.Lists) }
@@ -224,13 +267,41 @@ private fun MarketHome(
                 ) { onOpen(MarketDest.Catalog) }
             }
         }
+        // the carrier seat's own board — its open jobs, the job feed's circle under it
+        if (c.isCarrier) {
+            Spacer(Modifier.height(14.dp))
+            val cargo = cargoVm.board
+            HalfTile(
+                number = cargo?.jobs?.size,
+                label = stringResource(R.string.cargo_title),
+                sub = newLine(badgesVm.page("kargo"))
+                    ?: cargo?.let { "${it.shipments?.size ?: 0} " + stringResource(R.string.cargo_shipments_header).lowercase() },
+                icon = WorkisIcons.Truck,
+                modifier = Modifier.fillMaxWidth(),
+            ) { onOpen(MarketDest.Cargo) }
+        }
+        // every partner seat: the money it owes / is owed, and its commitments by day
         Spacer(Modifier.height(14.dp))
-        if (!c.isBuyer && !c.isSeller) {
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            HalfTile(number = null, label = stringResource(R.string.cari_title), sub = null, icon = WorkisIcons.CreditCard, modifier = Modifier.weight(1f), showNumber = false) {
+                onOpen(MarketDest.Ledger)
+            }
+            HalfTile(number = null, label = stringResource(R.string.calendar_title), sub = null, icon = WorkisIcons.Calendar, modifier = Modifier.weight(1f), showNumber = false) {
+                onOpen(MarketDest.Calendar)
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        if (!c.isBuyer && !c.isSeller && !c.isCarrier) {
             Text(stringResource(R.string.market_empty), fontSize = 14.sp, color = colors.muted, modifier = Modifier.padding(top = 20.dp))
         }
         Spacer(Modifier.height(30.dp))
     }
 }
+
+/** "3 yeni" — a page's unread circle in words (a count is never colour alone). */
+@Composable
+private fun newLine(n: Int?): String? =
+    n?.takeIf { it > 0 }?.let { "$it " + stringResource(R.string.badge_new_word) }
 
 /** Two rows tall, beige band: the seat's one emphasis. */
 @Composable
@@ -250,9 +321,9 @@ private fun HeroTile(number: Int?, label: String, sub: String?, modifier: Modifi
     }
 }
 
-/** Half the hero's height: icon, number, name. */
+/** Half the hero's height: icon, number, name — and the page's "n yeni" when the badge has one. */
 @Composable
-private fun CapsuleTile(number: Int?, label: String, icon: ImageVector, onClick: () -> Unit) {
+private fun CapsuleTile(number: Int?, label: String, icon: ImageVector, badge: String? = null, onClick: () -> Unit) {
     val colors = WorkisTheme.colors
     Column(
         Modifier
@@ -270,16 +341,17 @@ private fun CapsuleTile(number: Int?, label: String, icon: ImageVector, onClick:
         }
         Spacer(Modifier.weight(1f))
         Text(label, fontSize = 13.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        badge?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.muted, maxLines = 1) }
     }
 }
 
-/** The seller's bottom row. */
+/** The seller's bottom row, the carrier's Kargo; without a number, a plain door (Cari, Takvim). */
 @Composable
-private fun HalfTile(number: Int?, label: String, sub: String?, icon: ImageVector, modifier: Modifier, onClick: () -> Unit) {
+private fun HalfTile(number: Int?, label: String, sub: String?, icon: ImageVector, modifier: Modifier, showNumber: Boolean = true, onClick: () -> Unit) {
     val colors = WorkisTheme.colors
     Column(
         modifier
-            .height(120.dp)
+            .height(if (showNumber) 120.dp else 92.dp)
             .background(colors.surface, RoundedCornerShape(20.dp))
             .border(1.dp, colors.border, RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
@@ -287,9 +359,9 @@ private fun HalfTile(number: Int?, label: String, sub: String?, icon: ImageVecto
     ) {
         Icon(icon, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(18.dp))
         Spacer(Modifier.weight(1f))
-        Text(number?.toString() ?: "–", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 26.sp, color = colors.ink)
-        Text(label, fontSize = 13.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(sub ?: " ", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (showNumber) Text(number?.toString() ?: "–", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 26.sp, color = colors.ink)
+        Text(label, fontSize = if (showNumber) 13.sp else 14.sp, color = if (showNumber) colors.muted else colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (showNumber) Text(sub ?: " ", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

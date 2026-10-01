@@ -37,6 +37,20 @@ object WorkisIcons {
         }
     }
 
+    /** SF "qrcode.viewfinder" — the carrier's label scan. */
+    val QrScan: ImageVector = stroked("QrScan") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(3f, 8f); lineTo(3f, 3f); lineTo(8f, 3f)
+            moveTo(16f, 3f); lineTo(21f, 3f); lineTo(21f, 8f)
+            moveTo(21f, 16f); lineTo(21f, 21f); lineTo(16f, 21f)
+            moveTo(8f, 21f); lineTo(3f, 21f); lineTo(3f, 16f)
+            moveTo(7f, 7f); lineTo(11f, 7f); lineTo(11f, 11f); lineTo(7f, 11f); close()
+            moveTo(13f, 13f); lineTo(17f, 13f); lineTo(17f, 17f); lineTo(13f, 17f); close()
+            moveTo(14f, 7f); lineTo(17f, 7f); lineTo(17f, 10f)
+            moveTo(7f, 14f); lineTo(7f, 17f); lineTo(10f, 17f)
+        }
+    }
+
     val Link: ImageVector = stroked("Link") {
         path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
             moveTo(10f, 14f); lineTo(14f, 10f)
@@ -50,6 +64,16 @@ object WorkisIcons {
             moveTo(12f, 3f); lineTo(20f, 7.5f); lineTo(20f, 16.5f); lineTo(12f, 21f); lineTo(4f, 16.5f); lineTo(4f, 7.5f); close()
             moveTo(4f, 7.5f); lineTo(12f, 12f); lineTo(20f, 7.5f)
             moveTo(12f, 12f); lineTo(12f, 21f)
+        }
+    }
+
+    /** SF "truck.box" — the carrier seat's Kargo door. */
+    val Truck: ImageVector = stroked("Truck") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(2f, 6f); lineTo(14f, 6f); lineTo(14f, 17f); lineTo(2f, 17f); close()
+            moveTo(14f, 10f); lineTo(18.5f, 10f); lineTo(22f, 13.5f); lineTo(22f, 17f); lineTo(14f, 17f)
+            moveTo(4.5f, 18.5f); arcToRelative(1.8f, 1.8f, 0f, true, false, 3.6f, 0f); arcToRelative(1.8f, 1.8f, 0f, true, false, -3.6f, 0f)
+            moveTo(15.5f, 18.5f); arcToRelative(1.8f, 1.8f, 0f, true, false, 3.6f, 0f); arcToRelative(1.8f, 1.8f, 0f, true, false, -3.6f, 0f)
         }
     }
 
@@ -422,6 +446,15 @@ object WorkisIcons {
         ) {
             moveTo(8.5f, 5f); lineTo(4f, 9.5f); lineTo(8.5f, 14f)
             moveTo(4f, 9.5f); lineTo(14.5f, 9.5f); arcToRelative(5f, 5f, 0f, false, true, 0f, 10f); lineTo(9f, 19.5f)
+        }
+    }
+
+    /** SF "creditcard" — Cari, the firm's current accounts. */
+    val CreditCard: ImageVector = stroked("CreditCard") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(3f, 6f); lineTo(21f, 6f); lineTo(21f, 18f); lineTo(3f, 18f); close()
+            moveTo(3f, 10f); lineTo(21f, 10f)
+            moveTo(6.5f, 14.5f); lineTo(10f, 14.5f)
         }
     }
 
