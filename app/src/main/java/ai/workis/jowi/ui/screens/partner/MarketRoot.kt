@@ -64,6 +64,8 @@ sealed interface MarketDest {
     data object Catalog : MarketDest
     data class Family(val id: String) : MarketDest
     data object Orders : MarketDest
+    /** One order's stage (`orders/{id}/stage/`) — opened from the card's title row. */
+    data class Stage(val orderId: String, val back: MarketDest) : MarketDest
     data object Approvals : MarketDest
     data class Thread(val door: ThreadDoor, val back: MarketDest) : MarketDest
     /** `seat` comes from the door that opened the paper — the reader's own acceptance card. */
@@ -111,6 +113,7 @@ fun MarketRoot() {
             is MarketDest.Family -> MarketDest.Catalog
             is MarketDest.Thread -> d.back
             is MarketDest.Contract -> d.back
+            is MarketDest.Stage -> d.back
             else -> MarketDest.Home
         }
     }
@@ -124,6 +127,15 @@ fun MarketRoot() {
             onBack = { dest = MarketDest.Home },
             onThread = { o -> o.id?.let { dest = MarketDest.Thread(ThreadDoor.Order(it), MarketDest.Orders) } },
             onContract = { o -> o.id?.let { dest = MarketDest.Contract(it, MarketDest.Orders, o.role) } },
+            onStage = { o -> o.id?.let { dest = MarketDest.Stage(it, MarketDest.Orders) } },
+        )
+        is MarketDest.Stage -> OrderStageScreen(
+            d.orderId,
+            ordersVm,
+            onBack = { dest = d.back },
+            // the stage's yazışma / contract doors come back to the stage
+            onThread = { o -> o.id?.let { dest = MarketDest.Thread(ThreadDoor.Order(it), d) } },
+            onContract = { o -> o.id?.let { dest = MarketDest.Contract(it, d, o.role) } },
         )
         MarketDest.Approvals -> ApprovalsScreen(
             approvalsVm,

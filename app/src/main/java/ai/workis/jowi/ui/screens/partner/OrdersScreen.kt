@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Badge
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -28,6 +30,9 @@ import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -61,6 +66,7 @@ import ai.workis.jowi.data.WorkisMoney
 import ai.workis.jowi.data.orderedLevels
 import ai.workis.jowi.data.partnerCall
 import ai.workis.jowi.data.shortDate
+import ai.workis.jowi.ui.components.ChangesWatch
 import ai.workis.jowi.ui.components.FormRow
 import ai.workis.jowi.ui.components.FormSection
 import ai.workis.jowi.ui.components.PdfViewerDialog
@@ -93,6 +99,8 @@ class OrdersViewModel : ViewModel() {
     var note by mutableStateOf<String?>(null)
     var busy by mutableStateOf(false)
         private set
+    /** 0 Aktif · 1 Tamamlananlar — kept here so it survives a visit to the stage. */
+    var segment by mutableStateOf(0)
     private val lang get() = Graph.language.value
 
     val unreadTotal get() = orders.orEmpty().sumOf { it.unread ?: 0 }
@@ -104,17 +112,23 @@ class OrdersViewModel : ViewModel() {
         }
     }
 
-    private fun act(block: suspend () -> Pair<Boolean, String?>) {
-        busy = true; note = null
+    /**
+     * One door at a time. The sentence lands in this screen's note — or, when a
+     * caller passes `onResult` (the stage screen), with that caller instead.
+     */
+    private fun act(onResult: ((Boolean, String?) -> Unit)? = null, block: suspend () -> Pair<Boolean, String?>) {
+        if (busy) return
+        busy = true
+        if (onResult == null) note = null
         viewModelScope.launch {
             val (ok, msg) = block()
             busy = false
-            note = msg
+            if (onResult == null) note = msg else onResult(ok, msg)
             if (ok) load()
         }
     }
 
-    fun fund(id: String) = act {
+    fun fund(id: String, onResult: ((Boolean, String?) -> Unit)? = null) = act(onResult) {
         val (r, err) = partnerCall(lang) { Graph.api.orderFund(id) }
         (r?.success == true) to (r?.error ?: r?.message ?: err)
     }
@@ -123,6 +137,22 @@ class OrdersViewModel : ViewModel() {
         val (r, err) = partnerCall(lang) { Graph.api.orderLineReceived(lineId) }
         (r?.success == true) to (r?.error ?: r?.message ?: err)
     }
+
+    // the line doors Onaylar already calls — the stage's `lines` job posts to the same ones,
+    // and the server drops the system line into the order's yazışma itself
+    private suspend fun simple(call: suspend () -> ai.workis.jowi.data.SimpleResult): Pair<Boolean, String?> {
+        val (r, err) = partnerCall(lang, call)
+        return (r?.success == true) to (r?.error ?: r?.message ?: err)
+    }
+
+    fun lineConfirm(lineId: String, onResult: ((Boolean, String?) -> Unit)? = null) =
+        act(onResult) { simple { Graph.api.lineConfirm(lineId) } }
+
+    fun lineObjection(lineId: String, reason: String, onResult: ((Boolean, String?) -> Unit)? = null) =
+        act(onResult) { simple { Graph.api.lineObjection(lineId, ai.workis.jowi.data.jsonBody("reason" to reason)) } }
+
+    fun lineObjectionWithdraw(lineId: String, onResult: ((Boolean, String?) -> Unit)? = null) =
+        act(onResult) { simple { Graph.api.lineObjectionWithdraw(lineId) } }
 
     /**
      * The dispatch doors answer without `success`: a 2xx is the yes and its
@@ -150,6 +180,11 @@ class OrdersViewModel : ViewModel() {
     fun ready(id: String, readyDate: String, onResult: (Boolean, String?) -> Unit) =
         sheetDoor(onResult) { Graph.api.orderReady(id, OrderReadyBody(readyDate)) }
 
+    /**
+     * Since 2026-10-02 this no longer writes the level: it STATES the cargo term as
+     * the buyer's proposal (the seller confirms; under a contract in force it is an
+     * amendment). The reply `{success, fee, message}` — `message` is the note.
+     */
     fun serviceLevel(id: String, level: String, onResult: (Boolean, String?) -> Unit) =
         sheetDoor(onResult) { Graph.api.orderServiceLevel(id, ServiceLevelBody(level)) }
 
@@ -167,7 +202,13 @@ class OrdersViewModel : ViewModel() {
 }
 
 @Composable
-fun OrdersScreen(vm: OrdersViewModel, onBack: () -> Unit, onThread: (PartnerOrder) -> Unit, onContract: (PartnerOrder) -> Unit) {
+fun OrdersScreen(
+    vm: OrdersViewModel,
+    onBack: () -> Unit,
+    onThread: (PartnerOrder) -> Unit,
+    onContract: (PartnerOrder) -> Unit,
+    onStage: (PartnerOrder) -> Unit,
+) {
     val colors = WorkisTheme.colors
     var reviewFor by remember { mutableStateOf<PartnerOrder?>(null) }
     var confirmFund by remember { mutableStateOf<PartnerOrder?>(null) }
@@ -186,11 +227,41 @@ fun OrdersScreen(vm: OrdersViewModel, onBack: () -> Unit, onThread: (PartnerOrde
                 CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Kiremit500)
             }
             else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // the other party moved an order (`changes/`, 2026-10-03)
+                ChangesWatch(scope = "orders") { vm.load() }
                 NoteBand(vm.note)
                 if (orders.isEmpty()) Text(stringResource(R.string.orders_empty), fontSize = 14.sp, color = colors.muted, modifier = Modifier.padding(4.dp))
-                orders.forEach { o ->
+                else {
+                    // Aktif / Tamamlananlar — the split is the server's `done` (an older
+                    // server sends none: every order then reads as active)
+                    val doneCount = orders.count { it.done == true }
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        listOf(
+                            stringResource(R.string.order_seg_active) + " (${orders.size - doneCount})",
+                            stringResource(R.string.order_seg_done) + " ($doneCount)",
+                        ).forEachIndexed { i, label ->
+                            SegmentedButton(
+                                selected = vm.segment == i, onClick = { vm.segment = i },
+                                shape = SegmentedButtonDefaults.itemShape(index = i, count = 2),
+                                colors = SegmentedButtonDefaults.colors(
+                                    activeContainerColor = colors.surface, activeContentColor = colors.ink,
+                                    inactiveContainerColor = colors.canvas, inactiveContentColor = colors.muted,
+                                ),
+                            ) { Text(label, fontSize = 13.sp) }
+                        }
+                    }
+                }
+                val shown = orders.filter { (it.done == true) == (vm.segment == 1) }
+                if (orders.isNotEmpty() && shown.isEmpty()) {
+                    Text(
+                        stringResource(if (vm.segment == 1) R.string.order_done_empty else R.string.order_active_empty),
+                        fontSize = 14.sp, color = colors.muted, modifier = Modifier.padding(4.dp),
+                    )
+                }
+                shown.forEach { o ->
                     OrderCard(
                         o, vm,
+                        onStage = { onStage(o) },
                         onThread = { onThread(o) },
                         onContract = { onContract(o) },
                         onFund = { confirmFund = o },
@@ -210,7 +281,7 @@ fun OrdersScreen(vm: OrdersViewModel, onBack: () -> Unit, onThread: (PartnerOrde
         }
     }
     reviewFor?.let { o -> ReviewSheet(o, vm) { reviewFor = null } }
-    readyFor?.let { o -> ReadySheet(o, vm) { readyFor = null } }
+    readyFor?.let { o -> ReadySheet(o, vm.busy, onReady = { day, done -> o.id?.let { vm.ready(it, day, done) } }) { readyFor = null } }
     cargoFor?.let { o -> CargoLevelSheet(o, vm) { cargoFor = null } }
     pdfDoor?.let { (title, url, file) -> PdfViewerDialog(title, url = url, fileName = file) { pdfDoor = null } }
 }
@@ -219,6 +290,7 @@ fun OrdersScreen(vm: OrdersViewModel, onBack: () -> Unit, onThread: (PartnerOrde
 private fun OrderCard(
     o: PartnerOrder,
     vm: OrdersViewModel,
+    onStage: () -> Unit,
     onThread: () -> Unit,
     onContract: () -> Unit,
     onFund: () -> Unit,
@@ -230,17 +302,27 @@ private fun OrderCard(
     val colors = WorkisTheme.colors
     SurfaceCard {
         Row(verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f)) {
-                Text(o.po.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
-                Text(
-                    stringResource(
-                        when (o.role) {
-                            "seller" -> R.string.order_role_seller
-                            "carrier" -> R.string.order_role_carrier
-                            else -> R.string.order_role_buyer
-                        },
-                    ) + (o.at?.take(10)?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""),
-                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint,
+            // the title row is the door to the order's stage (2026-10-02)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f).clickable(enabled = !o.id.isNullOrEmpty(), onClick = onStage),
+            ) {
+                Column(Modifier.weight(1f, fill = false)) {
+                    Text(o.po.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
+                    Text(
+                        stringResource(
+                            when (o.role) {
+                                "seller" -> R.string.order_role_seller
+                                "carrier" -> R.string.order_role_carrier
+                                else -> R.string.order_role_buyer
+                            },
+                        ) + (o.at?.take(10)?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""),
+                        fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint,
+                    )
+                }
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = stringResource(R.string.order_stage_title),
+                    tint = colors.faint, modifier = Modifier.size(18.dp),
                 )
             }
             // a carrier card carries no amount at all — never a zero
@@ -292,6 +374,7 @@ private fun OrderCard(
             }
         }
         o.shipment?.let { s ->
+            // `promised` is the agreed delivery date (18:00 that day, 2026-10-02) — drawn as sent
             Text(
                 listOfNotNull(
                     s.statusLabel?.takeIf { it.isNotEmpty() },
@@ -332,6 +415,9 @@ private fun OrderCard(
                 }
             }
         }
+        // where the order stands (the server's walk) and THE one sentence under it
+        o.steps?.takeIf { it.isNotEmpty() }?.let { OrderWalk(it) }
+        o.next?.let { OrderNextLine(it) }
         // Each state stands over the door it belongs to — the unread count on
         // the correspondence row, the terms under it, the contract's standing
         // under its own row. In the card's corner they said nothing about
@@ -352,10 +438,13 @@ private fun OrderCard(
             o.terms?.let { t ->
                 val ok = t.ok ?: 0
                 val total = t.total ?: 0
+                // the ONE term asked of this seat now ("Teslim tarihi · 2/7 · belirtin"),
+                // else "5/7 koşul kesinleşti" — settled / total, in words
+                val asked = currentTermLine(t.current)
                 Text(
-                    "$ok/$total " + stringResource(R.string.order_terms_settled),
+                    asked ?: ("$ok/$total " + stringResource(R.string.order_terms_settled)),
                     fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp,
-                    color = if (total > 0 && ok >= total) SuccessGreen else Beige,
+                    color = if (asked == null && total > 0 && ok >= total) SuccessGreen else Beige,
                     modifier = Modifier.padding(start = 20.dp),
                 )
             }
@@ -385,17 +474,17 @@ private fun OrderCard(
         // server's `canReady`; while the door is closed its `readyHint` stands in
         // its place, the server's sentence (like `fundHint`)
         if (o.canReady == true) {
-            DoorRow(WorkisIcons.ShippingBox, stringResource(R.string.order_ready_action), enabled = !vm.busy, onClick = onReady)
+            OrderDoorRow(WorkisIcons.ShippingBox, stringResource(R.string.order_ready_action), enabled = !vm.busy, onClick = onReady)
         } else o.readyHint?.takeIf { it.isNotEmpty() }?.let {
             Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
         }
         // Buyer: the cargo level (and the manual carrier pick) until dispatch starts
         if (o.canPickCargo == true) {
-            DoorRow(WorkisIcons.Clock, stringResource(R.string.cargo_level_action), enabled = !vm.busy, onClick = onCargo)
+            OrderDoorRow(WorkisIcons.Clock, stringResource(R.string.cargo_level_action), enabled = !vm.busy, onClick = onCargo)
         }
         val poTitle = stringResource(R.string.order_po_form_pdf)
         if (o.poPdf == true && !o.id.isNullOrEmpty()) {
-            DoorRow(WorkisIcons.DocText, poTitle) {
+            OrderDoorRow(WorkisIcons.DocText, poTitle) {
                 onPdf(Triple(poTitle, WORKIS_BASE_URL + "workis/orders/${o.id}/po-pdf/", (o.po?.takeIf { it.isNotEmpty() } ?: "siparis") + ".pdf"))
             }
         }
@@ -404,7 +493,7 @@ private fun OrderCard(
         val labelTitle = stringResource(R.string.shipment_label_pdf)
         val shipmentId = o.shipment?.id?.takeIf { it.isNotEmpty() }
         if (!o.isCarrier && shipmentId != null) {
-            DoorRow(WorkisIcons.Printer, labelTitle) {
+            OrderDoorRow(WorkisIcons.Printer, labelTitle) {
                 onPdf(Triple(labelTitle, WORKIS_BASE_URL + "workis/shipments/$shipmentId/label/", (o.shipment.number?.takeIf { it.isNotEmpty() } ?: "etiket") + ".pdf"))
             }
         }
@@ -467,7 +556,7 @@ private fun ReviewSheet(order: PartnerOrder, vm: OrdersViewModel, onClose: () ->
 
 /** A door on the card: icon + words in the accent ink, like the thread and contract rows. */
 @Composable
-private fun DoorRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun OrderDoorRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, enabled: Boolean = true, onClick: () -> Unit) {
     val colors = WorkisTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick)) {
         Icon(icon, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp))
@@ -498,11 +587,22 @@ private fun SheetTitle(title: String, busy: Boolean, trailing: @Composable () ->
 /**
  * Seller: "Kargoya teslim" — the ready day (today … +30 days), then the job
  * opens to the carrier pool. The reply's `message` becomes the screen note; a
- * refusal stays in the sheet in the server's words.
+ * refusal stays in the sheet in the server's words. From the stage's `ready`
+ * job (2026-10-02) it also carries the agreed delivery date, the last day the
+ * goods can be handed to cargo and still arrive on it, and whether that passed.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ReadySheet(order: PartnerOrder, vm: OrdersViewModel, onClose: () -> Unit) {
+internal fun ReadySheet(
+    order: PartnerOrder,
+    busy: Boolean,
+    deliveryDate: String? = null,
+    handover: String? = null,
+    handoverOk: Boolean? = null,
+    /** ('YYYY-MM-DD', result) — the door; `result(ok, sentence)` closes the sheet on ok. */
+    onReady: (String, (Boolean, String?) -> Unit) -> Unit,
+    onClose: () -> Unit,
+) {
     val colors = WorkisTheme.colors
     val today = remember { LocalDate.now() }
     val last = remember { today.plusDays(30) }
@@ -512,26 +612,33 @@ private fun ReadySheet(order: PartnerOrder, vm: OrdersViewModel, onClose: () -> 
     val failWord = stringResource(R.string.st_error)
     ModalBottomSheet(onDismissRequest = onClose, containerColor = colors.surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            SheetTitle(stringResource(R.string.order_ready_action), vm.busy) {
+            SheetTitle(stringResource(R.string.order_ready_action), busy) {
                 TextButton(onClick = {
-                    val id = order.id ?: return@TextButton
+                    if (order.id == null) return@TextButton
                     errorText = null
                     // 'YYYY-MM-DD', the calendar day as picked
-                    vm.ready(id, day.toString()) { ok, msg -> if (ok) onClose() else errorText = msg ?: failWord }
+                    onReady(day.toString()) { ok, msg -> if (ok) onClose() else errorText = msg ?: failWord }
                 }) { Text(stringResource(R.string.order_ready_action), color = colors.accentText, fontWeight = FontWeight.SemiBold) }
             }
             Text(order.po.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
             FormSection(null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().clickable(enabled = !vm.busy) { picking = true }.padding(horizontal = 14.dp, vertical = 12.dp),
+                    modifier = Modifier.fillMaxWidth().clickable(enabled = !busy) { picking = true }.padding(horizontal = 14.dp, vertical = 12.dp),
                 ) {
                     Icon(WorkisIcons.Calendar, contentDescription = null, tint = colors.muted, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.order_ready_date), fontSize = 14.sp, color = colors.ink, modifier = Modifier.weight(1f))
                     Text(shortDate(day.toString()), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.accentText)
                 }
+                deliveryDate?.takeIf { it.isNotEmpty() }?.let {
+                    StageFact(stringResource(R.string.stage_delivery_date), shortDate(it), Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+                }
+                handover?.takeIf { it.isNotEmpty() }?.let {
+                    StageFact(stringResource(R.string.stage_handover), shortDate(it), Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+                }
             }
+            if (!handover.isNullOrEmpty() && handoverOk == false) HandoverLate()
             Text(stringResource(R.string.order_ready_hint), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
             errorText?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.danger) }
         }

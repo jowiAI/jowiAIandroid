@@ -45,9 +45,61 @@ data class OrderShipment(
     val code get() = listOfNotNull(deliveryCode, deliveryCodeSnake).firstOrNull { it.isNotEmpty() && it != "null" }
 }
 
+/**
+ * `terms.current` (2026-10-02): the ONE term asked of this seat now, in the walk
+ * order; `turn` is `answer` (state it) or `confirm` (the other side stated it).
+ */
+@Serializable
+data class OrderCurrentTerm(
+    val key: String? = null,
+    val label: String? = null,
+    val turn: String? = null, // answer | confirm
+    val i: Int? = null,
+    val n: Int? = null,
+)
+
 /** "7/7 koşul kesinleşti" — the server counts, the app prints. */
 @Serializable
-data class OrderTermsBadge(val ok: Int? = null, val total: Int? = null)
+data class OrderTermsBadge(
+    val ok: Int? = null,
+    val total: Int? = null,
+    /** How many terms wait on this seat. */
+    val mine: Int? = null,
+    /** null when nothing waits on this seat (and for the seller until the buyer signed). */
+    val current: OrderCurrentTerm? = null,
+)
+
+/**
+ * THE one sentence under an order (`order_stage.next_step`): draw `text`, never
+ * derive one from state codes. `who`: me · buyer · seller · carrier · workis · "".
+ */
+@Serializable
+data class OrderNext(
+    val who: String? = null,
+    val text: String? = null,
+    val step: String? = null, // the live step's key
+    val job: String? = null, // terms · contract · fund · ready · lines · collect · ""
+    val action: String? = null, // a control the card already has (cargo_pick) or ""
+)
+
+/** One dated movement under a step — filled on `orders/{id}/stage/` only. */
+@Serializable
+data class OrderStepRow(val at: String? = null, val text: String? = null, val value: String? = null)
+
+/**
+ * terms · contract · payment · cargo · accept · account (a carrier: cargo only);
+ * `state` done · now · wait · skip — exactly one `now` on an unfinished order.
+ * `label` is the server's word for the step: the app keeps no table of its own.
+ */
+@Serializable
+data class OrderStep(
+    val key: String? = null,
+    val label: String? = null,
+    val state: String? = null,
+    val line: String? = null,
+    val note: String? = null,
+    val rows: List<OrderStepRow>? = null,
+)
 
 @Serializable
 data class OrderContractBadge(val version: Int? = null, val status: String? = null) // draft | accepted
@@ -94,12 +146,73 @@ data class PartnerOrder(
     val canReady: Boolean? = null,
     /** Why the goods may not leave yet — the server's sentence; "" when not worth a line. */
     val readyHint: String? = null,
+    // the order stage (`order_seat.serialize`, 2026-10-02) — all absent on an older server
+    /** Aktif / Tamamlananlar — the server's split; a missing `done` reads as active. */
+    val done: Boolean? = null,
+    val next: OrderNext? = null,
+    val steps: List<OrderStep>? = null,
+    /** What the live step asks of this seat — `orders/{id}/stage/` only, never on the list. */
+    val job: OrderJob? = null,
 ) {
     val isCarrier get() = role == "carrier"
 }
 
 @Serializable
 data class PartnerOrders(val orders: List<PartnerOrder>? = null)
+
+// ---------- the stage (`GET orders/{id}/stage/`, Django `order_seat.stage_for` + `serialize_job`, 2026-10-02)
+
+/**
+ * One line of the `lines` job. The flags only keep dead buttons off the screen;
+ * the doors hold the rules. `canMark` (the seller's hand-delivery mark) has no
+ * API door — decoded, never drawn.
+ */
+@Serializable
+data class OrderJobLine(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val name: String? = null,
+    @Serializable(with = FlexDouble::class) val qty: Double? = null,
+    val note: String? = null,
+    val openAccount: Boolean? = null,
+    val canMark: Boolean? = null,
+    val canConfirm: Boolean? = null,
+    val canObject: Boolean? = null,
+    val canWithdraw: Boolean? = null,
+)
+
+/** The live step's job — one shape for every `kind`; the unused fields stay null. */
+@Serializable
+data class OrderJob(
+    val kind: String? = null, // terms | contract | fund | ready | lines | collect
+    // terms — `current` is the term KEY; the card's `terms.current` names it
+    val current: String? = null,
+    val i: Int? = null,
+    val n: Int? = null,
+    // contract
+    val canAccept: Boolean? = null,
+    val signHint: String? = null,
+    // ready
+    val today: String? = null,
+    val sellerDelivers: Boolean? = null,
+    val deliveryDate: String? = null,
+    /** The last day the goods can be handed to cargo and still arrive on the agreed date. */
+    val handover: String? = null,
+    /** false = that day has passed. */
+    val handoverOk: Boolean? = null,
+    // lines
+    val lines: List<OrderJobLine>? = null,
+    // collect — money is a JSON number here too
+    @Serializable(with = FlexString::class) val invoiceId: String? = null,
+    val number: String? = null,
+    @Serializable(with = FlexDouble::class) val total: Double? = null,
+    val currency: String? = null,
+    val due: String? = null,
+    val suspended: Boolean? = null,
+)
+
+/** `{success, order}` — the card with `steps[].rows` filled and `job`. 404 = the server's sentence. */
+@Serializable
+data class OrderStageResult(val success: Boolean? = null, val order: PartnerOrder? = null, val error: String? = null)
 
 // ---------- the dispatch doors (2026-09-30, "The missing doors, all at once")
 
@@ -418,6 +531,11 @@ data class OrderContract(
     val seller: ContractAcceptance? = null,
     val acceptedAt: String? = null,
     val canAccept: Boolean? = null,
+    /**
+     * Why this seat cannot sign yet when `canAccept` is false (2026-10-02,
+     * `contract_seat.why_not_signable`) — the server's sentence, shown as sent.
+     */
+    val signHint: String? = null,
     val pdfUrl: String? = null,
 )
 

@@ -162,7 +162,8 @@ fun OrderContractScreen(orderId: String, seat: String? = null, onBack: () -> Uni
                 androidx.compose.runtime.CompositionLocalProvider(
                     ai.workis.jowi.ui.theme.LocalWorkisColors provides ai.workis.jowi.ui.theme.WorkisLightColors,
                 ) { ContractPaper(c, vm) }
-                if (c.canAccept != true) {
+                // the signHint, when it came, already says why on the paper
+                if (c.canAccept != true && c.signHint.isNullOrEmpty()) {
                     Text(stringResource(R.string.contract_read_only), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
                 }
                 Spacer(Modifier.height(30.dp))
@@ -220,6 +221,9 @@ private fun ContractPaper(c: OrderContract, vm: OrderContractViewModel) {
                     colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill),
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(stringResource(R.string.contract_accept), fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+            } else c.signHint?.takeIf { it.isNotEmpty() }?.let {
+                // why this seat cannot sign yet, in the server's words — where the button would be
+                Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = PaperInk.copy(alpha = 0.6f))
             }
         }
     }

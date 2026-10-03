@@ -305,6 +305,10 @@ interface WorkisApi {
     @POST("workis/orders/{id}/dispatch/")
     suspend fun orderDispatch(@Path("id") id: String, @Body body: DispatchBody): OrderDoorResult
 
+    /** ONE order as the web stage draws it: the card with dated rows under each step + `job` (2026-10-02). 404 = not this firm's. */
+    @GET("workis/orders/{id}/stage/")
+    suspend fun orderStage(@Path("id") id: String): OrderStageResult
+
     // the two threads — one screen, two doors
     @GET("workis/orders/{id}/thread/")
     suspend fun orderThread(@Path("id") id: String): ThreadPayload
