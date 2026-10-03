@@ -54,6 +54,7 @@ import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.PurchaseListRow
 import ai.workis.jowi.data.partnerCall
+import ai.workis.jowi.ui.components.ChangesWatch
 import ai.workis.jowi.ui.components.WorkisMark
 import ai.workis.jowi.ui.screens.expert.NoteBand
 import ai.workis.jowi.ui.theme.Beige
@@ -169,6 +170,9 @@ fun ListsMenu(vm: ListsViewModel) {
 fun ListsScreen(vm: ListsViewModel, onOpen: (String) -> Unit) {
     val colors = WorkisTheme.colors
     LaunchedEffect(Unit) { ai.workis.jowi.data.ScreenContext.setPage("lists"); vm.load() } // Jowi's page (2026-09-19)
+    // changes/ (2026-10-03): the `lists` stamp moved → re-read. Nothing is typed here, so the
+    // pill never draws and the watcher may sit outside the column.
+    ChangesWatch("lists") { vm.load() }
     val lists = vm.lists
     // a stuck row is still in a working stage; the poll goes on, the row says "Takıldı"
     LaunchedEffect(lists?.any { it.isWorking && it.stuck != true }) {

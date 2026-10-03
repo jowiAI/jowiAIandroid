@@ -520,6 +520,13 @@ interface WorkisApi {
     @GET("workis/lists/items/{id}/search/")
     suspend fun listItemSearch(@Path("id") id: String, @Query("q") q: String): PLSearchResults
 
+    /** A product row `{cpid, sellerId?, sku?, q?}` → `{matched, item_id, needs_variant}` (2026-10-02). */
+    @POST("workis/lists/{id}/items/")
+    suspend fun listAddProduct(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): ListItemAdded
+
+    @GET("workis/lists/items/{id}/variants/")
+    suspend fun listItemVariants(@Path("id") id: String, @Query("cpid") cpid: String): PLVariantList
+
     @POST("workis/lists/{id}/note/")
     suspend fun listNote(@Path("id") id: String, @Body body: NoteBody): SimpleResult
 

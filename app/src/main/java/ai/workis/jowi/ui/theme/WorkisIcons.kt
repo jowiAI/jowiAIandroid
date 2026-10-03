@@ -353,6 +353,55 @@ object WorkisIcons {
         }
     }
 
+    /** SF "ruler" — a list row's variant ("varyant seçin", "Varyant seç"). */
+    val Ruler: ImageVector = stroked("Ruler") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(3f, 8f); lineTo(21f, 8f); lineTo(21f, 16f); lineTo(3f, 16f); close()
+            moveTo(7f, 8f); lineTo(7f, 11.5f)
+            moveTo(11f, 8f); lineTo(11f, 13f)
+            moveTo(15f, 8f); lineTo(15f, 11.5f)
+            moveTo(19f, 8f); lineTo(19f, 13f)
+        }
+    }
+
+    /** SF "hand.tap" — a list row waiting for its product ("ürünü seçin"). */
+    val HandTap: ImageVector = stroked("HandTap") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(9f, 13f); lineTo(9f, 5.5f)
+            arcToRelative(1.5f, 1.5f, 0f, false, true, 3f, 0f)
+            lineTo(12f, 11f); lineTo(17.5f, 12f)
+            arcToRelative(2f, 2f, 0f, false, true, 1.6f, 2.3f)
+            lineTo(18.3f, 18.5f)
+            arcToRelative(3f, 3f, 0f, false, true, -3f, 2.5f)
+            lineTo(11.5f, 21f)
+            arcToRelative(3f, 3f, 0f, false, true, -2.4f, -1.2f)
+            lineTo(6f, 15.5f)
+            arcToRelative(1.4f, 1.4f, 0f, false, true, 2.2f, -1.7f)
+            lineTo(9f, 14.8f)
+            moveTo(6f, 4f); lineTo(4.5f, 2.5f)
+            moveTo(15f, 4f); lineTo(16.5f, 2.5f)
+        }
+    }
+
+    /** SF "text.alignleft" — a free-text list row (no catalogue match). */
+    val TextLeft: ImageVector = stroked("TextLeft") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(4f, 6f); lineTo(20f, 6f)
+            moveTo(4f, 10f); lineTo(14f, 10f)
+            moveTo(4f, 14f); lineTo(20f, 14f)
+            moveTo(4f, 18f); lineTo(12f, 18f)
+        }
+    }
+
     /** SF "doc.text.badge.plus" — agreement re-acceptance reminder. */
     val DocPlus: ImageVector = stroked("DocPlus") {
         path(

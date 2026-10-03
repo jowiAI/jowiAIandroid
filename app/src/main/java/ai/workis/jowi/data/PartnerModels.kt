@@ -213,13 +213,23 @@ data class PLCandidate(
     val variantName: String? = null,
     val variants: List<PLVariant>? = null,
     val nVariants: Int? = null,
+    /** One variant stands for this candidate (single-variant product, a size fitting exactly
+     *  one, or the reader's own choice) — then `variantName`/`sku`/`price` are that variant's. */
+    val resolved: Boolean? = null,
+    /** Several variants of a real seller's product: offer "Varyant seç" / "Varyantı değiştir"
+     *  (`GET lists/items/{id}/variants/?cpid=`, 2026-10-02). */
+    val canChooseVariant: Boolean? = null,
 ) {
     /** What the row names: the resolved variant, else the family. */
     val displayName get() = variantName?.takeIf { it.isNotEmpty() } ?: name ?: sku.orEmpty()
 }
 
 @Serializable
-data class PLVariant(val sku: String? = null, val name: String? = null, val price: Double? = null, val currency: String? = null)
+data class PLVariant(val sku: String? = null, val name: String? = null, @Serializable(with = FlexDouble::class) val price: Double? = null, val currency: String? = null)
+
+/** `GET lists/items/{id}/variants/?cpid=` — that seller's variants of ONE candidate; `chosen` = the sku standing ("" when none). */
+@Serializable
+data class PLVariantList(val variants: List<PLVariant>? = null, val chosen: String? = null)
 
 @Serializable
 data class PLItem(
@@ -233,6 +243,9 @@ data class PLItem(
     @Serializable(with = FlexString::class) val boundCpid: String? = null,
     @Serializable(with = FlexString::class) val selectedCpid: String? = null,
     val candidates: List<PLCandidate>? = null,
+    /** The row's tick: a selected product AND one variant stands for it. "Teklif iste"
+     *  refuses until every matched row has it; a free-text row never blocks (2026-10-03). */
+    val complete: Boolean? = null,
 ) {
     /** the bound candidate, else the top one (the web's `sel`) */
     val selected: PLCandidate?
@@ -252,6 +265,8 @@ data class PLSuggestion(
     val currency: String? = null,
     val because: String? = null,
     val lbl: PLLabel? = null,
+    /** whose product — rides `POST lists/{id}/items/` as `sellerId` */
+    @Serializable(with = FlexString::class) val sellerId: String? = null,
 )
 
 @Serializable
@@ -412,6 +427,15 @@ data class PLSearchResult(
     val currency: String? = null,
     val img: String? = null,
     val already: Boolean? = null,
+    // 2026-10-02: the search line's keys are the service's own, SNAKE_CASE (returned raw).
+    // `price` is set only when `resolved` (one variant stands); else the count + the range.
+    @SerialName("seller_id") @Serializable(with = FlexString::class) val sellerId: String? = null,
+    val resolved: Boolean? = null,
+    val variant: String? = null,
+    @SerialName("variant_name") val variantName: String? = null,
+    @SerialName("n_variants") val nVariants: Int? = null,
+    @SerialName("price_from") @Serializable(with = FlexDouble::class) val priceFrom: Double? = null,
+    @SerialName("price_to") @Serializable(with = FlexDouble::class) val priceTo: Double? = null,
 )
 
 @Serializable
@@ -420,8 +444,21 @@ data class PLSearchResults(val results: List<PLSearchResult>? = null)
 @Serializable
 data class ListCreated(@Serializable(with = FlexString::class) val id: String? = null, @Serializable(with = FlexString::class) val listId: String? = null, val success: Boolean? = null, val message: String? = null, val error: String? = null)
 
+/** `{cpid}` selects the family, `+ sku` chooses the VARIANT (draft only), `{cpid: ""}` unselects;
+ *  a search pick adds `sellerId` + `q`. Nulls are not encoded (`explicitNulls = false`). */
 @Serializable
-data class BindBody(val cpid: String)
+data class BindBody(val cpid: String, val sku: String? = null, val sellerId: String? = null, val q: String? = null)
+
+/** `POST lists/{id}/items/` answer — raw keys: `needs_variant` → open that row's variant list. */
+@Serializable
+data class ListItemAdded(
+    val success: Boolean = false,
+    val matched: Int? = null,
+    @SerialName("item_id") @Serializable(with = FlexString::class) val itemId: String? = null,
+    @SerialName("needs_variant") val needsVariant: Boolean? = null,
+    val message: String? = null,
+    val error: String? = null,
+)
 
 @Serializable
 data class NoteBody(val note: String? = null, val letter: String? = null)
