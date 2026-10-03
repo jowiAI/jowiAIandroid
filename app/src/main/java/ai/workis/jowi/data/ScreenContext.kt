@@ -73,13 +73,17 @@ object ScreenContext {
     @Volatile
     var openListTitle: String? = null
         private set
+    /** The open list is still a DRAFT — Jowi's picks may join it (`listId`, 2026-10-02). */
+    @Volatile
+    var openListDraft: Boolean = false
+        private set
 
     /** A page without a list open: Listeler, Teklifler, Siparişler. */
-    fun setPage(page: String) { this.page = page; openListId = null; openListTitle = null }
+    fun setPage(page: String) { this.page = page; openListId = null; openListTitle = null; openListDraft = false }
 
     /** The list detail: its page is `lists` and the list rides as the scope. */
-    fun openList(id: String, title: String?) {
-        page = "lists"; openListId = id; openListTitle = title?.takeIf { it.isNotEmpty() }
+    fun openList(id: String, title: String?, draft: Boolean = false) {
+        page = "lists"; openListId = id; openListTitle = title?.takeIf { it.isNotEmpty() }; openListDraft = draft
     }
 
     fun set(screen: String, state: JsonObject? = null, visible: List<VisibleItem>, seller: String? = null) {
@@ -90,5 +94,5 @@ object ScreenContext {
         current = Snapshot(screen, state?.takeIf { it.isNotEmpty() }, labels, seller?.takeIf { it.isNotEmpty() })
     }
 
-    fun clear() { current = null; page = null; openListId = null; openListTitle = null }
+    fun clear() { current = null; page = null; openListId = null; openListTitle = null; openListDraft = false }
 }

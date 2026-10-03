@@ -179,6 +179,13 @@ data class AskBody(
     val hint: String? = null,
     /** "Teklif topla" on a pick list: the ticked product rows — only ever with `createList`. */
     val picks: List<AskPick>? = null,
+    /**
+     * Which list (2026-10-02): the open DRAFT the picks join — only with `createList`. Omitted =
+     * a new list; a `listId` no longer open silently becomes a new list server-side.
+     */
+    val listId: String? = null,
+    /** The reader's own name for a new list (else the item's name) — part of the shape, not sent today. */
+    val title: String? = null,
 )
 
 /**
@@ -346,6 +353,8 @@ data class AskResponse(
     /** The turn's row ids + `canHide`, so "Soruyu geri çek" works right after sending (2026-09-19). */
     val turn: AskTurn? = null,
     val handedOff: Boolean? = null,
+    /** Which list the picks went to (2026-10-02): true = appended to the open draft named by `listId`, false = a new list. */
+    val appended: Boolean? = null,
 )
 
 @Serializable

@@ -271,6 +271,13 @@ class JowiViewModel : ViewModel() {
     /** The open list rides as `ctxList` while the scope stays on it. */
     private fun ctxList(): String? = if (scopeGeneral) null else ScreenContext.openListId
 
+    /**
+     * Which list (2026-10-02): asked from an open DRAFT list with the scope on it, the picks
+     * join THAT list; anywhere else a new list named by the item (no `title`). A listId no
+     * longer open silently becomes a new list server-side — `appended` says which.
+     */
+    private fun draftScope(): String? = ctxList()?.takeIf { ScreenContext.openListDraft }
+
     /** Server rows → lines; each reply remembers the question it answers ("Teklif topla" resends it). */
     private fun fromServer(
         rows: List<AskLine>,
@@ -509,7 +516,7 @@ class JowiViewModel : ViewModel() {
                         q = q, page = askPage(ctx), ctxList = ctxList(),
                         createList = true, screen = ctx?.screen, state = ctx?.state,
                         visible = ctx?.visible?.takeIf { it.isNotEmpty() }, seller = ctx?.seller,
-                        picks = picks,
+                        picks = picks, listId = if (picks != null) draftScope() else null,
                     ),
                 )
             }.getOrNull()

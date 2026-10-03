@@ -170,6 +170,7 @@ fun QuotesScreen(vm: QuotesViewModel, onCompose: (String) -> Unit, onThread: (St
     var pdf by remember { mutableStateOf<Pair<String, String>?>(null) } // url to title
     var reviseFor by remember { mutableStateOf<SellerInvitation?>(null) }
     val rows = vm.invitations
+    ai.workis.jowi.ui.components.ChangesWatch("quotes") { vm.load() } // changes/ (2026-10-03)
     LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Text(stringResource(R.string.quotes_sub), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted) }
         item { NoteBand(vm.note) }

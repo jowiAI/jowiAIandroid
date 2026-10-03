@@ -15,6 +15,15 @@ import ai.workis.jowi.ui.screens.partner.CompanySections
 import ai.workis.jowi.ui.screens.console.ConsoleSub
 import ai.workis.jowi.ui.theme.Kiremit500
 import androidx.activity.compose.BackHandler
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.core.content.ContextCompat
+import ai.workis.jowi.data.PushService
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -233,6 +242,13 @@ private fun AccountHome(onReaccept: () -> Unit, onDeparture: () -> Unit, onOpen:
             }
         }
 
+        // Bildirimler (push, 2026-10-03): a firm's trade moving — `push/register/` answers
+        // only a partner seat, so only a firm gets the switch
+        if (company != null) {
+            Spacer(Modifier.height(16.dp))
+            NotificationsCard()
+        }
+
         // §10.2 reminder — stays until the seat re-accepts. A colleague seat
         // cannot accept: the paper's only button answers 403 `admin_required`,
         // so it gets a band it cannot tap, carrying the SERVER's sentence. With
@@ -279,8 +295,53 @@ private fun AccountHome(onReaccept: () -> Unit, onDeparture: () -> Unit, onOpen:
     }
 }
 
+/**
+ * The Hesap "Bildirimler" switch — off by default. Turning it on asks POST_NOTIFICATIONS
+ * (Android 13+) right here and nowhere else; a refusal leaves it off and says so. The footer
+ * names why nothing will arrive: the permission, no push carrier in this build, or the
+ * server's `ready: false`.
+ */
 @Composable
-private fun segmentedColors() = SegmentedButtonDefaults.colors(
+private fun NotificationsCard() {
+    val colors = WorkisTheme.colors
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val on by PushService.enabled.collectAsState()
+    val ready by PushService.ready.collectAsState()
+    var denied by remember { mutableStateOf(false) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) PushService.setEnabled(true) else denied = true
+    }
+    SettingsCard {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.notifications_row), color = colors.ink, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+            Switch(
+                checked = on,
+                onCheckedChange = { want ->
+                    if (!want) PushService.setEnabled(false)
+                    else {
+                        denied = false
+                        val needsAsk = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                        if (needsAsk) ask.launch(Manifest.permission.POST_NOTIFICATIONS) else PushService.setEnabled(true)
+                    }
+                },
+                colors = SwitchDefaults.colors(checkedTrackColor = colors.blue),
+            )
+        }
+    }
+    val footer = when {
+        denied -> R.string.notifications_denied
+        on && !PushService.hasCarrier -> R.string.notifications_build_off
+        on && ready == 0 -> R.string.notifications_server_off
+        else -> null
+    }
+    footer?.let {
+        Text(stringResource(it), color = colors.muted, fontSize = 12.sp, lineHeight = 16.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp))
+    }
+}
+
+@Composable
+private fun segmentedColors() =SegmentedButtonDefaults.colors(
     activeContainerColor = WorkisTheme.colors.canvas,
     activeContentColor = WorkisTheme.colors.ink,
     inactiveContainerColor = WorkisTheme.colors.surface,

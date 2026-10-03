@@ -209,7 +209,7 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
     LaunchedEffect(listId) { vm.bind(listId) }
     val d = vm.detail
     // Jowi's page + scope: "bu listede kaç kalem var?" is answered from THIS list (2026-09-19)
-    LaunchedEffect(listId, d?.list?.title) { ai.workis.jowi.data.ScreenContext.openList(listId, d?.list?.title) }
+    LaunchedEffect(listId, d?.list?.title, d?.isDraft) { ai.workis.jowi.data.ScreenContext.openList(listId, d?.list?.title, d?.isDraft == true) }
     var segment by rememberSaveable { mutableStateOf(0) }
     var pickItem by remember { mutableStateOf<PLItem?>(null) }
     var showAdd by remember { mutableStateOf(false) }

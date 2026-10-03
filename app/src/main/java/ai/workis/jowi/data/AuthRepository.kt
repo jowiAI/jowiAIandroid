@@ -274,6 +274,7 @@ class AuthRepository(
     }
 
     suspend fun logout() {
+        PushService.signingOut() // with the outgoing key, before it is ended
         safeCall(lang()) { api.logout() }
         signOutLocally()
     }

@@ -112,5 +112,6 @@ class JowiApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Graph.init(this)
+        ai.workis.jowi.data.PushService.start() // register/ on every session while Bildirimler is on
     }
 }

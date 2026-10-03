@@ -624,6 +624,13 @@ interface WorkisApi {
     @GET("workis/changes/")
     suspend fun changes(): ChangeStampsReply
 
+    // push (2026-10-03): this device asks to be told when a scope moved — `PushService`
+    @POST("workis/push/register/")
+    suspend fun pushRegister(@Body body: PushRegisterBody): PushReply
+
+    @POST("workis/push/unregister/")
+    suspend fun pushUnregister(@Body body: PushUnregisterBody): PushReply
+
     // --- §10.2 agreement re-acceptance (every seat) ---
     @GET("workis/agreement/pending/")
     suspend fun agreementPending(): AgreementPending
