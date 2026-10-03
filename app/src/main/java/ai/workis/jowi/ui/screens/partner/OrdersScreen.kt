@@ -58,6 +58,7 @@ import ai.workis.jowi.data.CarrierOption
 import ai.workis.jowi.data.CarrierOptions
 import ai.workis.jowi.data.DispatchBody
 import ai.workis.jowi.data.OrderReadyBody
+import ai.workis.jowi.data.OrderQuoting
 import ai.workis.jowi.data.PartnerOrder
 import ai.workis.jowi.data.ReviewBody
 import ai.workis.jowi.data.ServiceLevelBody
@@ -94,6 +95,9 @@ import java.time.ZoneOffset
 class OrdersViewModel : ViewModel() {
     var orders by mutableStateOf<List<PartnerOrder>?>(null)
         private set
+    /** The buyer's lists in the quote stage (`GET orders/` `quoting[]`, 2026-10-03) — empty = no strip. */
+    var quoting by mutableStateOf<List<OrderQuoting>>(emptyList())
+        private set
     var loadError by mutableStateOf<String?>(null)
         private set
     var note by mutableStateOf<String?>(null)
@@ -108,7 +112,7 @@ class OrdersViewModel : ViewModel() {
     fun load() {
         viewModelScope.launch {
             val (r, err) = partnerCall(lang) { Graph.api.orders() }
-            if (r != null) { orders = r.orders.orEmpty(); loadError = null } else if (orders == null) loadError = err
+            if (r != null) { orders = r.orders.orEmpty(); quoting = r.quoting.orEmpty(); loadError = null } else if (orders == null) loadError = err
         }
     }
 
@@ -208,6 +212,8 @@ fun OrdersScreen(
     onThread: (PartnerOrder) -> Unit,
     onContract: (PartnerOrder) -> Unit,
     onStage: (PartnerOrder) -> Unit,
+    /** A quote-stage row opens its list (the compare and "Onayla" stay there). */
+    onList: (String) -> Unit = {},
 ) {
     val colors = WorkisTheme.colors
     var reviewFor by remember { mutableStateOf<PartnerOrder?>(null) }
@@ -229,7 +235,10 @@ fun OrdersScreen(
             else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 // the other party moved an order (`changes/`, 2026-10-03)
                 ChangesWatch(scope = "orders") { vm.load() }
+                // a quote arrived on a list in the quote stage (the strip)
+                ChangesWatch(scope = "quotes") { vm.load() }
                 NoteBand(vm.note)
+                if (vm.quoting.isNotEmpty()) QuotingStrip(vm.quoting, onList)
                 if (orders.isEmpty()) Text(stringResource(R.string.orders_empty), fontSize = 14.sp, color = colors.muted, modifier = Modifier.padding(4.dp))
                 else {
                     // Aktif / Tamamlananlar — the split is the server's `done` (an older
@@ -284,6 +293,48 @@ fun OrdersScreen(
     readyFor?.let { o -> ReadySheet(o, vm.busy, onReady = { day, done -> o.id?.let { vm.ready(it, day, done) } }) { readyFor = null } }
     cargoFor?.let { o -> CargoLevelSheet(o, vm) { cargoFor = null } }
     pdfDoor?.let { (title, url, file) -> PdfViewerDialog(title, url = url, fileName = file) { pdfDoor = null } }
+}
+
+/**
+ * Teklif aşaması — the buyer's lists with requests out, above the active orders. The
+ * strip only pulls the buyer to the list; compare and "Onayla" stay there. The counts
+ * as sent; `badge` (new quotes + unread quote-stage yazışma) as a number, never a dot.
+ */
+@Composable
+private fun QuotingStrip(rows: List<OrderQuoting>, onList: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Eyebrow(stringResource(R.string.orders_quoting_title).uppercase())
+        SurfaceCard {
+            val came = stringResource(R.string.quoting_came)
+            val waiting = stringResource(R.string.quoting_waiting)
+            rows.forEachIndexed { i, q ->
+                if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                        .clickable(enabled = !q.listId.isNullOrEmpty()) { q.listId?.let(onList) }
+                        .padding(vertical = 4.dp),
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            q.title.orEmpty(), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = colors.ink,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            "${q.nQuoted ?: 0} / ${q.nInvited ?: 0} $came · ${q.nPending ?: 0} $waiting",
+                            fontSize = 13.sp, color = colors.muted,
+                        )
+                    }
+                    (q.badge ?: 0).takeIf { it > 0 }?.let {
+                        Badge(containerColor = Kiremit500, contentColor = OnKiremitFill) { Text("$it", fontSize = 10.sp) }
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+    }
 }
 
 @Composable

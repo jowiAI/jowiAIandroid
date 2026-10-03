@@ -58,7 +58,8 @@ import ai.workis.jowi.ui.theme.WorkisTheme
 sealed interface MarketDest {
     data object Home : MarketDest
     data object Lists : MarketDest
-    data class ListDetail(val id: String) : MarketDest
+    /** `back`: Listeler, or Siparişler when its quote-stage strip opened the list. */
+    data class ListDetail(val id: String, val back: MarketDest = Lists) : MarketDest
     data object Quotes : MarketDest
     data class Compose(val invitationId: String) : MarketDest
     data object Catalog : MarketDest
@@ -108,7 +109,7 @@ fun MarketRoot() {
     val cargoVm: CargoViewModel = viewModel()
     BackHandler(enabled = dest != MarketDest.Home) {
         dest = when (val d = dest) {
-            is MarketDest.ListDetail -> MarketDest.Lists
+            is MarketDest.ListDetail -> d.back
             is MarketDest.Compose -> MarketDest.Quotes
             is MarketDest.Family -> MarketDest.Catalog
             is MarketDest.Thread -> d.back
@@ -128,6 +129,7 @@ fun MarketRoot() {
             onThread = { o -> o.id?.let { dest = MarketDest.Thread(ThreadDoor.Order(it), MarketDest.Orders) } },
             onContract = { o -> o.id?.let { dest = MarketDest.Contract(it, MarketDest.Orders, o.role) } },
             onStage = { o -> o.id?.let { dest = MarketDest.Stage(it, MarketDest.Orders) } },
+            onList = { dest = MarketDest.ListDetail(it, back = MarketDest.Orders) },
         )
         is MarketDest.Stage -> OrderStageScreen(
             d.orderId,
@@ -155,8 +157,8 @@ fun MarketRoot() {
         }
         is MarketDest.ListDetail -> ListDetailScreen(
             d.id,
-            onBack = { dest = MarketDest.Lists; listsVm.load() },
-            onThread = { invId -> dest = MarketDest.Thread(ThreadDoor.Invitation(invId), MarketDest.ListDetail(d.id)) },
+            onBack = { dest = d.back; listsVm.load() },
+            onThread = { invId -> dest = MarketDest.Thread(ThreadDoor.Invitation(invId), d) },
         )
         MarketDest.Quotes -> ConsoleSub(stringResource(R.string.quotes_title), { dest = MarketDest.Home }) {
             QuotesScreen(

@@ -38,6 +38,8 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -154,8 +156,17 @@ class ThreadViewModel : ViewModel() {
     /** A MATERIAL rewrite waits for the writer's choice (typed, reading). */
     var clarify by mutableStateOf<Pair<String, String>?>(null)
         private set
+    /** The Kargo switch (2026-10-03): off by default, back off after each send. */
+    var toCargo by mutableStateOf(false)
 
     private var door: ThreadDoor? = null
+
+    /**
+     * A party at the order table (buyer / seller) — the reader the cargo channel is
+     * offered to and the "kargo" tag is drawn for. The role is the server's `myRole`;
+     * a carrier's post is cargo whatever it sends, so it gets no switch.
+     */
+    val isOrderParty get() = door is ThreadDoor.Order && payload?.myRole.let { it == "buyer" || it == "seller" }
     private val lang get() = Graph.language.value
 
     fun open(d: ThreadDoor) {
@@ -265,16 +276,17 @@ class ThreadViewModel : ViewModel() {
         busy = true; note = null; localLines.clear(); privateNote = false
         viewModelScope.launch {
             val (r, err) = partnerCall(lang) {
-                val body = ThreadPostBody(t, original?.takeIf { it != t })
+                // `audience: "cargo"` only when the switch is on — the line reaches the carrier too
+                val body = ThreadPostBody(t, original?.takeIf { it != t }, audience = "cargo".takeIf { isOrderParty && toCargo })
                 if (d is ThreadDoor.Order) Graph.api.orderThreadPost(d.id, body) else Graph.api.invitationThreadPost(d.id, body)
             }
             busy = false
             when {
                 r == null -> note = err
-                r.kind == "posted" -> { draft = ""; load() }
+                r.kind == "posted" -> { draft = ""; toCargo = false; load() }
                 else -> {
                     // private / routed: shown to the asker alone, under the last turn
-                    draft = ""
+                    draft = ""; toCargo = false
                     privateNote = r.kind == "private"
                     localLines.addAll(r.lines.orEmpty().mapNotNull { it.text }.ifEmpty { listOfNotNull(r.line) })
                     load()
@@ -462,6 +474,7 @@ fun ThreadScreen(door: ThreadDoor, onBack: () -> Unit, onContract: (String, Stri
                 }
                 // the coordinator reads the table; no composer
                 if (!p.readOnly) {
+                    if (vm.isOrderParty) CargoSwitch(vm.toCargo) { vm.toCargo = it }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(
                             value = vm.draft,
@@ -635,7 +648,10 @@ private fun MessageRow(m: ThreadMessage, seats: List<String>, vm: ThreadViewMode
                 Spacer(Modifier.width(8.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(text, fontSize = 12.sp, lineHeight = 17.sp, color = colors.muted)
-                    m.atLabel?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontSize = 9.sp, color = colors.faint) }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        m.atLabel?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontSize = 9.sp, color = colors.faint) }
+                        if (m.cargo == true && vm.isOrderParty) CargoTag()
+                    }
                 }
             }
         }
@@ -659,7 +675,7 @@ private fun MessageRow(m: ThreadMessage, seats: List<String>, vm: ThreadViewMode
             ) {
                 Text(body, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
                 TranslationToggle(translated != null, showOriginal) { showOriginal = !showOriginal }
-                Stamp(m, mine = true)
+                Stamp(m, mine = true, cargo = m.cargo == true && vm.isOrderParty)
                 if (!readOnly) Receipt(m, seats, onRetract)
             }
         }
@@ -674,7 +690,7 @@ private fun MessageRow(m: ThreadMessage, seats: List<String>, vm: ThreadViewMode
                 )
                 Text(body, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
                 TranslationToggle(translated != null, showOriginal) { showOriginal = !showOriginal }
-                Stamp(m, mine = false)
+                Stamp(m, mine = false, cargo = m.cargo == true && vm.isOrderParty)
             }
         }
     }
@@ -717,13 +733,39 @@ private fun Withdrawn(m: ThreadMessage, ownText: String) {
     }
 }
 
+/** The carrier reads this line too — a word in a hairline capsule, never colour alone. */
+@Composable
+private fun CargoTag() {
+    val colors = WorkisTheme.colors
+    Text(
+        stringResource(R.string.thread_cargo_tag),
+        fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, color = colors.muted,
+        modifier = Modifier.border(1.dp, colors.faint, RoundedCornerShape(50)).padding(horizontal = 6.dp, vertical = 1.dp),
+    )
+}
+
+/** The cargo channel on the composer: on → this one line reaches the carrier too. */
+@Composable
+private fun CargoSwitch(on: Boolean, onChange: (Boolean) -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(WorkisIcons.Truck, contentDescription = null, tint = colors.muted, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.thread_cargo_switch), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.ink, modifier = Modifier.weight(1f))
+        Switch(checked = on, onCheckedChange = onChange, colors = SwitchDefaults.colors(checkedTrackColor = colors.blue))
+    }
+}
+
 /**
  * Time, the translation toggle, and — since the proofread moved inside send —
  * the words as TYPED, one tap behind a keyboard glyph: the bubble is Jowi's
  * corrected reading, but the original is what governs.
  */
 @Composable
-private fun Stamp(m: ThreadMessage, mine: Boolean) {
+private fun Stamp(m: ThreadMessage, mine: Boolean, cargo: Boolean = false) {
     val colors = WorkisTheme.colors
     val typed = m.textOriginal?.takeIf { it.isNotEmpty() }
     var open by remember(m.id) { mutableStateOf(false) }
@@ -739,6 +781,7 @@ private fun Stamp(m: ThreadMessage, mine: Boolean) {
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             m.atLabel?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontSize = 9.sp, color = colors.faint) }
+            if (cargo) CargoTag()
             if (typed != null) {
                 Box(
                     Modifier

@@ -157,8 +157,27 @@ data class PartnerOrder(
     val isCarrier get() = role == "carrier"
 }
 
+/**
+ * The buyer's lists in the quote stage, on `GET orders/` (2026-10-03; api/v1/workis/views.py:166-175,
+ * lists_seat.py `quoting_cards`) — compare and approve stay on the list. `badge` = new quotes +
+ * unread quote-stage yazışma since the buyer last opened that list's quotes.
+ */
 @Serializable
-data class PartnerOrders(val orders: List<PartnerOrder>? = null)
+data class OrderQuoting(
+    @Serializable(with = FlexString::class) val listId: String? = null,
+    val title: String? = null,
+    val nInvited: Int? = null,
+    val nQuoted: Int? = null,
+    val nPending: Int? = null,
+    val nDeclined: Int? = null,
+    val nNew: Int? = null,
+    val nUnread: Int? = null,
+    val badge: Int? = null,
+)
+
+/** `GET orders/` → `{orders[], quoting[]}`; `quoting` is absent on an older server, [] for a seat without a buyer side. */
+@Serializable
+data class PartnerOrders(val orders: List<PartnerOrder>? = null, val quoting: List<OrderQuoting>? = null)
 
 // ---------- the stage (`GET orders/{id}/stage/`, Django `order_seat.stage_for` + `serialize_job`, 2026-10-02)
 
@@ -334,6 +353,12 @@ data class ThreadMessage(
     val icon: String? = null,
     /** "quote" on a row of the teklif-stage yazışma shown inside the order's; null otherwise. */
     val stage: String? = null,
+    /**
+     * The cargo channel (2026-10-03, thread_seat.py:103-111, :722-726): true on a line the
+     * carrier reads too — its own, a party's line sent to cargo, the shipping system lines.
+     * A carrier reader receives cargo lines only. Absent on an older server.
+     */
+    val cargo: Boolean? = null,
 )
 
 /** The lighter door: what a poll says about rows already on screen. */
@@ -416,7 +441,12 @@ data class ThreadNew(
 data class ThreadLine(val text: String? = null, val href: String? = null)
 
 @Serializable
-data class ThreadPostBody(val text: String, val textOriginal: String? = null)
+data class ThreadPostBody(
+    val text: String,
+    val textOriginal: String? = null,
+    /** "cargo" (order table, buyer / seller) sends the line to the carrier too; null = the parties only. */
+    val audience: String? = null,
+)
 
 /**
  * `posted` → reload. `private` / `routed` → draw `lines` as a Jowi card for
