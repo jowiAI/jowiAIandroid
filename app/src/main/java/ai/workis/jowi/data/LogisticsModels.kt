@@ -211,7 +211,8 @@ data class CargoVehicle(
     @Serializable(with = FlexDouble::class) val capacityM3: Double? = null,
     val koliCapacity: Int? = null,
     /** decoded only — drivers are not edited on the app */
-    val driverUserIds: List<Int>? = null,
+    /** A JSONField of User ids — read as strings, whatever the JSON holds. */
+    val driverUserIds: List<@Serializable(with = FlexString::class) String>? = null,
     val isActive: Boolean? = null,
 )
 
