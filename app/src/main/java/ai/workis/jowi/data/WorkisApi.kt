@@ -620,6 +620,10 @@ interface WorkisApi {
     @POST("workis/shipments/{id}/deliver/")
     suspend fun cargoDeliver(@Path("id") id: String, @Body body: CargoDeliverBody): CargoActionResult
 
+    // --- what moved (2026-10-03): one aggregate reading, compared per scope — `ChangeStamps` ---
+    @GET("workis/changes/")
+    suspend fun changes(): ChangeStampsReply
+
     // --- §10.2 agreement re-acceptance (every seat) ---
     @GET("workis/agreement/pending/")
     suspend fun agreementPending(): AgreementPending
