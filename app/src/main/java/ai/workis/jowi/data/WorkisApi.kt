@@ -631,6 +631,31 @@ interface WorkisApi {
     @POST("workis/shipments/{id}/deliver/")
     suspend fun cargoDeliver(@Path("id") id: String, @Body body: CargoDeliverBody): CargoActionResult
 
+    // the job's SEVK LİSTESİ (2026-10-03) is a PDF door: `workis/cargo/jobs/{orderId}/dispatch-list/` through PdfViewerDialog
+
+    /** Vehicles + runs (2026-10-03, slice 5): the carrier's active vehicles. */
+    @GET("workis/cargo/vehicles/")
+    suspend fun cargoVehicles(): CargoVehiclesReply
+
+    /** Add or update; 400 "Plate is required." / "This plate is already registered." */
+    @POST("workis/cargo/vehicles/")
+    suspend fun cargoVehicleSave(@Body body: CargoVehicleBody): CargoActionResult
+
+    /** Soft — runs and shipments keep the plate. */
+    @POST("workis/cargo/vehicles/{id}/retire/")
+    suspend fun cargoVehicleRetire(@Path("id") id: String): CargoActionResult
+
+    /** Today's and tomorrow's runs, per vehicle. */
+    @GET("workis/cargo/runs/")
+    suspend fun cargoRuns(): CargoRunsReply
+
+    @POST("workis/cargo/runs/plan/")
+    suspend fun cargoRunsPlan(@Body body: CargoPlanBody): CargoPlanReply
+
+    /** A pickup tick only — a dropoff is refused (400): it closes through the OTP delivery door. */
+    @POST("workis/cargo/runs/{id}/stops/")
+    suspend fun cargoRunStop(@Path("id") id: String, @Body body: CargoStopBody): CargoStopReply
+
     // --- what moved (2026-10-03): one aggregate reading, compared per scope — `ChangeStamps` ---
     @GET("workis/changes/")
     suspend fun changes(): ChangeStampsReply

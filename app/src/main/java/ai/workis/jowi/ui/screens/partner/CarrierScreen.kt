@@ -52,7 +52,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -81,6 +84,7 @@ import ai.workis.jowi.ui.theme.BeigeBg
 import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.OnKiremitFill
+import ai.workis.jowi.ui.theme.SuccessGreen
 import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
@@ -99,7 +103,9 @@ import java.time.format.DateTimeFormatter
  * `nextStatuses`, "Teslim et" from `canDeliver`, "İşi bırak" from `canDrop`,
  * and (2026-10-01) the one next step from `primaryAction` / `moreActions` —
  * the app keeps no table of hops. §7.1: names, streets, phones and the
- * carrier's OWN fee only — never the goods' prices.
+ * carrier's OWN fee only — never the goods' prices. (2026-10-03) A job reads
+ * before it is taken: its SEVK LİSTESİ, the "you already go there" line, the
+ * consolidated fee and the same-direction bundle; Rotalar sits in the toolbar.
  */
 class CargoViewModel : ViewModel() {
     var board by mutableStateOf<CargoBoard?>(null)
@@ -144,9 +150,26 @@ class CargoViewModel : ViewModel() {
     /** First accept wins — a 409 brings the server's "somebody was faster". */
     fun accept(j: CargoJob) {
         val id = j.orderId ?: return
+        act { acceptOne(id) }
+    }
+
+    private suspend fun acceptOne(orderId: String): String? {
+        val (r, err) = partnerCall(lang) { Graph.api.cargoAccept(orderId) }
+        return if (r?.success == false) r.error ?: err else r?.message ?: err
+    }
+
+    /**
+     * "Bu yöndekilerin hepsini al" (2026-10-03): accept stays per job — each job of the
+     * bundle in turn; a 409 on one (somebody was faster) keeps its sentence and the walk
+     * goes on; every sentence is the note, one reload at the end.
+     */
+    fun acceptBundle(bundle: String) {
+        if (bundle.isEmpty()) return
+        val ids = board?.jobs.orEmpty().filter { it.bundle == bundle }.mapNotNull { it.orderId }
+        if (ids.isEmpty()) return
         act {
-            val (r, err) = partnerCall(lang) { Graph.api.cargoAccept(id) }
-            if (r?.success == false) r.error ?: err else r?.message ?: err
+            ids.mapNotNull { id -> acceptOne(id)?.takeIf { it.isNotBlank() } }
+                .joinToString("\n").ifEmpty { null }
         }
     }
 
@@ -287,11 +310,12 @@ private sealed interface CargoRow {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CarrierScreen(vm: CargoViewModel, onBack: () -> Unit) {
+fun CarrierScreen(vm: CargoViewModel, onBack: () -> Unit, onRuns: () -> Unit) {
     val colors = WorkisTheme.colors
     val context = LocalContext.current
     LaunchedEffect(Unit) { vm.load() }
     var otpTarget by remember { mutableStateOf<CargoShipment?>(null) }
+    var dispatchFor by remember { mutableStateOf<CargoJob?>(null) }
     var dropTarget by remember { mutableStateOf<CargoShipment?>(null) }
     var statusTarget by remember { mutableStateOf<Pair<CargoShipment, String>?>(null) }
     var labelFor by remember { mutableStateOf<CargoShipment?>(null) }
@@ -320,6 +344,10 @@ fun CarrierScreen(vm: CargoViewModel, onBack: () -> Unit) {
         if (vm.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Kiremit500)
         IconButton(onClick = startScan) {
             Icon(WorkisIcons.QrScan, contentDescription = stringResource(R.string.cargo_scan), tint = colors.ink, modifier = Modifier.size(22.dp))
+        }
+        // Rotalar (2026-10-03): the runs per vehicle and day, the vehicles behind them
+        IconButton(onClick = onRuns) {
+            Icon(WorkisIcons.Route, contentDescription = stringResource(R.string.cargo_runs), tint = colors.ink, modifier = Modifier.size(22.dp))
         }
     }) {
         ai.workis.jowi.ui.components.ChangesWatch("cargo", typing = dropTarget != null) { vm.load() } // changes/ (2026-10-03); a drop reason holds it back
@@ -352,7 +380,7 @@ fun CarrierScreen(vm: CargoViewModel, onBack: () -> Unit) {
                                 CargoRow.Note -> NoteBand(vm.note)
                                 is CargoRow.Header -> Eyebrow(stringResource(row.text).uppercase())
                                 is CargoRow.Empty -> Text(stringResource(row.text), fontSize = 13.sp, color = colors.muted, modifier = Modifier.padding(horizontal = 4.dp))
-                                is CargoRow.Job -> JobCard(row.job, vm)
+                                is CargoRow.Job -> JobCard(row.job, vm) { dispatchFor = row.job }
                                 is CargoRow.Ship -> ShipmentCard(row.shipment, vm, highlighted = vm.highlight == row.shipment.id, perform = perform)
                             }
                         }
@@ -378,6 +406,15 @@ fun CarrierScreen(vm: CargoViewModel, onBack: () -> Unit) {
             onDismiss = { labelFor = null },
         )
     }
+    // the open job's SEVK LİSTESİ, readable before accepting; 404 → the server's sentence
+    dispatchFor?.let { j ->
+        PdfViewerDialog(
+            title = stringResource(R.string.cargo_dispatch_list),
+            url = WORKIS_BASE_URL + "workis/cargo/jobs/${j.orderId}/dispatch-list/",
+            fileName = "sevk-listesi.pdf",
+            onDismiss = { dispatchFor = null },
+        )
+    }
 }
 
 @Composable
@@ -394,7 +431,7 @@ private fun CargoCard(highlighted: Boolean = false, content: @Composable () -> U
 }
 
 @Composable
-private fun JobCard(j: CargoJob, vm: CargoViewModel) {
+private fun JobCard(j: CargoJob, vm: CargoViewModel, onDispatchList: () -> Unit) {
     val colors = WorkisTheme.colors
     CargoCard {
         Row(verticalAlignment = Alignment.Top) {
@@ -403,7 +440,26 @@ private fun JobCard(j: CargoJob, vm: CargoViewModel) {
                 fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink, modifier = Modifier.weight(1f),
             )
             // the carrier's own fee — the only money on this screen (§7.1)
-            Text(WorkisMoney.text(j.fee, j.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
+            val consolidated = j.feeConsolidated
+            if (consolidated != null) {
+                // a fitting ertesi-gün job pays the consolidated fee: the plain one struck
+                val label = stringResource(R.string.cargo_fee_consolidated) + " " + WorkisMoney.text(consolidated, j.currency)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = label },
+                ) {
+                    Text(
+                        WorkisMoney.text(j.fee, j.currency), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp,
+                        color = colors.muted, textDecoration = TextDecoration.LineThrough,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Icon(WorkisIcons.Link, contentDescription = null, tint = colors.ink, modifier = Modifier.size(13.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text(WorkisMoney.text(consolidated, j.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
+                }
+            } else {
+                Text(WorkisMoney.text(j.fee, j.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
+            }
         }
         Text("${j.pickupDistrict ?: "—"} → ${j.dropoffDistrict ?: "—"}", fontSize = 13.sp, color = colors.ink)
         val packagesWord = stringResource(R.string.cargo_packages_word)
@@ -419,14 +475,39 @@ private fun JobCard(j: CargoJob, vm: CargoViewModel) {
         val after = stringResource(R.string.cargo_pickup_after)
         val due = stringResource(R.string.cargo_due_at)
         MonoLine(listOfNotNull(stamp(j.pickupAfter)?.let { "$after: $it" }, stamp(j.dueAt)?.let { "$due: $it" }))
-        if (j.dayFull == true) {
+        // "you already go there": the server counts this carrier's stops in that district
+        j.fitN?.takeIf { it > 0 }?.let { n ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(WorkisIcons.Calendar, contentDescription = null, tint = Beige, modifier = Modifier.size(14.dp))
+                Icon(WorkisIcons.Route, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(stringResource(R.string.cargo_day_full), fontWeight = FontWeight.Medium, fontSize = 12.sp, color = Beige)
+                Text(
+                    "${stringResource(R.string.cargo_fit_prefix)} ${j.fitWhere?.takeIf { it.isNotEmpty() } ?: j.dropoffDistrict.orEmpty()}: $n ${stringResource(R.string.cargo_fit_suffix)}",
+                    fontWeight = FontWeight.Medium, fontSize = 12.sp, color = SuccessGreen,
+                )
             }
-        } else {
-            DoorRow(stringResource(R.string.cargo_accept), WorkisIcons.Check, enabled = !vm.busy) { vm.accept(j) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (j.dayFull == true) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(WorkisIcons.Calendar, contentDescription = null, tint = Beige, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.cargo_day_full), fontWeight = FontWeight.Medium, fontSize = 12.sp, color = Beige)
+                }
+            } else {
+                DoorRow(stringResource(R.string.cargo_accept), WorkisIcons.Check, enabled = !vm.busy) { vm.accept(j) }
+            }
+            // read the job before taking it: the SEVK LİSTESİ preview (no street/phone/OTP yet)
+            if (j.orderId != null) DoorRow(stringResource(R.string.cargo_dispatch_list), WorkisIcons.DocText, enabled = true, onClick = onDispatchList)
+        }
+        // the same-direction bundle: accept stays per job, taken in turn
+        val bundle = j.bundle
+        val n = j.bundleCount ?: 0
+        if (n > 1 && !bundle.isNullOrEmpty() && j.dayFull != true) {
+            OutlinedButton(onClick = { vm.acceptBundle(bundle) }, enabled = !vm.busy, modifier = Modifier.height(36.dp)) {
+                Icon(WorkisIcons.ShippingBox, contentDescription = null, tint = colors.ink, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("${stringResource(R.string.cargo_bundle_take_all)} ($n)", fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink)
+            }
         }
     }
 }

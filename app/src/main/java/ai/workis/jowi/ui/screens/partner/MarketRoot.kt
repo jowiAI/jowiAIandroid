@@ -75,6 +75,8 @@ sealed interface MarketDest {
     data object Calendar : MarketDest
     /** The carrier seat's board. */
     data object Cargo : MarketDest
+    /** Rotalar — the carrier's runs per vehicle and day, off the Kargo toolbar (2026-10-03). */
+    data object CargoRuns : MarketDest
 }
 
 /**
@@ -115,6 +117,7 @@ fun MarketRoot() {
             is MarketDest.Thread -> d.back
             is MarketDest.Contract -> d.back
             is MarketDest.Stage -> d.back
+            MarketDest.CargoRuns -> MarketDest.Cargo
             else -> MarketDest.Home
         }
     }
@@ -122,7 +125,8 @@ fun MarketRoot() {
         MarketDest.Home -> MarketHome(listsVm, quotesVm, catalogVm, ordersVm, approvalsVm, badgesVm, cargoVm) { dest = it }
         MarketDest.Ledger -> LedgerScreen(ledgerVm, onBack = { dest = MarketDest.Home })
         MarketDest.Calendar -> CalendarScreen(calendarVm, onBack = { dest = MarketDest.Home })
-        MarketDest.Cargo -> CarrierScreen(cargoVm, onBack = { dest = MarketDest.Home })
+        MarketDest.Cargo -> CarrierScreen(cargoVm, onBack = { dest = MarketDest.Home }, onRuns = { dest = MarketDest.CargoRuns })
+        MarketDest.CargoRuns -> CarrierRunsScreen(onBack = { dest = MarketDest.Cargo })
         MarketDest.Orders -> OrdersScreen(
             ordersVm,
             onBack = { dest = MarketDest.Home },

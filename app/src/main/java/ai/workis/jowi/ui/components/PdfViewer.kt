@@ -41,8 +41,11 @@ import ai.workis.jowi.ui.theme.PaperWhite
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.absoluteWorkisUrl
+import ai.workis.jowi.data.serverSentence
+import androidx.compose.ui.text.style.TextAlign
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import retrofit2.HttpException
 import java.io.File
 
 
@@ -68,9 +71,13 @@ fun PdfViewerDialog(title: String, url: String? = null, data: ByteArray? = null,
     val context = LocalContext.current
     var bytes by remember { mutableStateOf(data) }
     var failed by remember { mutableStateOf(false) }
+    // the server's own sentence on a refused download (e.g. 404 `{error}` on a job this carrier may not see)
+    var failText by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(url) {
         if (bytes == null && url != null) {
-            val b = runCatching { withContext(Dispatchers.IO) { Graph.api.download(absoluteWorkisUrl(url)).use { it.bytes() } } }.getOrNull()
+            val b = runCatching { withContext(Dispatchers.IO) { Graph.api.download(absoluteWorkisUrl(url)).use { it.bytes() } } }
+                .onFailure { e -> if (e is HttpException) failText = serverSentence(e) }
+                .getOrNull()
             if (b != null && looksLikePdf(b)) bytes = b else failed = true
         }
     }
@@ -87,7 +94,7 @@ fun PdfViewerDialog(title: String, url: String? = null, data: ByteArray? = null,
             when {
                 b != null -> PdfPages(b, Modifier.fillMaxSize(), spinnerColor = PaperInk)
                 failed -> Column(Modifier.fillMaxSize().padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(stringResource(R.string.contract_load_fail), color = PaperInk.copy(alpha = 0.7f), fontSize = 14.sp)
+                    Text(failText ?: stringResource(R.string.contract_load_fail), color = PaperInk.copy(alpha = 0.7f), fontSize = 14.sp, textAlign = TextAlign.Center)
                     TextButton(onClick = { failed = false; bytes = null }) { Text(stringResource(R.string.retry), color = PaperInk) }
                 }
                 else -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = PaperInk) }

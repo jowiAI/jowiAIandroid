@@ -129,6 +129,15 @@ data class CargoJob(
     val dayCapacity: Int? = null,
     val dayFull: Boolean? = null,
     val packages: Int? = null,
+    // consolidation (2026-10-03, carrier_seat._job) — absent on an older server
+    /** how many of this carrier's shipments driven that day stop in `fitWhere` */
+    val fitN: Int? = null,
+    val fitWhere: String? = null,
+    /** same day + same dropoff district; `bundleCount` jobs share it (1 = alone) */
+    val bundle: String? = null,
+    val bundleCount: Int? = null,
+    /** the fee a fitting ertesi-gün job pays (the carrier's OWN fee); null otherwise */
+    @Serializable(with = FlexDouble::class) val feeConsolidated: Double? = null,
 )
 
 @Serializable
@@ -189,3 +198,80 @@ data class CargoDropBody(val reason: String? = null)
 
 @Serializable
 data class CargoDeliverBody(val otp: String)
+
+// --- vehicles + runs (2026-10-03, slice 5 — carrier_seat._vehicle / _run). Plain fleet data, no money. ---
+
+@Serializable
+data class CargoVehicle(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val plate: String? = null,
+    val kind: String? = null, // motosiklet | panelvan | kamyonet | kamyon
+    val kindLabel: String? = null,
+    val capacityKg: Int? = null,
+    @Serializable(with = FlexDouble::class) val capacityM3: Double? = null,
+    val koliCapacity: Int? = null,
+    /** decoded only — drivers are not edited on the app */
+    val driverUserIds: List<Int>? = null,
+    val isActive: Boolean? = null,
+)
+
+@Serializable
+data class CargoVehiclesReply(val vehicles: List<CargoVehicle>? = null)
+
+/** Add (no id) or update; the server upper-cases the plate and refuses a duplicate with its sentence. */
+@Serializable
+data class CargoVehicleBody(val plate: String, val kind: String, val capacityKg: Int? = null)
+
+/** One vehicle's run for one day. */
+@Serializable
+data class CargoRun(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val runDate: String? = null,
+    val day: String? = null, // today | tomorrow
+    @Serializable(with = FlexString::class) val vehicleId: String? = null,
+    val plate: String? = null,
+    val status: String? = null, // planned | active | done
+    val driverUserId: Int? = null,
+    val mine: Boolean? = null,
+    val note: String? = null,
+    val doneCount: Int? = null,
+    val stops: List<CargoStop>? = null,
+)
+
+@Serializable
+data class CargoStop(
+    val seq: Int? = null,
+    val kind: String? = null, // pickup | dropoff
+    @Serializable(with = FlexString::class) val shipmentId: String? = null,
+    val number: String? = null,
+    val place: String? = null,
+    val district: String? = null,
+    val street: String? = null,
+    val serviceLevel: String? = null,
+    /** "HH:MM" or "" */
+    val deadline: String? = null,
+    val late: Boolean? = null,
+    val packages: Int? = null,
+    /** ISO when ticked, null otherwise */
+    val doneAt: String? = null,
+)
+
+@Serializable
+data class CargoRunsReply(val runs: List<CargoRun>? = null)
+
+/** `vehicleId` = a vehicle's id or "all"; `day` = today | tomorrow. */
+@Serializable
+data class CargoPlanBody(val vehicleId: String, val day: String)
+
+/** Re-planning replaces that day's runs; `leftOut` names the shipments that did not fit. */
+@Serializable
+data class CargoPlanReply(
+    val runs: List<CargoRun>? = null,
+    val leftOut: List<@Serializable(with = FlexString::class) String>? = null,
+)
+
+@Serializable
+data class CargoStopBody(val shipmentId: String, val kind: String)
+
+@Serializable
+data class CargoStopReply(val runStatus: String? = null, val shipmentStatus: String? = null)

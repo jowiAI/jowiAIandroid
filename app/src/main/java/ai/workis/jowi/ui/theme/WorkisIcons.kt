@@ -77,6 +77,23 @@ object WorkisIcons {
         }
     }
 
+    /** SF "point.topleft.down.to.point.bottomright.curvepath" — Rotalar, a plan, a fitting route. */
+    val Route: ImageVector = stroked("Route") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(3f, 5f); arcToRelative(2f, 2f, 0f, true, false, 4f, 0f); arcToRelative(2f, 2f, 0f, true, false, -4f, 0f)
+            moveTo(17f, 19f); arcToRelative(2f, 2f, 0f, true, false, 4f, 0f); arcToRelative(2f, 2f, 0f, true, false, -4f, 0f)
+            moveTo(5f, 7f); curveTo(5f, 15f, 19f, 9f, 19f, 17f)
+        }
+    }
+
+    /** SF "mappin" — a run's dropoff stop. */
+    val MapPin: ImageVector = stroked("MapPin") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(12f, 21.5f); lineTo(6.06f, 13.2f); arcToRelative(7f, 7f, 0f, true, true, 11.88f, 0f); close()
+            moveTo(9.5f, 9.5f); arcToRelative(2.5f, 2.5f, 0f, true, false, 5f, 0f); arcToRelative(2.5f, 2.5f, 0f, true, false, -5f, 0f)
+        }
+    }
+
     val PersonKey: ImageVector = stroked("PersonKey") {
         path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
             moveTo(6f, 8f); arcToRelative(4f, 4f, 0f, true, false, 8f, 0f); arcToRelative(4f, 4f, 0f, true, false, -8f, 0f)
