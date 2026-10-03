@@ -415,6 +415,18 @@ object WorkisIcons {
         }
     }
 
+    /** SF "hourglass" — a proposed term card, waiting for the other seat. */
+    val Hourglass: ImageVector = stroked("Hourglass") {
+        path(
+            fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round,
+        ) {
+            moveTo(6f, 3.5f); lineTo(18f, 3.5f); moveTo(6f, 20.5f); lineTo(18f, 20.5f)
+            moveTo(7.5f, 3.5f); lineTo(7.5f, 6.5f); quadTo(7.5f, 9.5f, 12f, 12f); quadTo(16.5f, 9.5f, 16.5f, 6.5f); lineTo(16.5f, 3.5f)
+            moveTo(7.5f, 20.5f); lineTo(7.5f, 17.5f); quadTo(7.5f, 14.5f, 12f, 12f); quadTo(16.5f, 14.5f, 16.5f, 17.5f); lineTo(16.5f, 20.5f)
+        }
+    }
+
     /** SF "shield". */
     val Shield: ImageVector = stroked("Shield") {
         path(

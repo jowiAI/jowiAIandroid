@@ -219,6 +219,8 @@ data class ThreadMessage(
     val trace: String? = null,
     /** The system line's own word (delivered · accepted · … · withdrawn); the emoji map is the fallback. */
     val icon: String? = null,
+    /** "quote" on a row of the teklif-stage yazışma shown inside the order's; null otherwise. */
+    val stage: String? = null,
 )
 
 /** The lighter door: what a poll says about rows already on screen. */
@@ -267,12 +269,19 @@ data class ThreadPayload(
     val myRole: String? = null, // buyer | seller | carrier | coordinator
     val parties: ThreadParties? = null,
     val messages: List<ThreadMessage>? = null,
+    /**
+     * The winning quote's yazışma (2026-10-02): same grammar, each row `stage:
+     * "quote"`, read-only. Drawn ABOVE `messages`; `[]` for a carrier.
+     */
+    val quoteStage: List<ThreadMessage>? = null,
     val shipment: OrderShipment? = null,
     val terms: List<OrderTerm>? = null,
     val nTermsOk: Int? = null,
     val nTerms: Int? = null,
     val contract: OrderContractBadge? = null,
     val inspection: List<ThreadInspection>? = null,
+    /** What the three typed cards offer (data/ThreadModels.kt); null for a carrier. */
+    val termChoices: TermChoices? = null,
 ) {
     /** The coordinator reads the table; the composer is hidden. */
     val readOnly get() = myRole == "coordinator"
@@ -333,6 +342,11 @@ data class OrderTerm(
     val canWithdraw: Boolean? = null,
     val canDecline: Boolean? = null,
     val proposedBy: String? = null,
+    /**
+     * The stored value behind `display` (camelCase; its shape differs per key) —
+     * raw, read through `valueText` / `valueInt` (data/ThreadModels.kt).
+     */
+    val value: kotlinx.serialization.json.JsonElement? = null,
 )
 
 @Serializable
