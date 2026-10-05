@@ -183,8 +183,8 @@ data class PartnerOrders(val orders: List<PartnerOrder>? = null, val quoting: Li
 
 /**
  * One line of the `lines` job. The flags only keep dead buttons off the screen;
- * the doors hold the rules. `canMark` (the seller's hand-delivery mark) has no
- * API door — decoded, never drawn.
+ * the doors hold the rules. `canMark` = the seller's hand-delivery mark →
+ * `POST orders/lines/{id}/delivered/` (2026-10-05).
  */
 @Serializable
 data class OrderJobLine(

@@ -31,11 +31,13 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -97,8 +99,8 @@ class ListsViewModel : ViewModel() {
     }
 
     /**
-     * archive · unarchive · retry — the server decides (canArchive / canRetry); a sent
-     * list answers 409 and its sentence is shown as is. Nothing is deleted.
+     * archive · unarchive · retry · withdraw — the server decides (canArchive / canRetry /
+     * canWithdraw); a refusal answers 409 and its sentence is shown as is. Nothing is deleted.
      */
     fun act(row: PurchaseListRow, action: String) {
         val id = row.id ?: return
@@ -108,6 +110,7 @@ class ListsViewModel : ViewModel() {
                 when (action) {
                     "archive" -> Graph.api.listArchive(id)
                     "unarchive" -> Graph.api.listUnarchive(id)
+                    "withdraw" -> Graph.api.listWithdraw(id)
                     else -> Graph.api.listRetry(id)
                 }
             }
@@ -180,6 +183,8 @@ fun ListsScreen(vm: ListsViewModel, onOpen: (String) -> Unit) {
     }
     // "Arşivlenen taslaklar" is the same screen over the archived drafts
     var showArchived by remember { mutableStateOf(false) }
+    // the row whose "Talebi geri çek" was pressed once (the swipe) — waits for the second press
+    var armedWithdraw by remember { mutableStateOf<String?>(null) }
     BackHandler(enabled = showArchived) { showArchived = false }
     if (showArchived) {
         LaunchedEffect(Unit) { vm.loadArchived() }
@@ -229,6 +234,19 @@ fun ListsScreen(vm: ListsViewModel, onOpen: (String) -> Unit) {
                             label = stringResource(R.string.list_retry), icon = WorkisIcons.Retry, tint = colors.blue,
                             enabled = !vm.busy, onSwipe = { vm.act(row, "retry") },
                         ) { ListRow(row, vm) { row.id?.let(onOpen) } }
+                        // a request out for quotes (2026-10-04): the swipe is the FIRST press — the
+                        // row then shows the confirming button; the second press posts, 4 s puts it back
+                        row.canWithdraw == true -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            SwipeRow(
+                                label = stringResource(R.string.list_withdraw), icon = WorkisIcons.Undo, tint = colors.muted,
+                                enabled = !vm.busy, onSwipe = { armedWithdraw = row.id },
+                            ) { ListRow(row, vm) { row.id?.let(onOpen) } }
+                            if (armedWithdraw != null && armedWithdraw == row.id) WithdrawButton(
+                                busy = vm.busy, startArmed = true,
+                                onConfirm = { armedWithdraw = null; vm.act(row, "withdraw") },
+                                onReset = { if (armedWithdraw == row.id) armedWithdraw = null },
+                            )
+                        }
                         else -> ListRow(row, vm) { row.id?.let(onOpen) }
                     }
                 }
@@ -331,6 +349,31 @@ private fun ListRow(row: PurchaseListRow, vm: ListsViewModel, onClick: () -> Uni
             if (row.demo == true) StatusPill(stringResource(R.string.demo_tag))
             if (row.held != null) StatusPill(stringResource(R.string.held_tag), Beige)
         }
+    }
+}
+
+/**
+ * "Talebi geri çek" — two presses, no system dialog (Django note §O): the first arms it
+ * ("Geri çek — satıcılara bildirilecek ✓"), the second posts. Four seconds, or the button
+ * leaving the screen, puts it back. `startArmed`: the lists screen's swipe was the first press.
+ */
+@Composable
+internal fun WithdrawButton(busy: Boolean, startArmed: Boolean = false, onConfirm: () -> Unit, onReset: () -> Unit = {}) {
+    val colors = WorkisTheme.colors
+    var armed by remember { mutableStateOf(startArmed) }
+    LaunchedEffect(armed) {
+        if (armed) { delay(4_000); armed = false; onReset() }
+    }
+    DisposableEffect(Unit) { onDispose { onReset() } }
+    OutlinedButton(
+        onClick = { if (armed) { armed = false; onConfirm() } else armed = true },
+        enabled = !busy,
+        modifier = Modifier.height(36.dp),
+    ) {
+        if (busy) { CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = colors.faint); Spacer(Modifier.width(8.dp)) }
+        Icon(if (armed) WorkisIcons.Check else WorkisIcons.Undo, contentDescription = null, tint = colors.ink, modifier = Modifier.size(15.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(stringResource(if (armed) R.string.list_withdraw_confirm else R.string.list_withdraw), fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink)
     }
 }
 

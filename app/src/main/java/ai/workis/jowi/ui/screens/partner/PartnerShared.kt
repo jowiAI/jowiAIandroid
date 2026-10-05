@@ -65,7 +65,7 @@ fun Eyebrow(text: String) {
 
 @Composable
 fun listStatusText(s: String?): String = stringResource(
-    when (s) { "quoting" -> R.string.ls_quoting; "ordered" -> R.string.ls_ordered; "closed" -> R.string.ls_closed; else -> R.string.ls_draft },
+    when (s) { "quoting" -> R.string.ls_quoting; "ordered" -> R.string.ls_ordered; "closed" -> R.string.ls_closed; "withdrawn" -> R.string.ls_withdrawn; else -> R.string.ls_draft },
 )
 
 @Composable

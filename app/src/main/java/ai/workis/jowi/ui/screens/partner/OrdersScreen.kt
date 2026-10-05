@@ -158,6 +158,10 @@ class OrdersViewModel : ViewModel() {
     fun lineObjectionWithdraw(lineId: String, onResult: ((Boolean, String?) -> Unit)? = null) =
         act(onResult) { simple { Graph.api.lineObjectionWithdraw(lineId) } }
 
+    /** The seller's hand-over mark (`canMark`, 2026-10-05) — the buyer confirms after it; 404 / 400 carry the sentence. */
+    fun lineMarkDelivered(lineId: String, onResult: ((Boolean, String?) -> Unit)? = null) =
+        act(onResult) { simple { Graph.api.lineMarkDelivered(lineId) } }
+
     /**
      * The dispatch doors answer without `success`: a 2xx is the yes and its
      * `message` the note; a refusal is the server's sentence, kept in the sheet.

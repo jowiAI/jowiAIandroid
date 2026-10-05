@@ -120,6 +120,8 @@ fun OrderStageScreen(
     var confirmFund by remember { mutableStateOf(false) }
     var readyOpen by remember { mutableStateOf(false) }
     var lineConfirm by remember { mutableStateOf<OrderJobLine?>(null) }
+    // the line whose "Teslim ettim" waits for the confirmation (2026-10-05)
+    var lineMark by remember { mutableStateOf<OrderJobLine?>(null) }
     var objectionFor by remember { mutableStateOf<OrderJobLine?>(null) }
     LaunchedEffect(orderId) { ai.workis.jowi.data.ScreenContext.setPage("orders"); vm.load(orderId) }
     /** A door's answer: the sentence is this screen's note; a yes re-reads the stage. */
@@ -149,6 +151,7 @@ fun OrderStageScreen(
                         onFund = { confirmFund = true },
                         onReady = { readyOpen = true },
                         onConfirmLine = { lineConfirm = it },
+                        onMarkLine = { lineMark = it },
                         onObject = { objectionFor = it },
                         onWithdraw = { l -> l.id?.let { doors.lineObjectionWithdraw(it, after) } },
                     )
@@ -203,6 +206,15 @@ fun OrderStageScreen(
             destructive = false,
             onDismiss = { lineConfirm = null },
         ) { l.id?.let { doors.lineConfirm(it, after) } }
+    }
+    lineMark?.let { l ->
+        // the seller's hand-over mark: the server's `message` (or its refusal) becomes the note
+        ConfirmDialog(
+            stringResource(R.string.line_mark_delivered),
+            stringResource(R.string.line_mark_delivered_confirm),
+            destructive = false,
+            onDismiss = { lineMark = null },
+        ) { l.id?.let { doors.lineMarkDelivered(it, after) } }
     }
     objectionFor?.let { l ->
         ObjectionSheet(onSend = { reason -> l.id?.let { doors.lineObjection(it, reason, after) } }) { objectionFor = null }
@@ -292,6 +304,7 @@ private fun JobView(
     onFund: () -> Unit,
     onReady: () -> Unit,
     onConfirmLine: (OrderJobLine) -> Unit,
+    onMarkLine: (OrderJobLine) -> Unit,
     onObject: (OrderJobLine) -> Unit,
     onWithdraw: (OrderJobLine) -> Unit,
 ) {
@@ -320,7 +333,7 @@ private fun JobView(
             }
             OrderDoorRow(WorkisIcons.ShippingBox, stringResource(R.string.order_ready_action), enabled = !busy, onClick = onReady)
         }
-        "lines" -> job.lines.orEmpty().forEach { l -> LineJob(l, busy, onConfirmLine, onObject, onWithdraw) }
+        "lines" -> job.lines.orEmpty().forEach { l -> LineJob(l, busy, onConfirmLine, onMarkLine, onObject, onWithdraw) }
         // read-only: there is no collect door in the app
         "collect" -> {
             job.number?.takeIf { it.isNotEmpty() }?.let { StageFact(stringResource(R.string.stage_invoice), it) }
@@ -353,12 +366,13 @@ private fun termsSub(job: OrderJob, o: PartnerOrder): String? {
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 
-/** One line of the `lines` job: confirm / object / withdraw by the flags. `canMark` has no door — not drawn. */
+/** One line of the `lines` job: the seller's hand-over mark / confirm / object / withdraw by the flags. */
 @Composable
 private fun LineJob(
     l: OrderJobLine,
     busy: Boolean,
     onConfirm: (OrderJobLine) -> Unit,
+    onMark: (OrderJobLine) -> Unit,
     onObject: (OrderJobLine) -> Unit,
     onWithdraw: (OrderJobLine) -> Unit,
 ) {
@@ -369,8 +383,10 @@ private fun LineJob(
             fontSize = 14.sp, color = colors.ink,
         )
         l.note?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted) }
-        if (l.canConfirm == true || l.canObject == true || l.canWithdraw == true) {
+        if (l.canMark == true || l.canConfirm == true || l.canObject == true || l.canWithdraw == true) {
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                // the seller's hand-over mark (`orders/lines/{id}/delivered/`) — the buyer confirms after it
+                if (l.canMark == true) LineAction(stringResource(R.string.line_mark_delivered), colors.accentText, !busy) { onMark(l) }
                 if (l.canConfirm == true) LineAction(stringResource(R.string.ap_confirm_delivery), colors.accentText, !busy) { onConfirm(l) }
                 if (l.canObject == true) LineAction(stringResource(R.string.ap_object), colors.danger, !busy) { onObject(l) }
                 if (l.canWithdraw == true) LineAction(stringResource(R.string.ap_object_withdraw), colors.accentText, !busy) { onWithdraw(l) }

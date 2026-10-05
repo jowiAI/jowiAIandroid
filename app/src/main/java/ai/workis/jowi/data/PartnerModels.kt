@@ -131,7 +131,7 @@ data class AutonomyResult(val success: Boolean = false, val message: String? = n
 data class PurchaseListRow(
     @Serializable(with = FlexString::class) val id: String? = null,
     val title: String? = null,
-    val status: String? = null, // draft | quoting | ordered | closed
+    val status: String? = null, // draft | quoting | ordered | closed | withdrawn
     val stage: String? = null, // parsing | matching | compliance | checking | ready | error
     val source: String? = null,
     @Serializable(with = FlexString::class) val projectId: String? = null,
@@ -150,6 +150,11 @@ data class PurchaseListRow(
     /** The screens' own words ("teklif aşamasında" / "okunuyor") — drawn before the app's map. */
     val statusLabel: String? = null,
     val stageLabel: String? = null,
+    /** 2026-10-04: a request out for quotes with nothing awarded may be taken back
+     *  (`POST lists/{id}/withdraw/`, 409 otherwise); `withdrawn` once it was. The detail's
+     *  `list` carries neither — read them from this row. */
+    val canWithdraw: Boolean? = null,
+    val withdrawn: Boolean? = null,
 ) {
     val isWorking get() = stage in PL_WORKING_STAGES
 }
@@ -160,7 +165,7 @@ val PL_WORKING_STAGES = setOf("parsing", "matching", "compliance", "checking")
 @Serializable
 data class PurchaseListIndex(val lists: List<PurchaseListRow>? = null)
 
-/** `archive` / `unarchive` / `retry` — a sent list answers 409 with the sentence to show. */
+/** `archive` / `unarchive` / `retry` / `withdraw` — a sent list answers 409 with the sentence to show. */
 @Serializable
 data class ListActionResult(val success: Boolean = false, val list: PurchaseListRow? = null, val stage: String? = null, val message: String? = null, val error: String? = null)
 
@@ -462,14 +467,27 @@ data class PLSearchResult(
     val already: Boolean? = null,
     // 2026-10-02: the search line's keys are the service's own, SNAKE_CASE (returned raw).
     // `price` is set only when `resolved` (one variant stands); else the count + the range.
-    @SerialName("seller_id") @Serializable(with = FlexString::class) val sellerId: String? = null,
+    // 2026-10-05 (views.py `_camel_twins`): the camelCase twins ride beside the snake keys —
+    // both spellings are read, the camelCase one first.
+    @SerialName("sellerId") @Serializable(with = FlexString::class) val sellerIdCamel: String? = null,
+    @SerialName("seller_id") @Serializable(with = FlexString::class) val sellerIdSnake: String? = null,
     val resolved: Boolean? = null,
     val variant: String? = null,
-    @SerialName("variant_name") val variantName: String? = null,
-    @SerialName("n_variants") val nVariants: Int? = null,
-    @SerialName("price_from") @Serializable(with = FlexDouble::class) val priceFrom: Double? = null,
-    @SerialName("price_to") @Serializable(with = FlexDouble::class) val priceTo: Double? = null,
-)
+    @SerialName("variantName") val variantNameCamel: String? = null,
+    @SerialName("variant_name") val variantNameSnake: String? = null,
+    @SerialName("nVariants") val nVariantsCamel: Int? = null,
+    @SerialName("n_variants") val nVariantsSnake: Int? = null,
+    @SerialName("priceFrom") @Serializable(with = FlexDouble::class) val priceFromCamel: Double? = null,
+    @SerialName("price_from") @Serializable(with = FlexDouble::class) val priceFromSnake: Double? = null,
+    @SerialName("priceTo") @Serializable(with = FlexDouble::class) val priceToCamel: Double? = null,
+    @SerialName("price_to") @Serializable(with = FlexDouble::class) val priceToSnake: Double? = null,
+) {
+    val sellerId get() = sellerIdCamel ?: sellerIdSnake
+    val variantName get() = variantNameCamel ?: variantNameSnake
+    val nVariants get() = nVariantsCamel ?: nVariantsSnake
+    val priceFrom get() = priceFromCamel ?: priceFromSnake
+    val priceTo get() = priceToCamel ?: priceToSnake
+}
 
 @Serializable
 data class PLSearchResults(val results: List<PLSearchResult>? = null)
@@ -612,7 +630,7 @@ data class SellerOrder(
 @Serializable
 data class SellerInvitation(
     @Serializable(with = FlexString::class) val id: String? = null,
-    val status: String? = null, // invited | viewed | quoted | declined
+    val status: String? = null, // invited | viewed | quoted | declined | withdrawn
     val statusLabel: String? = null,
     val createdAt: String? = null,
     @Serializable(with = FlexString::class) val rfqId: String? = null,
@@ -635,7 +653,10 @@ data class SellerInvitation(
     val order: SellerOrder? = null,
     val lost: Boolean? = null,
 ) {
-    val isOpen get() = status == "invited" || status == "viewed"
+    /** `withdrawn` (2026-10-04, lists_seat.py:116 / quotes_seat.py:299): the buyer took the request
+     *  back — closed, no quote form; a quote already given stays on the record. */
+    val isWithdrawn get() = status == "withdrawn"
+    val isOpen get() = !isWithdrawn && (status == "invited" || status == "viewed")
 }
 
 @Serializable

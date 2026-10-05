@@ -161,6 +161,8 @@ fun MarketRoot() {
         }
         is MarketDest.ListDetail -> ListDetailScreen(
             d.id,
+            // the lists row's `canWithdraw` (the detail's `list` lacks it) until the detail reads its own
+            canWithdraw = listsVm.lists?.firstOrNull { it.id == d.id }?.canWithdraw == true,
             onBack = { dest = d.back; listsVm.load() },
             onThread = { invId -> dest = MarketDest.Thread(ThreadDoor.Invitation(invId), d) },
         )

@@ -380,6 +380,10 @@ interface WorkisApi {
     @POST("workis/orders/lines/{lineId}/objection-withdraw/")
     suspend fun lineObjectionWithdraw(@Path("lineId") lineId: String): SimpleResult
 
+    /** The seller's hand-over mark (`canMark`, 2026-10-05) → `{success, message}`; 404 not the seller's line, 400 with the reason. */
+    @POST("workis/orders/lines/{lineId}/delivered/")
+    suspend fun lineMarkDelivered(@Path("lineId") lineId: String): SimpleResult
+
     @POST("workis/orders/lines/{lineId}/objection-resolve/")
     suspend fun lineObjectionResolve(@Path("lineId") lineId: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
 
@@ -502,6 +506,10 @@ interface WorkisApi {
     @POST("workis/lists/{id}/retry/")
     suspend fun listRetry(@Path("id") id: String): ListActionResult
 
+    /** Takes a request out for quotes back before any award (2026-10-04): the sellers are told, the list is `withdrawn` + archived; 409 carries the sentence. */
+    @POST("workis/lists/{id}/withdraw/")
+    suspend fun listWithdraw(@Path("id") id: String): ListActionResult
+
     @Multipart
     @POST("workis/lists/upload/")
     suspend fun listUpload(@Part file: okhttp3.MultipartBody.Part): ListCreated
@@ -523,6 +531,10 @@ interface WorkisApi {
 
     @GET("workis/lists/items/{id}/search/")
     suspend fun listItemSearch(@Path("id") id: String, @Query("q") q: String): PLSearchResults
+
+    /** The catalogue search for a NEW row before it exists (2026-10-05) — the per-row search's rows, prices null for a buyer. */
+    @GET("workis/lists/search/")
+    suspend fun listsSearch(@Query("q") q: String): PLSearchResults
 
     /** A product row `{cpid, sellerId?, sku?, q?}` → `{matched, item_id, needs_variant}` (2026-10-02). */
     @POST("workis/lists/{id}/items/")

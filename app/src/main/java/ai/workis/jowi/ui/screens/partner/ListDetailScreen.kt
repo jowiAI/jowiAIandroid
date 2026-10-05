@@ -123,7 +123,37 @@ class ListDetailViewModel : ViewModel() {
     private var id: String? = null
     private val lang get() = Graph.language.value
 
-    fun bind(listId: String) { if (id != listId) { id = listId; detail = null; load() } }
+    /** `canWithdraw` as last read from `GET lists/` (null = not read yet) — the detail's `list`
+     *  does not carry it (lists_seat.py:1174 vs the detail serializer). */
+    var withdrawable by mutableStateOf<Boolean?>(null)
+        private set
+    var withdrawing by mutableStateOf(false)
+        private set
+
+    fun bind(listId: String) { if (id != listId) { id = listId; detail = null; withdrawable = null; load(); readWithdrawable() } }
+
+    /** This list's row from `GET lists/` (absent = archived, so nothing to withdraw). */
+    fun readWithdrawable() {
+        val listId = id ?: return
+        viewModelScope.launch {
+            val (r, _) = partnerCall(lang) { Graph.api.lists() }
+            r?.lists?.let { rows -> withdrawable = rows.firstOrNull { it.id == listId }?.canWithdraw == true }
+        }
+    }
+
+    /** `POST lists/{id}/withdraw/` → the sellers are told, the list is `withdrawn` and archived;
+     *  a 409 shows the server's sentence. */
+    fun withdraw() {
+        val listId = id ?: return
+        if (withdrawing) return
+        withdrawing = true; note = null
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.listWithdraw(listId) }
+            withdrawing = false
+            if (r == null || !r.success) note = r?.error ?: r?.message ?: err
+            load(); readWithdrawable()
+        }
+    }
 
     fun load() {
         val listId = id ?: return
@@ -158,12 +188,26 @@ class ListDetailViewModel : ViewModel() {
      * list." (400) → the note; `needs_variant` → that row opens on its variant list at once.
      */
     fun addSuggestion(s: PLSuggestion, onNeedsVariant: (PLItem, String) -> Unit) {
+        addProductRow(s.cpid ?: return, s.sellerId, onNeedsVariant = onNeedsVariant)
+    }
+
+    /** A line of the add-item search (2026-10-05): `{cpid, sellerId, q}` + `sku` only when the
+     *  line is ONE variant of a multi-variant family (the per-row search's rule). */
+    fun addSearchResult(r: PLSearchResult, q: String, onNeedsVariant: (PLItem, String) -> Unit) {
+        val sku = if (r.resolved == true && (r.nVariants ?: 0) > 1) r.sku else null
+        addProductRow(r.cpid ?: return, r.sellerId, sku, q, onNeedsVariant)
+    }
+
+    private fun addProductRow(cpid: String, sellerId: String?, sku: String? = null, q: String? = null, onNeedsVariant: (PLItem, String) -> Unit) {
         val listId = id ?: return
-        val cpid = s.cpid ?: return
         if (busy) return
         busy = true
         viewModelScope.launch {
-            val (r, err) = partnerCall(lang) { Graph.api.listAddProduct(listId, jsonBody("cpid" to cpid, "sellerId" to s.sellerId?.let { it.toIntOrNull() ?: it })) }
+            val body = jsonBody(
+                "cpid" to cpid, "sellerId" to sellerId?.let { it.toIntOrNull() ?: it },
+                "sku" to sku?.takeIf { it.isNotEmpty() }, "q" to q?.takeIf { it.isNotEmpty() },
+            )
+            val (r, err) = partnerCall(lang) { Graph.api.listAddProduct(listId, body) }
             busy = false
             if (r?.success != true) { note = r?.error ?: r?.message ?: err; load(); return@launch }
             val fresh = reload()
@@ -187,6 +231,9 @@ class ListDetailViewModel : ViewModel() {
     }
     suspend fun search(itemId: String, q: String): List<PLSearchResult> =
         partnerCall(lang) { Graph.api.listItemSearch(itemId, q) }.first?.results.orEmpty()
+    /** `GET lists/search/?q=` — the catalogue search for a row not created yet. */
+    suspend fun searchNew(q: String): List<PLSearchResult> =
+        partnerCall(lang) { Graph.api.listsSearch(q) }.first?.results.orEmpty()
     suspend fun variants(itemId: String, cpid: String): Pair<PLVariantList?, String?> =
         partnerCall(lang) { Graph.api.listItemVariants(itemId, cpid) }
 
@@ -245,7 +292,7 @@ private fun sendGroups(d: PurchaseListDetail): List<SendGroup> {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> Unit = {}) {
+fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> Unit = {}, canWithdraw: Boolean = false) {
     val vm: ListDetailViewModel = viewModel(key = "list-$listId")
     val colors = WorkisTheme.colors
     LaunchedEffect(listId) { vm.bind(listId) }
@@ -291,6 +338,9 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
             when {
                 d != null -> {
                     Header(d)
+                    // a request out for quotes may be taken back (2026-10-04) — two presses, no
+                    // system dialog; the lists row's flag until this screen's own read answers
+                    if (vm.withdrawable ?: canWithdraw) WithdrawButton(busy = vm.withdrawing, onConfirm = vm::withdraw)
                     NoteBand(vm.note)
                     if (d.isWorking) Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = colors.faint)
@@ -331,7 +381,11 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
     pickItem?.let { item ->
         key(item.id) { CandidateSheet(item, d?.isDraft == true, vm, openVariantsFor = pickVariantCpid, prices = d?.showsPrices ?: true) { pickItem = null; pickVariantCpid = null } }
     }
-    if (showAdd) AddItemSheet(vm) { showAdd = false }
+    if (showAdd) AddItemSheet(vm, prices = d?.showsPrices ?: true, onPick = { r, q ->
+        // a catalogue line: the sheet is gone; `needs_variant` opens that row's variant list
+        showAdd = false
+        vm.addSearchResult(r, q) { row, cpid -> pickVariantCpid = cpid; pickItem = row }
+    }) { showAdd = false }
     if (showSend && d != null) SendPreviewSheet(d, vm, onRefused = { msg, row ->
         // the gate's sentence names the rows (2026-10-03): it becomes the screen note and
         // the first open row opens once the send sheet is gone
@@ -1113,18 +1167,32 @@ private fun CandidateRow(c: PLCandidate, bound: Boolean, prices: Boolean, onClic
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddItemSheet(vm: ListDetailViewModel, onDismiss: () -> Unit) {
+private fun AddItemSheet(vm: ListDetailViewModel, prices: Boolean, onPick: (PLSearchResult, String) -> Unit, onDismiss: () -> Unit) {
     val colors = WorkisTheme.colors
     var name by remember { mutableStateOf("") }
+    // `GET lists/search/?q=` as the name is typed (2026-10-05): 300 ms, two characters at least
+    var results by remember { mutableStateOf<List<PLSearchResult>>(emptyList()) }
+    val typed = name.trim()
+    LaunchedEffect(typed) {
+        if (typed.length < 2) { results = emptyList(); return@LaunchedEffect }
+        delay(300)
+        results = vm.searchNew(typed)
+    }
     var qty by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val fc = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue)
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.surface) {
-        Column(Modifier.padding(20.dp).imePadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp).imePadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.add_item), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = colors.ink)
             OutlinedTextField(value = name, onValueChange = { name = it }, placeholder = { Text(stringResource(R.string.item_name), color = colors.faint) }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = fc, modifier = Modifier.fillMaxWidth())
+            if (results.isNotEmpty()) {
+                Eyebrow(stringResource(R.string.add_item_from_catalogue).uppercase())
+                results.forEach { r -> SearchLine(r, prices) { if (!busy && !vm.busy) onPick(r, typed) } }
+                // the manual row stays the fallback below the catalogue lines
+                Eyebrow(stringResource(R.string.add_item_manual).uppercase())
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(value = qty, onValueChange = { qty = it }, placeholder = { Text(stringResource(R.string.qty_field), color = colors.faint) }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = fc, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
                 OutlinedTextField(value = unit, onValueChange = { unit = it }, placeholder = { Text(stringResource(R.string.unit_field), color = colors.faint) }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = fc, modifier = Modifier.weight(1f))

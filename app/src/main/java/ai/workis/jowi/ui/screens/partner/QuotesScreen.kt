@@ -212,7 +212,12 @@ private fun InvitationCard(inv: SellerInvitation, onCompose: () -> Unit, onPdf: 
         Row(verticalAlignment = Alignment.Top) {
             Text(inv.caseTitle ?: inv.request ?: "—", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, color = colors.ink, maxLines = 2, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(6.dp))
-            StatusPill(inv.statusLabel ?: inv.status.orEmpty(), if (inv.isOpen) colors.accentText else colors.muted)
+            StatusPill(if (inv.isWithdrawn) stringResource(R.string.ls_withdrawn) else inv.statusLabel ?: inv.status.orEmpty(), if (inv.isOpen) colors.accentText else colors.muted)
+        }
+        // the buyer took the request back (2026-10-04): closed, icon + words, no quote form
+        if (inv.isWithdrawn) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(WorkisIcons.Undo, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
+            Text(stringResource(R.string.inv_withdrawn), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.muted)
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(inv.buyer?.short.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = colors.accentText)
@@ -338,7 +343,7 @@ private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onPdf: (String, St
             val parts = listOf(tm.packaging, warranty, tm.warrantyText, tm.returnsText).filterNotNull().filter { it.isNotEmpty() }
             if (parts.isNotEmpty()) Text(parts.joinToString(" · "), fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, maxLines = 3)
         }
-        if (inv.order == null && inv.lost != true && inv.rfqStatus != "awarded") {
+        if (inv.order == null && inv.lost != true && inv.rfqStatus != "awarded" && !inv.isWithdrawn) {
             Text(stringResource(R.string.quote_revise), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable(onClick = onRevise))
         }
     }
