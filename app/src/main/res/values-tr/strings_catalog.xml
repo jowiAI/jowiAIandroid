@@ -535,6 +535,7 @@
     <string name="jowi_load_older">Eski kayıtları yükle</string>
     <string name="jowi_more_example">Bir örnek daha</string>
     <string name="jowi_no_older">Daha eski kayıt yok</string>
+    <string name="jowi_note_title">Jowi\'nin notu</string>
     <string name="jowi_open_link">Aç</string>
     <string name="jowi_option_other_hint">Kendi cümlenizle yazın — ya da gördüğünüz etiketin adını verin.</string>
     <string name="jowi_prompt">Jowi\'ye sor…</string>
@@ -574,6 +575,7 @@
     <string name="lists_unit">liste</string>
     <string name="live_empty">Henüz yayında teklif yok.</string>
     <string name="live_sub">Yayındaki teklifler — fiyat, ad, temin süresi, stok ve görünürlük düzenlenebilir; Geri Al bir ürün ailesini incelemeye geri götürür.</string>
+    <string name="ls_checking">Kontrol ediliyor</string>
     <string name="ls_closed">Kapandı</string>
     <string name="ls_draft">Taslak</string>
     <string name="ls_ordered">Sipariş verildi</string>
@@ -602,6 +604,15 @@
     <string name="msg_word">mesaj</string>
     <string name="my_agreement">Sözleşmem</string>
     <string name="name_visibility_title">Ad görünürlüğü</string>
+    <string name="need_answer_placeholder">Ya da cevabınızı yazın</string>
+    <string name="need_build">Listeyi kur</string>
+    <string name="need_problem">Sorun</string>
+    <string name="need_questions_left">soru kaldı</string>
+    <string name="need_role_core">ürünün kendisi</string>
+    <string name="need_role_fix">soruna çözüm</string>
+    <string name="need_role_needed">gerekli</string>
+    <string name="need_role_optional">isteğe bağlı</string>
+    <string name="need_skip">Atla</string>
     <string name="new_case_placeholder">İhtiyacını anlat — ör. \"Çekvalf DN50, 20 adet\"</string>
     <string name="new_case_title">Yeni talep</string>
     <string name="new_product">Yeni ürün (katalog yok)</string>
@@ -613,6 +624,13 @@
     <string name="no_email">e-posta yok</string>
     <string name="no_match">Eşleşme yok</string>
     <string name="no_profile_body">Bu hesabın henüz Workis üyeliği yok. Başvurunuz onaylandıysa, onay e-postanızdaki adresle girin. Yeni misin? Giriş ekranından başvurabilirsin.</string>
+    <string name="note_kind_duplicate">mükerrer</string>
+    <string name="note_kind_incompatible">uyumsuz</string>
+    <string name="note_kind_missing">eksik</string>
+    <string name="note_kind_note">not</string>
+    <string name="note_kind_problem">sorun</string>
+    <string name="note_kind_quantity">miktar</string>
+    <string name="note_kind_standard">standart</string>
     <string name="note_placeholder">Teklif isteğiyle giden isteğe bağlı not…</string>
     <string name="note_title">Satıcılara not</string>
     <string name="notifications_build_off">Bu sürümde bildirim kaydı kapalı</string>
@@ -809,7 +827,7 @@
     <string name="role_partner">PARTNER</string>
     <string name="row_choose_product">ürünü seçin</string>
     <string name="row_choose_variant">varyant seçin</string>
-    <string name="row_free_text">katalogda eşleşme yok — talep metin olarak gider</string>
+    <string name="row_free_text">Workis tedarikçi bulur</string>
     <string name="row_price_in_quote">fiyat teklifle gelir</string>
     <string name="sample_cleanup">Örneği kaldır</string>
     <string name="search_products">Başka ürün ara…</string>

@@ -535,6 +535,7 @@
     <string name="jowi_load_older">Load earlier records</string>
     <string name="jowi_more_example">One more example</string>
     <string name="jowi_no_older">No earlier records</string>
+    <string name="jowi_note_title">Jowi\'s note</string>
     <string name="jowi_open_link">Open</string>
     <string name="jowi_option_other_hint">Type it in your own words — or name the label you see.</string>
     <string name="jowi_prompt">Ask Jowi…</string>
@@ -574,6 +575,7 @@
     <string name="lists_unit">lists</string>
     <string name="live_empty">No live offers yet.</string>
     <string name="live_sub">Live offers — price, name, lead time, stock and visibility are editable; Withdraw sends a family back to review.</string>
+    <string name="ls_checking">Checking</string>
     <string name="ls_closed">Closed</string>
     <string name="ls_draft">Draft</string>
     <string name="ls_ordered">Ordered</string>
@@ -602,6 +604,15 @@
     <string name="msg_word">messages</string>
     <string name="my_agreement">My agreement</string>
     <string name="name_visibility_title">Name visibility</string>
+    <string name="need_answer_placeholder">Or type your answer</string>
+    <string name="need_build">Build the list</string>
+    <string name="need_problem">The problem</string>
+    <string name="need_questions_left">questions left</string>
+    <string name="need_role_core">the thing itself</string>
+    <string name="need_role_fix">for the problem</string>
+    <string name="need_role_needed">needed</string>
+    <string name="need_role_optional">optional</string>
+    <string name="need_skip">Skip</string>
     <string name="new_case_placeholder">Describe what you need — e.g. \"DN50 check valve, 20 pcs\"</string>
     <string name="new_case_title">New case</string>
     <string name="new_product">New product (no catalogue)</string>
@@ -613,6 +624,13 @@
     <string name="no_email">no e-mail</string>
     <string name="no_match">No match yet</string>
     <string name="no_profile_body">This account has no Workis membership yet. If your application was approved, sign in with the address from your approval e-mail. New here? Apply from the sign-in screen.</string>
+    <string name="note_kind_duplicate">duplicate</string>
+    <string name="note_kind_incompatible">incompatible</string>
+    <string name="note_kind_missing">missing</string>
+    <string name="note_kind_note">note</string>
+    <string name="note_kind_problem">problem</string>
+    <string name="note_kind_quantity">quantity</string>
+    <string name="note_kind_standard">standard</string>
     <string name="note_placeholder">Optional note sent with the RFQ…</string>
     <string name="note_title">Note to sellers</string>
     <string name="notifications_build_off">Notification registration is off in this build</string>
@@ -809,7 +827,7 @@
     <string name="role_partner">PARTNER</string>
     <string name="row_choose_product">choose the product</string>
     <string name="row_choose_variant">choose the variant</string>
-    <string name="row_free_text">no catalogue match — the request goes as text</string>
+    <string name="row_free_text">Workis sources it</string>
     <string name="row_price_in_quote">price comes with the quote</string>
     <string name="sample_cleanup">Remove the example</string>
     <string name="search_products">Search other products…</string>
