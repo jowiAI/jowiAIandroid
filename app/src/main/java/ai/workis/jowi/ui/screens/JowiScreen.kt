@@ -80,6 +80,18 @@ import ai.workis.jowi.data.AskBody
 import ai.workis.jowi.data.AskLikeBody
 import ai.workis.jowi.data.AskPreviewBody
 import ai.workis.jowi.data.AskSeller
+import ai.workis.jowi.data.AskNeed
+import ai.workis.jowi.data.AskNeedAnswerBody
+import ai.workis.jowi.data.AskNeedComponent
+import ai.workis.jowi.data.AskNeedQuestion
+import ai.workis.jowi.data.AskResponse
+import ai.workis.jowi.ui.theme.Kiremit400
+import ai.workis.jowi.ui.theme.OnKiremitFill
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.text.input.ImeAction
 import ai.workis.jowi.data.absoluteWorkisUrl
 import ai.workis.jowi.data.messageFromBody
 import ai.workis.jowi.data.safeCall
@@ -215,7 +227,16 @@ data class JowiLine(
     val hidden: Boolean = false,
     val trace: String? = null,
     val canUnhide: Boolean = false,
+    /** The salesperson's card (`kind: "need"`, 2026-10-03) — re-drawn in place on each answer. */
+    val need: AskNeed? = null,
+    /** The buyer's answers to the card's questions, drawn as their bubbles above it. */
+    val needAnswers: List<String> = emptyList(),
+    val needBusy: Boolean = false,
+    val needError: String? = null,
 )
+
+/** What this session knows of a need card — history rows carry only its sentence (asked of Django). */
+private data class KeptNeed(val need: AskNeed, val answers: List<String>, val listId: String?)
 
 class JowiViewModel : ViewModel() {
     val lines = mutableStateListOf<JowiLine>()
@@ -259,10 +280,20 @@ class JowiViewModel : ViewModel() {
     /** The chosen variant SKU; "" = "leave it to the seller". */
     val pickSkus = mutableStateMapOf<String, String>()
 
+    /** The need card's free-text answer, per needId. */
+    val needDrafts = mutableStateMapOf<String, String>()
+    /**
+     * The need cards of this session by needId — their latest reading, the answers given and
+     * the list built. `lines` is rebuilt on every history reload; this outlives it.
+     */
+    private val keptNeeds = HashMap<String, KeptNeed>()
+
     private var nextId = 1L
     private fun newId() = nextId++
     private val lang get() = Graph.language.value
-    private val hasPending get() = lines.any { it.pending }
+    private val hasPending get() = lines.any { it.pending || it.needBusy }
+    /** A turn or a need card's call is in flight — every door waits. */
+    val busy get() = hasPending
 
     /** The page the asker came from; a seller's catalogue screens say "products". */
     private fun askPage(ctx: ScreenContext.Snapshot?): String =
@@ -319,6 +350,15 @@ class JowiViewModel : ViewModel() {
                 if (match != null && match.products.isEmpty()) keptMatch[key]?.let { (m, picked) ->
                     line = line.copy(match = m, optionPicked = picked)
                 }
+                // a need row: this session's card when it has one (the row's id IS the
+                // needId), else the row's own fields when it carries them
+                if (l.kind == "need") {
+                    val k = keptNeeds[l.needId ?: l.id.orEmpty()]
+                    line = if (k != null) line.copy(
+                        need = k.need, needAnswers = k.answers, listId = line.listId ?: k.listId,
+                        canHide = if (k.listId != null) false else line.canHide,
+                    ) else line.copy(need = l.need)
+                }
             }
             out += line
             if (isUser) lastQ = l.text
@@ -346,7 +386,8 @@ class JowiViewModel : ViewModel() {
                     // answer pair; the card that bore the match carries the listId,
                     // so the repeat pair is folded away
                     val collected = HashMap<String, String>() // question → listId
-                    lines.forEach { l -> if (l.who != "user") l.listId?.let { collected[l.question.orEmpty()] = it } }
+                    // (a need card's list is its own, built from the card — never a resend's)
+                    lines.forEach { l -> if (l.who != "user" && l.need == null) l.listId?.let { collected[l.question.orEmpty()] = it } }
                     foldResends(collected)
                     scrollTick++
                 }
@@ -624,7 +665,9 @@ class JowiViewModel : ViewModel() {
                     // a match's chips belong to its card (AskMatch.options), not the clarify set
                     options = r.options?.takeIf { it.isNotEmpty() && r.kind != "match" },
                     serverId = r.turn?.answerIds?.firstOrNull(),
+                    need = r.need,
                 )
+                r.need?.let { keptNeeds[it.needId] = KeptNeed(it, emptyList(), null) }
                 // the row ids ride in the answer (2026-09-19): "Soruyu geri çek"
                 // works the moment the reply lands, no history re-read
                 r.turn?.let { t ->
@@ -651,6 +694,92 @@ class JowiViewModel : ViewModel() {
         if (q.isNullOrEmpty()) return false
         send(q, null)
         return true
+    }
+
+    // ---- the need card (2026-10-03) ----
+
+    /**
+     * A chip, the typed text or "Atla" → `ask/need/{id}/answer/`; the reply is the same card
+     * re-read IN PLACE, the buyer's answer standing above it (or, once the list exists, the
+     * list — the door answers `kind: "list"` then).
+     */
+    fun answerNeed(line: JowiLine, value: String? = null, skip: Boolean = false, skipWord: String = "") {
+        val idx = lines.indexOfFirst { it.id == line.id }
+        if (idx < 0 || hasPending) return
+        val n = lines[idx].need ?: return
+        val q = n.question ?: return
+        val shown = if (skip) skipWord else value?.trim().orEmpty()
+        if (!skip && shown.isEmpty()) return
+        lines[idx] = lines[idx].copy(needBusy = true, needError = null)
+        viewModelScope.launch {
+            val r = needCall { Graph.api.askNeedAnswer(n.needId, AskNeedAnswerBody(q.key, if (skip) null else shown, if (skip) true else null)) }
+            val j = lines.indexOfFirst { it.id == line.id }
+            if (j < 0) return@launch
+            val res = r.first
+            if (res == null) { lines[j] = lines[j].copy(needBusy = false, needError = r.second); return@launch }
+            lines[j] = lines[j].copy(needBusy = false, needAnswers = lines[j].needAnswers + shown)
+            if (!skip) needDrafts.remove(n.needId)
+            val fresh = res.need
+            val lid = res.listId?.takeIf { it.isNotEmpty() }
+            when {
+                fresh != null -> lines[j] = lines[j].copy(need = fresh)
+                res.kind == "list" && lid != null -> landNeedList(j, lid)
+            }
+            keepNeed(lines[j])
+            if (isLastReply(lines[j])) scrollTick++
+        }
+    }
+
+    /**
+     * "Listeyi kur" → `ask/need/{id}/build/` → `{kind: "list", listId, …}`; the card then does
+     * what a `createList` card does: "Listeyi aç" (the list detail polls itself to `ready`).
+     */
+    fun buildNeed(line: JowiLine) {
+        val idx = lines.indexOfFirst { it.id == line.id }
+        if (idx < 0 || hasPending) return
+        val n = lines[idx].need ?: return
+        lines[idx] = lines[idx].copy(needBusy = true, needError = null)
+        viewModelScope.launch {
+            val r = needCall { Graph.api.askNeedBuild(n.needId) }
+            val j = lines.indexOfFirst { it.id == line.id }
+            if (j < 0) return@launch
+            val lid = r.first?.takeIf { it.kind == "list" }?.listId?.takeIf { it.isNotEmpty() }
+            if (lid == null) {
+                lines[j] = lines[j].copy(needBusy = false, needError = r.second ?: statusMessage(null, lang))
+                return@launch
+            }
+            lines[j] = lines[j].copy(needBusy = false)
+            landNeedList(j, lid)
+            keepNeed(lines[j])
+            if (isLastReply(lines[j])) scrollTick++
+        }
+    }
+
+    /** One need door: the answer, or the server's sentence why not (a 400's `error`, else the status line). */
+    private suspend fun needCall(call: suspend () -> AskResponse): Pair<AskResponse?, String?> =
+        try {
+            val r = call()
+            if (r.success) r to null else null to (r.message ?: statusMessage(null, lang))
+        } catch (e: HttpException) {
+            null to messageFromBody(e, lang)
+        } catch (e: Exception) {
+            null to statusMessage(null, lang)
+        }
+
+    /**
+     * The card's list exists: its question and footer go, "Listeyi aç" takes over, and the
+     * turn did work — neither it nor the question above it can be withdrawn any more.
+     */
+    private fun landNeedList(j: Int, listId: String) {
+        val l = lines[j]
+        lines[j] = l.copy(listId = listId, need = l.need?.copy(question = null), canHide = false)
+        val u = (0 until j).lastOrNull { lines[it].who == "user" }
+        if (u != null) lines[u] = lines[u].copy(canHide = false)
+    }
+
+    private fun keepNeed(l: JowiLine) {
+        val n = l.need ?: return
+        keptNeeds[n.needId] = KeptNeed(n, l.needAnswers, l.listId)
     }
 
     /** 👍 / 👎 — first verdict wins; a 👎 opens a review on the expert side. */
@@ -801,6 +930,12 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
                 when {
                     line.hidden -> WithdrawnStub(line, vm)
                     line.who == "user" -> UserBubble(line, vm)
+                    // the need card is re-drawn IN PLACE on each answer: the buyer's
+                    // answers stand as their bubbles above the card's latest reading
+                    line.needAnswers.isNotEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        line.needAnswers.forEach { NeedAnswerBubble(it) }
+                        ReplyBubble(line, vm) { askFocus.requestFocus() }
+                    }
                     else -> ReplyBubble(line, vm) { askFocus.requestFocus() }
                 }
             }
@@ -1012,6 +1147,7 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Uni
                     // long answer) a title line — the md_lite grammar (2026-09-27);
                     // never the asterisks (2026-09-17)
                     AnswerText(line.text, color = colors.ink, fontSize = 15.sp, lineHeight = 22.sp)
+                    line.need?.let { NeedCard(it, line, vm) }
                     line.match?.takeIf { it.sellers.isNotEmpty() || it.products.isNotEmpty() }?.let { MatchCard(it, line, vm) }
                     // the chat-born list opens natively; else the step after a technical answer
                     val listId = line.listId
@@ -1063,7 +1199,7 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Uni
                             "🔒 " + stringResource(R.string.ask_answer_source_wall),
                             fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint,
                         )
-                    } else if (line.source == "clarify" || line.options != null) Unit
+                    } else if (line.source == "clarify" || line.options != null || line.need != null) Unit
                     else if (!label.isNullOrEmpty()) {
                         Text(label, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.5.sp, color = colors.muted)
                     } else if (line.source != null && line.surface != null) {
@@ -1201,6 +1337,187 @@ private fun NextCard(n: AskNext, line: JowiLine, vm: JowiViewModel) {
             Icon(WorkisIcons.Sparkle, contentDescription = null, tint = if (busy) colors.faint else colors.accentText, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.collect_quotes), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (busy) colors.faint else colors.accentText)
+        }
+    }
+}
+
+/** The buyer's answer to a need question — the asker's bubble grammar, no menu (it is not a turn). */
+@Composable
+private fun NeedAnswerBubble(text: String) {
+    val colors = WorkisTheme.colors
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Text(
+            text, fontSize = 15.sp, lineHeight = 21.sp, color = colors.ink, textAlign = TextAlign.End,
+            modifier = Modifier
+                .widthIn(max = 300.dp)
+                .background(Kiremit500.copy(alpha = 0.08f), RoundedCornerShape(18.dp))
+                .border(1.dp, Kiremit500.copy(alpha = 0.55f), RoundedCornerShape(18.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        )
+    }
+}
+
+/**
+ * The salesperson's card (`kind: "need"`, 2026-10-03; the web `needCard` is the model): the
+ * job, the problem behind it, the components with their role, ONE question, and "Listeyi kur"
+ * always. No price, no seller, no catalogue verdict anywhere on it.
+ */
+@Composable
+private fun NeedCard(n: AskNeed, line: JowiLine, vm: JowiViewModel) {
+    val colors = WorkisTheme.colors
+    Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (n.job.isNotEmpty()) {
+            Text(n.job, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 21.sp, color = colors.ink)
+        }
+        if (n.problem.isNotEmpty()) {
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = colors.muted, fontWeight = FontWeight.Medium)) { append(stringResource(R.string.need_problem) + ": ") }
+                    withStyle(SpanStyle(color = colors.ink)) { append(n.problem) }
+                },
+                fontSize = 14.sp, lineHeight = 20.sp,
+            )
+        }
+        if (n.components.isNotEmpty()) {
+            Column { n.components.forEach { NeedComponentRow(it) } }
+        }
+        // the list exists: "Listeyi aç" (ReplyBubble) takes over; question and footer go
+        if (line.listId == null) {
+            if (line.needBusy) {
+                CircularProgressIndicator(Modifier.size(16.dp).padding(vertical = 2.dp), strokeWidth = 2.dp, color = Kiremit500)
+            } else {
+                n.question?.let { NeedQuestion(it, n, line, vm) }
+                if (n.questionsLeft > 1) {
+                    Text("${n.questionsLeft} " + stringResource(R.string.need_questions_left), fontSize = 12.sp, color = colors.faint)
+                }
+                NeedBuildButton(n, line, vm)
+            }
+            line.needError?.let {
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(Icons.Filled.Info, contentDescription = null, tint = Beige, modifier = Modifier.size(14.dp).padding(top = 2.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = Beige)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A component row: the role chip (the word always; `fix` in the warning idiom), the name, the
+ * quantity when known, the attributes, and why it is on the card.
+ */
+@Composable
+private fun NeedComponentRow(c: AskNeedComponent) {
+    val colors = WorkisTheme.colors
+    val fix = c.role == "fix"
+    val role = stringResource(
+        when (c.role) {
+            "core" -> R.string.need_role_core
+            "optional" -> R.string.need_role_optional
+            "fix" -> R.string.need_role_fix
+            else -> R.string.need_role_needed
+        },
+    )
+    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                role, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = if (fix) Beige else colors.muted,
+                modifier = Modifier
+                    .background(if (fix) BeigeBg else colors.ink.copy(alpha = 0.07f), CircleShape)
+                    .padding(horizontal = 7.dp, vertical = 2.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(c.name.orEmpty(), fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, color = colors.ink, modifier = Modifier.weight(1f))
+            c.qty?.let { q ->
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    listOf(WorkisMoney.qty(q), c.unit.orEmpty()).filter { it.isNotEmpty() }.joinToString(" "),
+                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.ink,
+                )
+            }
+        }
+        c.attributeTexts.takeIf { it.isNotEmpty() }?.let {
+            Text(it.joinToString(" · "), fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
+        }
+        c.why?.takeIf { it.isNotEmpty() }?.let {
+            Text(it, fontSize = 11.sp, lineHeight = 15.sp, color = colors.faint)
+        }
+    }
+    Box(Modifier.fillMaxWidth().height(1.dp).background(colors.ink.copy(alpha = 0.08f)))
+}
+
+/** The card's ONE question: the text, why it is asked, the chips, a free-text line with a send arrow, and "Atla". */
+@Composable
+private fun NeedQuestion(q: AskNeedQuestion, n: AskNeed, line: JowiLine, vm: JowiViewModel) {
+    val colors = WorkisTheme.colors
+    val live = !vm.busy
+    val draft = vm.needDrafts[n.needId].orEmpty()
+    val typed = draft.trim()
+    val skipWord = stringResource(R.string.need_skip)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 2.dp)) {
+        Text(q.text, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, color = colors.ink)
+        if (q.why.isNotEmpty()) Text(q.why, fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)
+        // a chip IS the answer (`q` = its own words, so no open-ended pencil)
+        JowiOptions(q.options.map { AskOption(it, it) }, picked = false, enabled = live) { o ->
+            vm.answerNeed(line, value = o.label)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = draft,
+                onValueChange = { vm.needDrafts[n.needId] = it },
+                placeholder = { Text(stringResource(R.string.need_answer_placeholder), fontSize = 14.sp, color = colors.faint) },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                shape = RoundedCornerShape(12.dp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(onSend = { if (typed.isNotEmpty() && live) vm.answerNeed(line, value = typed) }),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = colors.muted, unfocusedBorderColor = colors.border,
+                    focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue,
+                ),
+                modifier = Modifier.weight(1f),
+            )
+            val canSend = typed.isNotEmpty() && live
+            IconButton(onClick = { vm.answerNeed(line, value = typed) }, enabled = canSend) {
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send), tint = if (canSend) colors.ink else colors.faint)
+            }
+        }
+        Text(
+            skipWord, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (live) colors.muted else colors.faint,
+            modifier = Modifier.clickable(enabled = live) { vm.answerNeed(line, skip = true, skipWord = skipWord) }.padding(vertical = 4.dp),
+        )
+    }
+}
+
+/**
+ * "Listeyi kur" — always on the card; THE filled kiremit action once no question is open, on
+ * the newest reply only (one tinted action per screen); otherwise the quiet card-door idiom.
+ */
+@Composable
+private fun NeedBuildButton(n: AskNeed, line: JowiLine, vm: JowiViewModel) {
+    val colors = WorkisTheme.colors
+    val live = !vm.busy
+    val label = stringResource(R.string.need_build)
+    if (n.question == null && vm.isLastReply(line)) {
+        Button(
+            onClick = { vm.buildNeed(line) },
+            enabled = live,
+            colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill, disabledContainerColor = colors.surface, disabledContentColor = colors.faint),
+            modifier = Modifier.height(40.dp),
+        ) {
+            Icon(WorkisIcons.Checklist, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        }
+    } else {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.clickable(enabled = live) { vm.buildNeed(line) }.padding(vertical = 4.dp),
+        ) {
+            Icon(WorkisIcons.Checklist, contentDescription = null, tint = if (live) colors.accentText else colors.faint, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (live) colors.accentText else colors.faint)
         }
     }
 }

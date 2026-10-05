@@ -705,6 +705,14 @@ interface WorkisApi {
     @POST("workis/ask/like/")
     suspend fun askLike(@Body body: AskLikeBody): AskLikeResult
 
+    /** A need card's answer (2026-10-03): the same `kind: "need"` shape again — `kind: "list"` once built. */
+    @POST("workis/ask/need/{needId}/answer/")
+    suspend fun askNeedAnswer(@Path("needId") needId: String, @Body body: AskNeedAnswerBody): AskResponse
+
+    /** "Listeyi kur": `{kind: "list", listId, listStage, listTitle, listUrl, answer}`; a second call returns the same list. */
+    @POST("workis/ask/need/{needId}/build/")
+    suspend fun askNeedBuild(@Path("needId") needId: String): AskResponse
+
     /** The earnings guide as Markdown sections (public). */
     @GET("workis/expert/guide/")
     suspend fun expertGuide(): ExpertGuide

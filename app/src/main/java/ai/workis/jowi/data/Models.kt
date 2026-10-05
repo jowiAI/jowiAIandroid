@@ -348,14 +348,110 @@ data class AskResponse(
     val products: List<AskProductSeller>? = null,
     /** What Jowi mapped the words onto (`{termTr, families, category, attributes, language}`) — kept raw, never drawn: a model-written shape must not sink the answer. */
     val reading: JsonElement? = null,
-    /** ONE clarifying question on a match; `options` then carries its chips. */
-    val question: String? = null,
+    /**
+     * ONE clarifying question on a match (a bare string; `options` then carries its chips) — or,
+     * on `kind: "need"`, the need's one question as an OBJECT. Kept raw; read through
+     * [question] / [need].
+     */
+    @SerialName("question") val questionRaw: JsonElement? = null,
     /** The turn's row ids + `canHide`, so "Soruyu geri çek" works right after sending (2026-09-19). */
     val turn: AskTurn? = null,
     val handedOff: Boolean? = null,
     /** Which list the picks went to (2026-10-02): true = appended to the open draft named by `listId`, false = a new list. */
     val appended: Boolean? = null,
+    // `kind: "need"` (2026-10-03, workis/services/need.py `serialize`): the row on the caller's
+    // Jowi thread that holds the need (an int there) — the answer/build doors take it
+    @Serializable(with = FlexString::class) val needId: String? = null,
+    val job: String? = null,
+    /** The complaint behind the need, "" when none (N.1). */
+    val problem: String? = null,
+    val components: List<AskNeedComponent>? = null,
+    val questionsLeft: Int? = null,
+) {
+    /** A match's clarifying sentence; null when `question` is a need's object. */
+    val question: String? get() = askQuestionText(questionRaw)
+
+    /** The need card this answer carries, when it is one. */
+    val need: AskNeed?
+        get() = askNeed(kind, needId, job, problem, components, questionRaw, questionsLeft)
+}
+
+/** `question` as a match's bare sentence — an object (a need's question) is not one. */
+private fun askQuestionText(e: JsonElement?): String? =
+    (e as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content
+
+private fun askNeed(
+    kind: String?, needId: String?, job: String?, problem: String?,
+    components: List<AskNeedComponent>?, question: JsonElement?, questionsLeft: Int?,
+): AskNeed? {
+    if (kind != "need") return null
+    val id = needId?.takeIf { it.isNotEmpty() } ?: return null
+    return AskNeed(
+        needId = id, job = job.orEmpty(), problem = problem.orEmpty(),
+        components = components.orEmpty().filter { !it.name.isNullOrEmpty() },
+        question = (question as? JsonObject)?.let { AskNeedQuestion.of(it) },
+        questionsLeft = questionsLeft ?: 0,
+    )
+}
+
+/**
+ * The salesperson's card on the Jowi thread (2026-10-03): Jowi's reading of the job, the
+ * components so far and ONE question. No price, no seller — the first number is a quote.
+ */
+data class AskNeed(
+    val needId: String,
+    val job: String,
+    val problem: String,
+    val components: List<AskNeedComponent>,
+    val question: AskNeedQuestion?,
+    val questionsLeft: Int,
 )
+
+/** One question of a need (need.py `_clean`): `options` are 2–4 bare strings. */
+data class AskNeedQuestion(val key: String, val text: String, val why: String, val options: List<String>) {
+    companion object {
+        fun of(o: JsonObject): AskNeedQuestion? {
+            fun text(e: JsonElement?) = (e as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content.orEmpty()
+            val q = text(o["text"])
+            if (q.isEmpty()) return null
+            return AskNeedQuestion(
+                key = text(o["key"]), text = q, why = text(o["why"]),
+                options = (o["options"] as? JsonArray).orEmpty().map { text(it) }.filter { it.isNotEmpty() },
+            )
+        }
+    }
+}
+
+/**
+ * One component of a need (need.py `serialize`): `role` core|needed|optional|fix, `qty` a
+ * float or null ("follows the core"), `attributes` a {name: value} map of scalars — kept raw,
+ * read through [attributeTexts]; an odd shape must never sink the card.
+ */
+@Serializable
+data class AskNeedComponent(
+    val name: String? = null,
+    val role: String? = null,
+    @Serializable(with = FlexDouble::class) val qty: Double? = null,
+    val unit: String? = null,
+    val why: String? = null,
+    val attributes: JsonElement? = null,
+) {
+    /** "name: value" in the server's order; a list or a bare string is read too. */
+    val attributeTexts: List<String>
+        get() {
+            fun text(e: JsonElement?) = (e as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content.orEmpty()
+            return when (val a = attributes) {
+                is JsonObject -> a.mapNotNull { (k, v) -> text(v).takeIf { it.isNotEmpty() }?.let { "$k: $it" } }
+                is JsonArray -> a.map { text(it) }.filter { it.isNotEmpty() }
+                is JsonPrimitive -> listOfNotNull(text(a).takeIf { it.isNotEmpty() })
+                else -> emptyList()
+            }
+        }
+}
+
+/** `POST ask/need/{needId}/answer/`: `{key, value}`, or `{key, skip: true}` when the buyer passes. */
+@Serializable
+data class AskNeedAnswerBody(val key: String, val value: String? = null, val skip: Boolean? = null)
 
 @Serializable
 data class AskTurn(
@@ -412,9 +508,24 @@ data class AskLine(
     // 2026-10-01 match fields — tolerated; history rows do not carry `products` today
     val products: List<AskProductSeller>? = null,
     val reading: JsonElement? = null,
-    val question: String? = null,
+    /** A match's clarifying sentence (string) — a need row's object is read too. */
+    @SerialName("question") val questionRaw: JsonElement? = null,
     val options: List<AskOption>? = null,
-)
+    // 2026-10-03 need fields — history rows (jowi_history.py) carry only `kind: "need"` and
+    // the sentence today; decoded when present, never required
+    @Serializable(with = FlexString::class) val needId: String? = null,
+    val job: String? = null,
+    val problem: String? = null,
+    val components: List<AskNeedComponent>? = null,
+    val questionsLeft: Int? = null,
+) {
+    val question: String? get() = askQuestionText(questionRaw)
+
+    /** The need card a history row carries — only when the row names the fields itself (the row's id IS the needId). */
+    val need: AskNeed?
+        get() = if (job == null && components == null) null
+        else askNeed(kind, needId ?: id, job, problem, components, questionRaw, questionsLeft)
+}
 
 /** `nextBefore` only on the archive pages — null once the oldest page is in hand. */
 @Serializable
