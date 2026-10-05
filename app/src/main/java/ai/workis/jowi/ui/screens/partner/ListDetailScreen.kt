@@ -93,6 +93,7 @@ import ai.workis.jowi.ui.components.WorkisMark
 import ai.workis.jowi.ui.screens.console.ConsoleSub
 import ai.workis.jowi.ui.screens.expert.NoteBand
 import ai.workis.jowi.ui.theme.Beige
+import ai.workis.jowi.ui.theme.BeigeBg
 import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.OnKiremitFill
@@ -294,7 +295,7 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
                     if (d.isWorking) Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = colors.faint)
                         Spacer(Modifier.width(10.dp))
-                        Text(listStageText(d.list?.stage) ?: stringResource(R.string.processing), fontSize = 13.sp, color = colors.muted)
+                        Text(listStageWord(d.list?.stage) ?: stringResource(R.string.processing), fontSize = 13.sp, color = colors.muted)
                     }
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                         listOf(
@@ -328,7 +329,7 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
     }
 
     pickItem?.let { item ->
-        key(item.id) { CandidateSheet(item, d?.isDraft == true, vm, openVariantsFor = pickVariantCpid) { pickItem = null; pickVariantCpid = null } }
+        key(item.id) { CandidateSheet(item, d?.isDraft == true, vm, openVariantsFor = pickVariantCpid, prices = d?.showsPrices ?: true) { pickItem = null; pickVariantCpid = null } }
     }
     if (showAdd) AddItemSheet(vm) { showAdd = false }
     if (showSend && d != null) SendPreviewSheet(d, vm, onRefused = { msg, row ->
@@ -400,9 +401,10 @@ private fun ItemsSegment(
     onNeedsVariant: (PLItem, String) -> Unit, onTyping: (Boolean) -> Unit,
 ) {
     val colors = WorkisTheme.colors
+    JowiNoteCard(d, onPick)
     SurfaceCard {
         d.items.orEmpty().forEachIndexed { i, item ->
-            ItemRow(item, draft = d.isDraft, onClick = { onPick(item) }, onDelete = { item.id?.let { vm.deleteItem(it) } })
+            ItemRow(item, draft = d.isDraft, prices = d.showsPrices, onClick = { onPick(item) }, onDelete = { item.id?.let { vm.deleteItem(it) } })
             if (i < d.items.orEmpty().lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
         }
         if (d.isDraft) {
@@ -414,7 +416,7 @@ private fun ItemsSegment(
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Eyebrow(stringResource(R.string.suggestions_title).uppercase())
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                sug.forEach { s -> SuggestionCard(s, d.isDraft) { vm.addSuggestion(s, onNeedsVariant) } }
+                sug.forEach { s -> SuggestionCard(s, d.isDraft, d.showsPrices) { vm.addSuggestion(s, onNeedsVariant) } }
             }
             Text(stringResource(R.string.suggestions_sub), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
         }
@@ -429,8 +431,64 @@ private fun ItemsSegment(
     if (d.isDraft) NoteLetterSection(d, vm, onTyping)
 }
 
+/**
+ * Jowi's note (2026-10-03): the salesperson's re-read before the buyer sees the list — the
+ * summary, then the findings with their kind in words (incompatible / problem in the warning
+ * colour, the word always); a finding naming a row (1-based) opens that row as a tap on it
+ * does. No price, no seller in it.
+ */
 @Composable
-private fun ItemRow(item: PLItem, draft: Boolean, onClick: () -> Unit, onDelete: () -> Unit) {
+private fun JowiNoteCard(d: PurchaseListDetail, onPick: (PLItem) -> Unit) {
+    val colors = WorkisTheme.colors
+    val note = d.list?.jowiNote ?: return
+    val summary = note.summary?.trim().orEmpty()
+    val findings = note.findings.orEmpty().filter { !it.text.isNullOrBlank() }
+    if (summary.isEmpty() && findings.isEmpty()) return
+    val items = d.items.orEmpty()
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Eyebrow(stringResource(R.string.jowi_note_title).uppercase())
+        SurfaceCard {
+            if (summary.isNotEmpty()) Text(summary, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
+            findings.forEach { f ->
+                val n = f.row?.toInt()
+                val row = n?.let { k -> items.firstOrNull { it.n == k } ?: items.getOrNull(k - 1) }
+                val warn = f.kind == "problem" || f.kind == "incompatible"
+                Row(
+                    Modifier.fillMaxWidth().clickable(enabled = row != null) { row?.let(onPick) }.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        noteKindWord(f.kind), fontSize = 11.sp, fontWeight = FontWeight.Medium,
+                        color = if (warn) Beige else colors.muted,
+                        modifier = Modifier.background(if (warn) BeigeBg else colors.ink.copy(alpha = 0.07f), CircleShape).padding(horizontal = 7.dp, vertical = 2.dp),
+                    )
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        if (n != null) Text("$n", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+                        Text(f.text.orEmpty(), fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
+                    }
+                    if (row != null) Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun noteKindWord(kind: String?): String = stringResource(
+    when (kind) {
+        "missing" -> R.string.note_kind_missing
+        "incompatible" -> R.string.note_kind_incompatible
+        "quantity" -> R.string.note_kind_quantity
+        "standard" -> R.string.note_kind_standard
+        "duplicate" -> R.string.note_kind_duplicate
+        "problem" -> R.string.note_kind_problem
+        else -> R.string.note_kind_note
+    },
+)
+
+/** `prices` false = a buyer seat (`list.prices`): no catalogue price, range or placeholder. */
+@Composable
+private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -> Unit, onDelete: () -> Unit) {
     val colors = WorkisTheme.colors
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
         Text("${item.n ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint, modifier = Modifier.width(24.dp))
@@ -455,7 +513,7 @@ private fun ItemRow(item: PLItem, draft: Boolean, onClick: () -> Unit, onDelete:
             }
             AskedLine(if (sel != null) item.name else null, item.requirements)
             if (draft) {
-                DraftRowState(item)
+                DraftRowState(item, prices)
             } else if (sel != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.size(6.dp).background(if (item.matchState == "bound") SuccessGreen else colors.faint, CircleShape))
@@ -466,10 +524,14 @@ private fun ItemRow(item: PLItem, draft: Boolean, onClick: () -> Unit, onDelete:
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text((if (sel.verified == false) "✋ " else "") + sel.seller.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
                     Spacer(Modifier.weight(1f))
-                    VariantPrice(sel)
+                    VariantPrice(sel, prices)
                 }
             } else {
-                Text(stringResource(R.string.no_match), fontSize = 12.sp, color = colors.faint)
+                // nobody carries it: sourcing is the platform's backstage work — never "no match"
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Icon(WorkisIcons.TextLeft, contentDescription = null, tint = colors.faint, modifier = Modifier.size(13.dp))
+                    Text(stringResource(R.string.row_free_text), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)
+                }
             }
             if (draft) Text(stringResource(R.string.delete_item), fontSize = 11.sp, color = colors.danger, modifier = Modifier.clickable(onClick = onDelete))
         }
@@ -478,12 +540,12 @@ private fun ItemRow(item: PLItem, draft: Boolean, onClick: () -> Unit, onDelete:
 
 /**
  * A DRAFT row's words, from the server's flags only (Django note 2026-10-03): `complete` →
- * tick + price (or "fiyat teklifle gelir"); selected but not complete → "varyant seçin";
- * candidates, none selected → "ürünü seçin"; no candidates → the row goes as text. Icon +
- * words — never the colour alone.
+ * tick + price (or "fiyat teklifle gelir"; neither for a buyer seat — `prices` false);
+ * selected but not complete → "varyant seçin"; candidates, none selected → "ürünü seçin";
+ * no candidates → "Workis tedarikçi bulur". Icon + words — never the colour alone.
  */
 @Composable
-private fun DraftRowState(item: PLItem) {
+private fun DraftRowState(item: PLItem, prices: Boolean) {
     val colors = WorkisTheme.colors
     if (item.candidates.isNullOrEmpty()) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -499,7 +561,9 @@ private fun DraftRowState(item: PLItem) {
             complete -> {
                 Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(14.dp))
                 val price = sel?.price
-                if (price != null) Text(WorkisMoney.text(price, sel?.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
+                // a buyer seat: the first number is a quote — no price, no placeholder
+                if (!prices) Unit
+                else if (price != null) Text(WorkisMoney.text(price, sel?.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
                 else Text(stringResource(R.string.row_price_in_quote), fontSize = 12.sp, color = colors.muted)
             }
             item.boundCpid != null -> {
@@ -537,10 +601,10 @@ private fun AskedLine(generic: String?, requirements: List<String>?) {
  * variant's price stood in for the asked one (3/4" shown for 1", 2026-09-18).
  */
 @Composable
-private fun VariantPrice(c: PLCandidate) {
+private fun VariantPrice(c: PLCandidate, prices: Boolean) {
     val colors = WorkisTheme.colors
     when {
-        c.price != null -> Text(WorkisMoney.text(c.price, c.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
+        prices && c.price != null -> Text(WorkisMoney.text(c.price, c.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
         c.variant == "none" -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Icon(WorkisIcons.QuestionCircle, contentDescription = null, tint = Beige, modifier = Modifier.size(12.dp))
             Text(stringResource(R.string.variant_none), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Beige)
@@ -558,7 +622,7 @@ private fun VariantPrice(c: PLCandidate) {
 }
 
 @Composable
-private fun SuggestionCard(s: PLSuggestion, draft: Boolean, onAdd: () -> Unit) {
+private fun SuggestionCard(s: PLSuggestion, draft: Boolean, prices: Boolean, onAdd: () -> Unit) {
     val colors = WorkisTheme.colors
     Column(
         Modifier.width(210.dp).background(colors.ink.copy(alpha = 0.05f), RoundedCornerShape(12.dp)).padding(12.dp),
@@ -566,7 +630,7 @@ private fun SuggestionCard(s: PLSuggestion, draft: Boolean, onAdd: () -> Unit) {
     ) {
         Text(s.name.orEmpty(), fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink, maxLines = 2)
         Text(s.lbl?.short ?: s.seller.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
-        Text(WorkisMoney.text(s.price, s.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
+        if (prices) Text(WorkisMoney.text(s.price, s.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
         s.because?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 11.sp, color = colors.faint, maxLines = 2) }
         if (draft) Text(stringResource(R.string.add_to_list), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable(onClick = onAdd).padding(top = 2.dp))
     }
@@ -819,11 +883,12 @@ private fun AssignmentRow(a: PLAssignment, tick: Boolean? = null, tickEnabled: B
  * Candidates with a tick on the bound one, the judge's rows under each; tap binds; search
  * other products. On a draft the selected candidate carries the variant door when the server
  * offers a choice (`canChooseVariant`); the variant list replaces the sheet's content (the
- * iOS sheet pushes it) and "Geri" returns to the candidates.
+ * iOS sheet pushes it) and "Geri" returns to the candidates. `prices` = the list's flag —
+ * false (a buyer seat): no catalogue price anywhere here.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CandidateSheet(item: PLItem, draft: Boolean, vm: ListDetailViewModel, openVariantsFor: String? = null, onDismiss: () -> Unit) {
+private fun CandidateSheet(item: PLItem, draft: Boolean, vm: ListDetailViewModel, openVariantsFor: String? = null, prices: Boolean = true, onDismiss: () -> Unit) {
     val colors = WorkisTheme.colors
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var query by remember { mutableStateOf("") }
@@ -872,7 +937,7 @@ private fun CandidateSheet(item: PLItem, draft: Boolean, vm: ListDetailViewModel
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val target = variantsOf
             if (target != null) {
-                VariantPicker(itemId, target.first, target.second, vm, onBack = { variantsOf = null }) { close() }
+                VariantPicker(itemId, target.first, target.second, vm, prices, onBack = { variantsOf = null }) { close() }
                 Spacer(Modifier.height(30.dp))
                 return@Column
             }
@@ -881,9 +946,9 @@ private fun CandidateSheet(item: PLItem, draft: Boolean, vm: ListDetailViewModel
             error?.let { Text(it, color = colors.danger, fontSize = 13.sp) }
             Eyebrow(stringResource(R.string.candidates_title).uppercase())
             val cands = row.candidates.orEmpty()
-            if (cands.isEmpty()) Text(stringResource(R.string.no_match), fontSize = 13.sp, color = colors.faint)
+            if (cands.isEmpty()) Text(stringResource(R.string.row_free_text), fontSize = 13.sp, color = colors.faint)
             cands.forEach { c ->
-                CandidateRow(c, bound = c.isBound == true || c.cpid == row.boundCpid) { c.cpid?.let { bind(it) } }
+                CandidateRow(c, bound = c.isBound == true || c.cpid == row.boundCpid, prices = prices) { c.cpid?.let { bind(it) } }
                 // the selected candidate's variant door — the server says whether there is a
                 // choice; draft lists only (a sku after the send is refused)
                 val cp = c.cpid
@@ -909,7 +974,7 @@ private fun CandidateSheet(item: PLItem, draft: Boolean, vm: ListDetailViewModel
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { val q = query.trim(); if (q.length >= 2) scope.launch { results = vm.search(itemId, q) } }),
                 modifier = Modifier.fillMaxWidth(),
             )
-            results.forEach { r -> SearchLine(r) { pick(r) } }
+            results.forEach { r -> SearchLine(r, prices) { pick(r) } }
             if (busy) Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = colors.faint) }
             Spacer(Modifier.height(30.dp))
         }
@@ -919,9 +984,10 @@ private fun CandidateSheet(item: PLItem, draft: Boolean, vm: ListDetailViewModel
 /**
  * A search line inside a row: ONE price only when one variant stands for it (`resolved`);
  * else "n varyant · from–to currency" — the first variant's price is somebody else's price.
+ * A buyer seat (`prices` false) reads neither the price nor the range, only the count.
  */
 @Composable
-private fun SearchLine(r: PLSearchResult, onPick: () -> Unit) {
+private fun SearchLine(r: PLSearchResult, prices: Boolean, onPick: () -> Unit) {
     val colors = WorkisTheme.colors
     val variantsWord = stringResource(R.string.variants_word)
     Column(Modifier.fillMaxWidth().clickable(onClick = onPick).padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -930,11 +996,11 @@ private fun SearchLine(r: PLSearchResult, onPick: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(r.seller.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, modifier = Modifier.weight(1f))
             if (r.resolved == true) {
-                r.price?.let { Text(WorkisMoney.text(it, r.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink) }
+                r.price?.takeIf { prices }?.let { Text(WorkisMoney.text(it, r.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink) }
             } else {
                 val range = buildString {
                     append("${r.nVariants ?: 0} ").append(variantsWord)
-                    r.priceFrom?.let { from ->
+                    r.priceFrom?.takeIf { prices }?.let { from ->
                         val to = r.priceTo
                         if (to != null && to != from) append(" · ").append(WorkisMoney.text(from, null)).append("–").append(WorkisMoney.text(to, r.currency))
                         else append(" · ").append(WorkisMoney.text(from, r.currency))
@@ -949,19 +1015,21 @@ private fun SearchLine(r: PLSearchResult, onPick: () -> Unit) {
 /**
  * One candidate's variants (`GET lists/items/{id}/variants/?cpid=`); the standing one
  * (`chosen`) wears a solid kiremit border — selection, never a tinted fill. A tap posts
- * `bind {cpid, sku}` and the list re-reads.
+ * `bind {cpid, sku}` and the list re-reads. `prices` = the list's flag; the door answers its
+ * own (`prices`), which wins — false: no price and no "fiyat teklifle gelir".
  */
 @Composable
-private fun VariantPicker(itemId: String, cpid: String, title: String, vm: ListDetailViewModel, onBack: () -> Unit, onChosen: () -> Unit) {
+private fun VariantPicker(itemId: String, cpid: String, title: String, vm: ListDetailViewModel, prices: Boolean, onBack: () -> Unit, onChosen: () -> Unit) {
     val colors = WorkisTheme.colors
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var rows by remember { mutableStateOf<List<PLVariant>?>(null) }
     var chosen by remember { mutableStateOf("") }
+    var serverPrices by remember { mutableStateOf<Boolean?>(null) }
     var busySku by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(itemId, cpid) {
         val (list, err) = vm.variants(itemId, cpid)
-        if (list != null) { rows = list.variants.orEmpty(); chosen = list.chosen.orEmpty() } else error = err
+        if (list != null) { rows = list.variants.orEmpty(); chosen = list.chosen.orEmpty(); serverPrices = list.prices } else error = err
     }
     Row(Modifier.clickable(onClick = onBack).padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
@@ -1000,6 +1068,7 @@ private fun VariantPicker(itemId: String, cpid: String, title: String, vm: ListD
                 Spacer(Modifier.width(6.dp))
                 when {
                     busySku != null && busySku == v.sku -> CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = colors.faint)
+                    !(serverPrices ?: prices) -> Unit
                     v.price != null -> Text(WorkisMoney.text(v.price, v.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
                     else -> Text(stringResource(R.string.row_price_in_quote), fontSize = 12.sp, color = colors.muted)
                 }
@@ -1009,7 +1078,7 @@ private fun VariantPicker(itemId: String, cpid: String, title: String, vm: ListD
 }
 
 @Composable
-private fun CandidateRow(c: PLCandidate, bound: Boolean, onClick: () -> Unit) {
+private fun CandidateRow(c: PLCandidate, bound: Boolean, prices: Boolean, onClick: () -> Unit) {
     val colors = WorkisTheme.colors
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1021,13 +1090,13 @@ private fun CandidateRow(c: PLCandidate, bound: Boolean, onClick: () -> Unit) {
             c.sku?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint) }
             Spacer(Modifier.weight(1f))
             ComplianceChip(c.compliance)
-            VariantPrice(c)
+            VariantPrice(c, prices)
         }
         // several variants fit the asked size: name them, each with its own price
         c.variants?.takeIf { c.variant == "exact" && it.size > 1 }?.forEach { v ->
             Row(verticalAlignment = Alignment.Top) {
                 Text(v.name ?: v.sku.orEmpty(), fontSize = 12.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                v.price?.let { Spacer(Modifier.width(6.dp)); Text(WorkisMoney.text(it, v.currency), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.ink) }
+                v.price?.takeIf { prices }?.let { Spacer(Modifier.width(6.dp)); Text(WorkisMoney.text(it, v.currency), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.ink) }
             }
         }
         c.compliance?.rows.orEmpty().forEach { v ->

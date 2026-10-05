@@ -315,7 +315,7 @@ private fun ListRow(row: PurchaseListRow, vm: ListsViewModel, onClick: () -> Uni
                 }
                 row.isWorking -> {
                     CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 2.dp, color = colors.faint)
-                    Text(row.stageLabel ?: listStageText(row.stage) ?: stringResource(R.string.processing), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+                    Text(row.stageLabel ?: listStageWord(row.stage) ?: stringResource(R.string.processing), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
                 }
                 else -> {
                     Text("${row.nMatched ?: 0}/${row.nItems ?: 0} " + stringResource(R.string.matched_word), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
@@ -333,3 +333,8 @@ private fun ListRow(row: PurchaseListRow, vm: ListsViewModel, onClick: () -> Uni
         }
     }
 }
+
+/** The stage word: the shared map, plus `checking` — Jowi re-reading a list built from a need (2026-10-03). */
+@Composable
+internal fun listStageWord(s: String?): String? =
+    if (s == "checking") stringResource(R.string.ls_checking) else listStageText(s)

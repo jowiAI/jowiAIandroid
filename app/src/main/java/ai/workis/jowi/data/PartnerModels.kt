@@ -132,7 +132,7 @@ data class PurchaseListRow(
     @Serializable(with = FlexString::class) val id: String? = null,
     val title: String? = null,
     val status: String? = null, // draft | quoting | ordered | closed
-    val stage: String? = null, // parsing | matching | compliance | ready | error
+    val stage: String? = null, // parsing | matching | compliance | checking | ready | error
     val source: String? = null,
     @Serializable(with = FlexString::class) val projectId: String? = null,
     val createdAt: String? = null,
@@ -151,8 +151,11 @@ data class PurchaseListRow(
     val statusLabel: String? = null,
     val stageLabel: String? = null,
 ) {
-    val isWorking get() = stage in setOf("parsing", "matching", "compliance")
+    val isWorking get() = stage in PL_WORKING_STAGES
 }
+
+/** `checking` = Jowi re-reads a list built from a need (purchase_list.WORKING_STAGES, 2026-10-03). */
+val PL_WORKING_STAGES = setOf("parsing", "matching", "compliance", "checking")
 
 @Serializable
 data class PurchaseListIndex(val lists: List<PurchaseListRow>? = null)
@@ -184,6 +187,29 @@ data class PLInfo(
     val demo: Boolean? = null,
     val held: String? = null,
     @Serializable(with = FlexString::class) val rfqId: String? = null,
+    /** false = a buyer seat: every catalogue price in the payload is null and none is drawn —
+     *  the first number a buyer sees is a quote (lists_seat.py, 2026-10-03). Missing = true. */
+    val prices: Boolean? = null,
+    /** Jowi's re-read of a list built from a need; null = no note. */
+    val jowiNote: PLJowiNote? = null,
+)
+
+/** One finding of Jowi's note: `kind` missing · incompatible · quantity · standard · duplicate ·
+ *  problem · note; `row` = the 1-based row it names (null = the list as a whole). */
+@Serializable
+data class PLNoteFinding(
+    val kind: String? = null,
+    @Serializable(with = FlexDouble::class) val row: Double? = null,
+    val text: String? = null,
+)
+
+/** `list.jowiNote {at, summary, findings, language}` — no price, no seller in it. */
+@Serializable
+data class PLJowiNote(
+    val at: String? = null,
+    val summary: String? = null,
+    val findings: List<PLNoteFinding>? = null,
+    val language: String? = null,
 )
 
 @Serializable
@@ -229,7 +255,12 @@ data class PLVariant(val sku: String? = null, val name: String? = null, @Seriali
 
 /** `GET lists/items/{id}/variants/?cpid=` — that seller's variants of ONE candidate; `chosen` = the sku standing ("" when none). */
 @Serializable
-data class PLVariantList(val variants: List<PLVariant>? = null, val chosen: String? = null)
+data class PLVariantList(
+    val variants: List<PLVariant>? = null,
+    val chosen: String? = null,
+    /** false = a buyer seat, the prices are null (2026-10-03); missing = true. */
+    val prices: Boolean? = null,
+)
 
 @Serializable
 data class PLItem(
@@ -414,7 +445,9 @@ data class PurchaseListDetail(
     val isDraft get() = list?.status == "draft"
     val isQuoting get() = list?.status == "quoting"
     val isReady get() = (list?.stage ?: "ready") == "ready"
-    val isWorking get() = list?.stage in setOf("parsing", "matching", "compliance")
+    val isWorking get() = list?.stage in PL_WORKING_STAGES
+    /** Catalogue prices are drawn only when the server says so; a missing flag = true. */
+    val showsPrices get() = list?.prices ?: true
 }
 
 @Serializable
