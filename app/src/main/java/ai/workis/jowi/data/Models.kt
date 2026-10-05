@@ -365,6 +365,8 @@ data class AskResponse(
     val job: String? = null,
     /** The complaint behind the need, "" when none (N.1). */
     val problem: String? = null,
+    /** A courtesy sentence from an earlier Jowi turn, "" when none (N.2, need.py `serialize`) — drawn faint, never acted on. */
+    val recall: String? = null,
     val components: List<AskNeedComponent>? = null,
     val questionsLeft: Int? = null,
 ) {
@@ -373,7 +375,7 @@ data class AskResponse(
 
     /** The need card this answer carries, when it is one. */
     val need: AskNeed?
-        get() = askNeed(kind, needId, job, problem, components, questionRaw, questionsLeft)
+        get() = askNeed(kind, needId, job, problem, recall, components, questionRaw, questionsLeft)
 }
 
 /** `question` as a match's bare sentence — an object (a need's question) is not one. */
@@ -381,13 +383,13 @@ private fun askQuestionText(e: JsonElement?): String? =
     (e as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content
 
 private fun askNeed(
-    kind: String?, needId: String?, job: String?, problem: String?,
+    kind: String?, needId: String?, job: String?, problem: String?, recall: String?,
     components: List<AskNeedComponent>?, question: JsonElement?, questionsLeft: Int?,
 ): AskNeed? {
     if (kind != "need") return null
     val id = needId?.takeIf { it.isNotEmpty() } ?: return null
     return AskNeed(
-        needId = id, job = job.orEmpty(), problem = problem.orEmpty(),
+        needId = id, job = job.orEmpty(), problem = problem.orEmpty(), recall = recall.orEmpty(),
         components = components.orEmpty().filter { !it.name.isNullOrEmpty() },
         question = (question as? JsonObject)?.let { AskNeedQuestion.of(it) },
         questionsLeft = questionsLeft ?: 0,
@@ -402,6 +404,8 @@ data class AskNeed(
     val needId: String,
     val job: String,
     val problem: String,
+    /** "Hatırladığım" — a recollection, never a fact a control reads (N.2). */
+    val recall: String,
     val components: List<AskNeedComponent>,
     val question: AskNeedQuestion?,
     val questionsLeft: Int,
@@ -511,21 +515,56 @@ data class AskLine(
     /** A match's clarifying sentence (string) — a need row's object is read too. */
     @SerialName("question") val questionRaw: JsonElement? = null,
     val options: List<AskOption>? = null,
-    // 2026-10-03 need fields — history rows (jowi_history.py) carry only `kind: "need"` and
-    // the sentence today; decoded when present, never required
+    // 2026-10-03 need fields read FLAT (the live answer's shape) — tolerated on a row
     @Serializable(with = FlexString::class) val needId: String? = null,
     val job: String? = null,
     val problem: String? = null,
+    val recall: String? = null,
     val components: List<AskNeedComponent>? = null,
     val questionsLeft: Int? = null,
+    /**
+     * 2026-10-05 (Q.2): a `kind: "need"` row carries the card NESTED — `need_svc.serialize(…)`
+     * (jowi_history.py `row`, need.py `serialize`) — kept raw, read through [need]; `listId`
+     * and `builtListId` once the list was built.
+     */
+    @SerialName("need") val needRaw: JsonElement? = null,
+    @Serializable(with = FlexString::class) val builtListId: String? = null,
 ) {
     val question: String? get() = askQuestionText(questionRaw)
 
-    /** The need card a history row carries — only when the row names the fields itself (the row's id IS the needId). */
+    /**
+     * The need card a history row carries — the nested card first, the flat fields second
+     * (the row's id IS the needId). An odd nested shape falls back, never sinks the row.
+     */
     val need: AskNeed?
-        get() = if (job == null && components == null) null
-        else askNeed(kind, needId ?: id, job, problem, components, questionRaw, questionsLeft)
+        get() {
+            if (kind != "need") return null
+            val n = (needRaw as? JsonObject)?.let {
+                runCatching { WorkisJson.decodeFromJsonElement(AskNeedPayload.serializer(), it) }.getOrNull()
+            }
+            if (n != null && (n.job != null || n.components != null)) {
+                askNeed(kind, n.needId ?: needId ?: id, n.job, n.problem, n.recall, n.components, n.questionRaw, n.questionsLeft)
+                    ?.let { return it }
+            }
+            return if (job == null && components == null) null
+            else askNeed(kind, needId ?: id, job, problem, recall, components, questionRaw, questionsLeft)
+        }
 }
+
+/**
+ * The need card nested on a history row (need.py `serialize`): the same keys as the live
+ * answer's top-level need fields. `rounds`, `answers`, `title`, `language` are not drawn.
+ */
+@Serializable
+data class AskNeedPayload(
+    @Serializable(with = FlexString::class) val needId: String? = null,
+    val job: String? = null,
+    val problem: String? = null,
+    val recall: String? = null,
+    val components: List<AskNeedComponent>? = null,
+    @SerialName("question") val questionRaw: JsonElement? = null,
+    val questionsLeft: Int? = null,
+)
 
 /** `nextBefore` only on the archive pages — null once the oldest page is in hand. */
 @Serializable

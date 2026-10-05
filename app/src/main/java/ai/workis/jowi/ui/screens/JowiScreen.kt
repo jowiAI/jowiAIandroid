@@ -235,8 +235,12 @@ data class JowiLine(
     val needError: String? = null,
 )
 
-/** What this session knows of a need card — history rows carry only its sentence (asked of Django). */
-private data class KeptNeed(val need: AskNeed, val answers: List<String>, val listId: String?)
+/**
+ * What this session knows of a need card. The history row carries the card and its list since
+ * 2026-10-05; this fills only what it lacks — the answers' bubbles, a list built just now, and
+ * the job line the answer door re-wrote (`answer`; the row keeps the sentence it was logged with).
+ */
+private data class KeptNeed(val need: AskNeed, val answers: List<String>, val listId: String?, val text: String? = null)
 
 class JowiViewModel : ViewModel() {
     val lines = mutableStateListOf<JowiLine>()
@@ -350,14 +354,22 @@ class JowiViewModel : ViewModel() {
                 if (match != null && match.products.isEmpty()) keptMatch[key]?.let { (m, picked) ->
                     line = line.copy(match = m, optionPicked = picked)
                 }
-                // a need row: this session's card when it has one (the row's id IS the
-                // needId), else the row's own fields when it carries them
+                // a need row: the card the row carries (nested `need`, jowi_history.py `row`)
+                // and its list (`listId` / `builtListId`); this session's card fills only what
+                // the row lacks (the row's id IS the needId — need.py `remember`)
                 if (l.kind == "need") {
-                    val k = keptNeeds[l.needId ?: l.id.orEmpty()]
-                    line = if (k != null) line.copy(
-                        need = k.need, needAnswers = k.answers, listId = line.listId ?: k.listId,
-                        canHide = if (k.listId != null) false else line.canHide,
-                    ) else line.copy(need = l.need)
+                    line = line.copy(
+                        need = l.need,
+                        listId = line.listId ?: l.builtListId?.takeIf { it.isNotEmpty() },
+                    )
+                    keptNeeds[l.needId ?: l.id.orEmpty()]?.let { k ->
+                        line = line.copy(
+                            need = line.need ?: k.need, needAnswers = k.answers,
+                            listId = line.listId ?: k.listId,
+                            text = k.text?.takeIf { it.isNotEmpty() } ?: line.text,
+                            canHide = if (k.listId != null) false else line.canHide,
+                        )
+                    }
                 }
             }
             out += line
@@ -722,7 +734,8 @@ class JowiViewModel : ViewModel() {
             val fresh = res.need
             val lid = res.listId?.takeIf { it.isNotEmpty() }
             when {
-                fresh != null -> lines[j] = lines[j].copy(need = fresh)
+                // the job line rides beside the card (api views.py `need_answer` → `answer`)
+                fresh != null -> lines[j] = lines[j].copy(need = fresh, text = res.answer?.takeIf { it.isNotEmpty() } ?: lines[j].text)
                 res.kind == "list" && lid != null -> landNeedList(j, lid)
             }
             keepNeed(lines[j])
@@ -779,7 +792,7 @@ class JowiViewModel : ViewModel() {
 
     private fun keepNeed(l: JowiLine) {
         val n = l.need ?: return
-        keptNeeds[n.needId] = KeptNeed(n, l.needAnswers, l.listId)
+        keptNeeds[n.needId] = KeptNeed(n, l.needAnswers, l.listId, l.text)
     }
 
     /** 👍 / 👎 — first verdict wins; a 👎 opens a review on the expert side. */
@@ -1368,6 +1381,13 @@ private fun NeedCard(n: AskNeed, line: JowiLine, vm: JowiViewModel) {
     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (n.job.isNotEmpty()) {
             Text(n.job, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 21.sp, color = colors.ink)
+        }
+        // N.2: a courtesy recollection — faint and italic, never a problem or a fact to act on
+        if (n.recall.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(stringResource(R.string.need_recall).uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.faint)
+                Text(n.recall, fontSize = 13.sp, lineHeight = 18.sp, fontStyle = FontStyle.Italic, color = colors.faint)
+            }
         }
         if (n.problem.isNotEmpty()) {
             Text(
