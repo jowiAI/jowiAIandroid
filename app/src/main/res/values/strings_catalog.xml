@@ -13,6 +13,8 @@
     <string name="active_partners_pill">active partners</string>
     <string name="active_seats_pill">active seats</string>
     <string name="add_item">Add item</string>
+    <string name="add_item_from_catalogue">From the catalogue</string>
+    <string name="add_item_manual">Or add it by hand</string>
     <string name="add_row">Add row</string>
     <string name="add_to_list">Add to list</string>
     <string name="address_field">Address</string>
@@ -517,6 +519,7 @@
     <string name="inspection_open">inspection window open</string>
     <string name="internal_badge">INTERNAL</string>
     <string name="internal_note">Internal note</string>
+    <string name="inv_withdrawn">the buyer withdrew the request</string>
     <string name="invited_word">sellers invited</string>
     <string name="item_name">Item name</string>
     <string name="items_word">items</string>
@@ -562,11 +565,15 @@
     <string name="letter_default_hint">The default letter goes out unless you write your own.</string>
     <string name="letter_note_tab">Letter &amp; note</string>
     <string name="letter_title">RFQ letter</string>
+    <string name="line_mark_delivered">I delivered it</string>
+    <string name="line_mark_delivered_confirm">The buyer then confirms, and the stage amount is released.</string>
     <string name="link_hint">Tapping the link in the e-mail works too.</string>
     <string name="list_archive">Archive</string>
     <string name="list_retry">Try again</string>
     <string name="list_stuck">Stuck</string>
     <string name="list_unarchive">Bring back</string>
+    <string name="list_withdraw">Withdraw the request</string>
+    <string name="list_withdraw_confirm">Withdraw — the sellers will be told ✓</string>
     <string name="lists_archived_empty">No archived drafts.</string>
     <string name="lists_archived_title">Archived drafts</string>
     <string name="lists_empty">No lists yet — upload a spec or try the example project.</string>
@@ -580,6 +587,7 @@
     <string name="ls_draft">Draft</string>
     <string name="ls_ordered">Ordered</string>
     <string name="ls_quoting">Quoting</string>
+    <string name="ls_withdrawn">Withdrawn</string>
     <string name="machine_translation">machine translation</string>
     <string name="maps_link">Maps link</string>
     <string name="maps_link_hint">Paste a Google Maps link to pin the location; your pin outranks the address lookup.</string>
@@ -608,6 +616,7 @@
     <string name="need_build">Build the list</string>
     <string name="need_problem">The problem</string>
     <string name="need_questions_left">questions left</string>
+    <string name="need_recall">I remember</string>
     <string name="need_role_core">the thing itself</string>
     <string name="need_role_fix">for the problem</string>
     <string name="need_role_needed">needed</string>

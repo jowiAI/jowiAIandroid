@@ -13,6 +13,8 @@
     <string name="active_partners_pill">aktif partner</string>
     <string name="active_seats_pill">aktif koltuk</string>
     <string name="add_item">Kalem ekle</string>
+    <string name="add_item_from_catalogue">Katalogdan</string>
+    <string name="add_item_manual">Ya da elle ekleyin</string>
     <string name="add_row">Satır ekle</string>
     <string name="add_to_list">Listeye ekle</string>
     <string name="address_field">Adres</string>
@@ -517,6 +519,7 @@
     <string name="inspection_open">inceleme süresi açık</string>
     <string name="internal_badge">İÇ NOT</string>
     <string name="internal_note">İç not</string>
+    <string name="inv_withdrawn">alıcı talebi geri çekti</string>
     <string name="invited_word">satıcı davet edildi</string>
     <string name="item_name">Kalem adı</string>
     <string name="items_word">kalem</string>
@@ -562,11 +565,15 @@
     <string name="letter_default_hint">Kendi mektubunuzu yazmazsanız varsayılan mektup gider.</string>
     <string name="letter_note_tab">Mektup &amp; not</string>
     <string name="letter_title">Teklif mektubu</string>
+    <string name="line_mark_delivered">Teslim ettim</string>
+    <string name="line_mark_delivered_confirm">Ardından alıcı onaylar ve aşama tutarı serbest bırakılır.</string>
     <string name="link_hint">Kod yerine e-postadaki bağlantıya dokunman da yeterli.</string>
     <string name="list_archive">Arşivle</string>
     <string name="list_retry">Yeniden dene</string>
     <string name="list_stuck">Takıldı</string>
     <string name="list_unarchive">Arşivden çıkar</string>
+    <string name="list_withdraw">Talebi geri çek</string>
+    <string name="list_withdraw_confirm">Geri çek — satıcılara bildirilecek ✓</string>
     <string name="lists_archived_empty">Arşivlenmiş taslak yok.</string>
     <string name="lists_archived_title">Arşivlenen taslaklar</string>
     <string name="lists_empty">Henüz liste yok — bir şartname yükleyin ya da örnek projeyle deneyin.</string>
@@ -580,6 +587,7 @@
     <string name="ls_draft">Taslak</string>
     <string name="ls_ordered">Sipariş verildi</string>
     <string name="ls_quoting">Teklif aşaması</string>
+    <string name="ls_withdrawn">Geri çekildi</string>
     <string name="machine_translation">makine çevirisi</string>
     <string name="maps_link">Harita bağlantısı</string>
     <string name="maps_link_hint">Konumu sabitlemek için bir Google Maps bağlantısı yapıştırın; sizin işaretiniz adres aramasından önce gelir.</string>
@@ -608,6 +616,7 @@
     <string name="need_build">Listeyi kur</string>
     <string name="need_problem">Sorun</string>
     <string name="need_questions_left">soru kaldı</string>
+    <string name="need_recall">Hatırladığım</string>
     <string name="need_role_core">ürünün kendisi</string>
     <string name="need_role_fix">soruna çözüm</string>
     <string name="need_role_needed">gerekli</string>
