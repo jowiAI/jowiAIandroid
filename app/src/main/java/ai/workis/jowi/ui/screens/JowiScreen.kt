@@ -92,6 +92,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import ai.workis.jowi.data.absoluteWorkisUrl
 import ai.workis.jowi.data.messageFromBody
 import ai.workis.jowi.data.safeCall
@@ -111,6 +113,8 @@ import ai.workis.jowi.data.ScreenContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import ai.workis.jowi.ui.components.JowiOptions
+import ai.workis.jowi.ui.components.JowiWordmark
+import androidx.compose.ui.draw.clip
 import ai.workis.jowi.ui.components.AnswerText
 import ai.workis.jowi.ui.components.AuthImage
 import ai.workis.jowi.data.AskPick
@@ -815,7 +819,10 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
         ai.workis.jowi.ui.screens.partner.ListDetailScreen(id, onBack = { vm.openList = null })
         return
     }
-    var question by remember { mutableStateOf("") }
+    // a value, not a bare string: an example or a clarify "back" lands with the
+    // cursor at its end, ready to edit
+    var question by remember { mutableStateOf(TextFieldValue("")) }
+    fun putQuestion(text: String) { question = TextFieldValue(text, TextRange(text.length)) }
     val askFocus = remember { FocusRequester() }
     var askArchive by remember { mutableStateOf(false) }
     val listState: LazyListState = rememberLazyListState()
@@ -893,6 +900,10 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
             // nothing is deleted, the record moves and can be read again
             if (vm.loaded) {
                 item(key = "history-top") {
+                  Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Jowi's letterhead over a running thread (the empty tab draws it
+                    // large): still, never a background; nothing until the image lands
+                    if (vm.lines.isNotEmpty()) JowiWordmark(40.dp, Modifier.padding(top = 6.dp, bottom = 6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                         when {
                             vm.loadingOlder -> CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 1.5.dp, color = colors.faint)
@@ -914,19 +925,12 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
                             }
                         }
                     }
+                  }
                 }
             }
             if (vm.lines.isEmpty() && vm.clarify == null && !vm.previewing && vm.loaded) {
-                item {
-                    Text(
-                        stringResource(R.string.jowi_empty),
-                        fontSize = 15.sp, lineHeight = 22.sp, color = colors.muted,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(colors.surface, RoundedCornerShape(20.dp))
-                            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-                            .padding(16.dp),
-                    )
+                item(key = "empty") {
+                    JowiEmptyState { example -> putQuestion(example); askFocus.requestFocus() }
                 }
             }
             itemsIndexed(vm.lines, key = { _, l -> l.id }) { i, line ->
@@ -953,7 +957,7 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
                 }
             }
             vm.clarify?.let { (typed, reading) ->
-                item { ClarifyCard(typed, reading, vm) { back -> question = back; askFocus.requestFocus() } }
+                item { ClarifyCard(typed, reading, vm) { back -> putQuestion(back); askFocus.requestFocus() } }
             }
             if (vm.previewing || (!vm.loaded && vm.lines.isEmpty())) {
                 item { Box(Modifier.fillMaxWidth().padding(vertical = 10.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Kiremit500) } }
@@ -974,8 +978,8 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
                 ),
                 modifier = Modifier.weight(1f).focusRequester(askFocus),
             )
-            val canSend = question.isNotBlank() && vm.clarify == null && !vm.previewing
-            IconButton(onClick = { val q = question.trim(); question = ""; vm.submit(q) }, enabled = canSend) {
+            val canSend = question.text.isNotBlank() && vm.clarify == null && !vm.previewing
+            IconButton(onClick = { val q = question.text.trim(); question = TextFieldValue(""); vm.submit(q) }, enabled = canSend) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send), tint = if (canSend) Kiremit500 else colors.faint)
             }
         }
@@ -996,6 +1000,47 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
             },
             dismissButton = { TextButton(onClick = { askArchive = false }) { Text(stringResource(R.string.cancel), color = colors.muted) } },
         )
+    }
+}
+
+/**
+ * An empty thread (artifact "Workis Panel Masası", 2026-10-05): Jowi's wordmark
+ * writing itself (a server image — absent until it lands), one hint, three
+ * examples. An example goes into the ask field, open to edit; the asker sends it.
+ * No tinted action here — the send arrow stays the screen's one.
+ */
+@Composable
+private fun JowiEmptyState(onExample: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 60.dp, bottom = 20.dp),
+    ) {
+        JowiWordmark(72.dp, write = true)
+        Text(
+            stringResource(R.string.jowi_empty_hint),
+            fontSize = 15.sp, lineHeight = 22.sp, color = colors.muted, textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 240.dp), // ~26 ch
+        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(top = 4.dp),
+        ) {
+            listOf(R.string.jowi_example1, R.string.jowi_example2, R.string.jowi_example3).forEach { res ->
+                val example = stringResource(res)
+                Text(
+                    example,
+                    fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.muted, textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .border(1.dp, colors.border, CircleShape)
+                        .clickable { onExample(example) }
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                )
+            }
+        }
     }
 }
 
