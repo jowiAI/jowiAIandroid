@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -1009,6 +1010,7 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
  * examples. An example goes into the ask field, open to edit; the asker sends it.
  * No tinted action here — the send arrow stays the screen's one.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun JowiEmptyState(onExample: (String) -> Unit) {
     val colors = WorkisTheme.colors
@@ -1023,10 +1025,11 @@ private fun JowiEmptyState(onExample: (String) -> Unit) {
             fontSize = 15.sp, lineHeight = 22.sp, color = colors.muted, textAlign = TextAlign.Center,
             modifier = Modifier.widthIn(max = 240.dp), // ~26 ch
         )
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
+        // the three examples wrap as a centred row of capsules, as the mock draws them
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(top = 4.dp),
+            modifier = Modifier.padding(top = 4.dp, start = 8.dp, end = 8.dp),
         ) {
             listOf(R.string.jowi_example1, R.string.jowi_example2, R.string.jowi_example3).forEach { res ->
                 val example = stringResource(res)
