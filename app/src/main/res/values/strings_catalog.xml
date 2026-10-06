@@ -532,6 +532,10 @@
     <string name="jowi_clear">Archive</string>
     <string name="jowi_clear_confirm">Nothing is deleted: this history moves to the archive and a new one starts. \"Load earlier records\" brings it back. The web drawer follows.</string>
     <string name="jowi_empty">Ask about your lists, orders, ledger or calendar — Jowi answers from your records.</string>
+    <string name="jowi_empty_hint">A need, a photo, a question. I read the catalogue, pass it on to the seller, follow the order.</string>
+    <string name="jowi_example1">a fire cabinet and what goes in it</string>
+    <string name="jowi_example2">what happened to this order\'s payment?</string>
+    <string name="jowi_example3">the same as my broken valve</string>
     <string name="jowi_hide_turn">Withdraw this question</string>
     <string name="jowi_lane_empty">Nothing in this window.</string>
     <string name="jowi_lane_sub">Questions Jowi answered on its own while people were buying and selling — verified facts, generative model text, off-topic refusals. Read-only; a 👎 on a generative answer is already in the experts\' review queue.</string>
@@ -709,6 +713,15 @@
     <string name="pair_reject">Reject</string>
     <string name="pairs_sub">\'Bought together\' pairs to verify — price-blind: product names and the rationale, never offers.</string>
     <string name="pairs_title">Product pairs</string>
+    <string name="panel_approvals_word">approvals</string>
+    <string name="panel_ask_jowi">Ask Jowi</string>
+    <string name="panel_in_review_word">products in review</string>
+    <string name="panel_last_move">Last move</string>
+    <string name="panel_lists_door">Lists</string>
+    <string name="panel_mine">With you</string>
+    <string name="panel_nothing_waiting">Nothing is waiting on you today.</string>
+    <string name="panel_quote_ask">Send a quote</string>
+    <string name="panel_quote_requests_word">quote requests</string>
     <string name="partners_empty">No Workis partners yet — convert the first application on the Applications screen.</string>
     <string name="partners_filter_prompt">Name, city, sector…</string>
     <string name="partners_title">Partners</string>

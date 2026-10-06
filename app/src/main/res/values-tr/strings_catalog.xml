@@ -532,6 +532,10 @@
     <string name="jowi_clear">Arşivle</string>
     <string name="jowi_clear_confirm">Hiçbir şey silinmez: bu yazışma arşive kalkar ve yenisi başlar. \'Eski kayıtları yükle\' ile geri okunur. Web\'deki geçmiş de aynı şekilde arşivlenir.</string>
     <string name="jowi_empty">Listelerini, siparişlerini, cari ya da takvimini sor — Jowi kayıtlarından cevaplar.</string>
+    <string name="jowi_empty_hint">Bir ihtiyaç, bir fotoğraf, bir soru. Katalogdan okurum, satıcıya iletirim, siparişi izlerim.</string>
+    <string name="jowi_example1">yangın dolabı ve içindekiler</string>
+    <string name="jowi_example2">bu siparişin ödemesi ne oldu?</string>
+    <string name="jowi_example3">bozuk vanamın aynısı</string>
     <string name="jowi_hide_turn">Soruyu geri çek</string>
     <string name="jowi_lane_empty">Bu aralıkta kayıt yok.</string>
     <string name="jowi_lane_sub">Alım satım sırasında Jowi\'nin kendi başına yanıtladığı sorular — doğrulanmış bilgi, üretken model bilgisi, kapsam dışı retler. Salt okunur; üretken bir yanıta verilen 👎 zaten uzmanların inceleme kuyruğundadır.</string>
@@ -709,6 +713,15 @@
     <string name="pair_reject">Reddet</string>
     <string name="pairs_sub">Doğrulanacak \'birlikte alınır\' çiftleri — fiyat-kör: ürün adları ve gerekçe, asla teklif.</string>
     <string name="pairs_title">Ürün eşleri</string>
+    <string name="panel_approvals_word">onay</string>
+    <string name="panel_ask_jowi">Jowi\'ye sor</string>
+    <string name="panel_in_review_word">ürün incelemede</string>
+    <string name="panel_last_move">Son hareket</string>
+    <string name="panel_lists_door">Listeler</string>
+    <string name="panel_mine">Sizde</string>
+    <string name="panel_nothing_waiting">Bugün sizi bekleyen bir şey yok.</string>
+    <string name="panel_quote_ask">Teklif verin</string>
+    <string name="panel_quote_requests_word">teklif isteği</string>
     <string name="partners_empty">Henüz Workis partneri yok — ilk başvuruyu Başvurular ekranından partnere çevir.</string>
     <string name="partners_filter_prompt">Ad, şehir, sektör…</string>
     <string name="partners_title">Partnerler</string>
