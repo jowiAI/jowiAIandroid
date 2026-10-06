@@ -151,7 +151,7 @@ fun MainScreen() {
         Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
             when (current) {
                 MainTab.Panel -> if (isExpert) ExpertRoot() else ai.workis.jowi.ui.screens.console.ConsoleRoot()
-                MainTab.Market -> MarketRoot()
+                MainTab.Market -> MarketRoot(onAskJowi = { selected = MainTab.Jowi.name; userPicked = true })
                 MainTab.Seatless -> SeatlessScreen(onApply = { showApply = true })
                 MainTab.Account -> AccountScreen(onReaccept = { showReaccept = true }, onDeparture = { showDeparture = true })
                 MainTab.Jowi -> JowiScreen()

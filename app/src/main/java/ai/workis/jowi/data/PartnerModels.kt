@@ -18,6 +18,12 @@ data class CompanyInfo(
     val name: String? = null,
     val shortName: String? = null,
     val displayShort: String? = null,
+    /**
+     * The storefront logo the quote PDF prints — an absolute PUBLIC URL
+     * (`https://workis.ai/<slug>/gorsel/?k=<key>`, Django 2026-10-05); null for a
+     * firm without one → the monogram. Cache by URL (the key changes on upload).
+     */
+    val logoUrl: String? = null,
     @Serializable(with = FlexString::class) val vkn: String? = null,
     val taxOffice: String? = null,
     val fullAddress: String? = null,
