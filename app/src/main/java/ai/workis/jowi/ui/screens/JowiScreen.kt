@@ -238,6 +238,10 @@ data class JowiLine(
     val needAnswers: List<String> = emptyList(),
     val needBusy: Boolean = false,
     val needError: String? = null,
+    /** This line's card moved under a later message (the main box changed it, 2026-10-06): its id, so its answers still count. */
+    val needMovedId: String? = null,
+    /** The card arrived by such a move: `text` is the main box's line ("Kartı güncelledim: …"), not the card's job line. */
+    val needAmend: Boolean = false,
 )
 
 /**
@@ -644,7 +648,14 @@ class JowiViewModel : ViewModel() {
     /** The newest answer on screen (a withdrawn stub does not count). */
     fun isLastReply(line: JowiLine) = lines.lastOrNull { it.who != "user" && !it.hidden }?.id == line.id
 
-    fun send(q: String, original: String?, createList: Boolean = false, hint: String? = null) {
+    /**
+     * `ctxNeed` / `chipList`: what a "which list?" chip named (2026-10-06) — its card, or its list,
+     * `"none"` sent literally (= a general question). The chip's list wins over the scope picker.
+     */
+    fun send(
+        q: String, original: String?, createList: Boolean = false, hint: String? = null,
+        ctxNeed: String? = null, chipList: String? = null,
+    ) {
         val now = nowStamp()
         val userId = newId()
         lines += JowiLine(id = userId, who = "user", text = q, original = original?.takeIf { it != q }, at = now)
@@ -660,7 +671,8 @@ class JowiViewModel : ViewModel() {
                 val r = Graph.api.ask(
                     AskBody(
                         q = q, qOriginal = original?.takeIf { it != q },
-                        page = askPage(ctx), ctxList = ctxList(),
+                        page = askPage(ctx), ctxList = chipList?.takeIf { it.isNotEmpty() } ?: ctxList(),
+                        ctxNeed = ctxNeed?.takeIf { it.isNotEmpty() },
                         createList = if (createList) true else null,
                         screen = ctx?.screen, state = ctx?.state, visible = ctx?.visible?.takeIf { it.isNotEmpty() },
                         seller = ctx?.seller, hint = hint?.takeIf { it.isNotEmpty() },
@@ -684,7 +696,27 @@ class JowiViewModel : ViewModel() {
                     serverId = r.turn?.answerIds?.firstOrNull(),
                     need = r.need,
                 )
-                r.need?.let { keptNeeds[it.needId] = KeptNeed(it, emptyList(), null) }
+                r.need?.let { n ->
+                    // the main box moved an open card (`source: "need"` + `updated`, 2026-10-06):
+                    // the SAME card (its needId) is re-drawn here, under this message — never a
+                    // second card. The earlier line keeps its text and its answer bubbles, gives
+                    // up the card (and the error that stood on it).
+                    val here = i()
+                    var moved = false
+                    lines.indices.filter { it != here && lines[it].need?.needId == n.needId }.forEach { j ->
+                        moved = true
+                        if (here >= 0 && lines[here].needError == null) lines[here] = lines[here].copy(needError = lines[j].needError)
+                        lines[j] = lines[j].copy(need = null, needMovedId = n.needId, needError = null)
+                    }
+                    // a fresh card starts bare; a known one keeps its answers and its job line
+                    val prev = keptNeeds[n.needId]
+                    if (moved || prev != null) {
+                        if (here >= 0) lines[here] = lines[here].copy(needAmend = true)
+                        keptNeeds[n.needId] = KeptNeed(n, needAnswersOf(n.needId), prev?.listId, prev?.text)
+                    } else {
+                        keptNeeds[n.needId] = KeptNeed(n, emptyList(), null)
+                    }
+                }
                 // the row ids ride in the answer (2026-09-19): "Soruyu geri çek"
                 // works the moment the reply lands, no history re-read
                 r.turn?.let { t ->
@@ -709,7 +741,9 @@ class JowiViewModel : ViewModel() {
         if (idx >= 0) lines[idx] = lines[idx].copy(optionPicked = true)
         val q = option.q
         if (q.isNullOrEmpty()) return false
-        send(q, null)
+        // "which list?" chips (2026-10-06): `need` → `ctxNeed`, `ctxList` → `ctxList`,
+        // "none" sent literally (views.py `_ctx_need`, `list_pick`); a clarify chip carries neither
+        send(q, null, ctxNeed = option.need, chipList = option.ctxList)
         return true
     }
 
@@ -740,7 +774,9 @@ class JowiViewModel : ViewModel() {
             val lid = res.listId?.takeIf { it.isNotEmpty() }
             when {
                 // the job line rides beside the card (api views.py `need_answer` → `answer`)
-                fresh != null -> lines[j] = lines[j].copy(need = fresh, text = res.answer?.takeIf { it.isNotEmpty() } ?: lines[j].text)
+                fresh != null -> lines[j] = res.answer?.takeIf { it.isNotEmpty() }
+                    ?.let { lines[j].copy(need = fresh, text = it, needAmend = false) }
+                    ?: lines[j].copy(need = fresh)
                 res.kind == "list" && lid != null -> landNeedList(j, lid)
             }
             keepNeed(lines[j])
@@ -797,8 +833,15 @@ class JowiViewModel : ViewModel() {
 
     private fun keepNeed(l: JowiLine) {
         val n = l.need ?: return
-        keptNeeds[n.needId] = KeptNeed(n, l.needAnswers, l.listId, l.text)
+        // a card the main box moved: the main box's line is not the card's text, and the answers
+        // given where it stood before still belong to it (a reload puts it back on its own row)
+        val text = if (l.needAmend) keptNeeds[n.needId]?.text else l.text
+        keptNeeds[n.needId] = KeptNeed(n, needAnswersOf(n.needId), l.listId, text)
     }
+
+    /** Every answer given to that card on screen, wherever it stood — in order. */
+    private fun needAnswersOf(needId: String): List<String> =
+        lines.filter { it.who != "user" && (it.need?.needId ?: it.needMovedId) == needId }.flatMap { it.needAnswers }
 
     /** 👍 / 👎 — first verdict wins; a 👎 opens a review on the expert side. */
     fun rate(line: JowiLine, up: Boolean) {

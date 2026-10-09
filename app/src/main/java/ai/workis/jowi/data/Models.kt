@@ -164,7 +164,13 @@ data class AskBody(
     /** The typed text when Jowi's reading was sent instead (clarification, 2026-09-09). */
     val qOriginal: String? = null,
     val page: String? = null,
+    /** The open list (a list page's scope), or `"none"` from a "which list?" chip = a general question. */
     val ctxList: String? = null,
+    /**
+     * The open need card a "which list?" chip named (2026-10-06), or `"none"` = a general question,
+     * never read as a need or a purchase (views.py `_ctx_need`). Only ever from a chip.
+     */
+    val ctxNeed: String? = null,
     val voice: Boolean? = null,
     /** "Teklif topla": the same question again opens the chat-born list (2026-09-15). */
     val createList: Boolean? = null,
@@ -207,9 +213,17 @@ data class AskPick(
  * "Which one do you mean?" (2026-09-17): `q` is the follow-up to send, null = type again.
  * Two shapes share `options` (2026-10-01): the clarify flow's `{label, q}` and a
  * match answer's bare chip strings — a bare string decodes as `label`, no `q`.
+ * "Which list?" (2026-10-06): `need` = the open card a `source: "need"` chip names (an int row id
+ * — need.py `take` — or "none"), sent back as `ctxNeed`; `ctxList` = the list a `source:
+ * "list_pick"` chip names (a string, or "none" — views.py `list_pick`), sent back as `ctxList`.
  */
 @Serializable(with = AskOptionSerializer::class)
-data class AskOption(val label: String = "", val q: String? = null)
+data class AskOption(
+    val label: String = "",
+    val q: String? = null,
+    val need: String? = null,
+    val ctxList: String? = null,
+)
 
 object AskOptionSerializer : KSerializer<AskOption> {
     override val descriptor: SerialDescriptor = buildClassSerialDescriptor("AskOption")
@@ -217,7 +231,12 @@ object AskOptionSerializer : KSerializer<AskOption> {
         val json = decoder as? JsonDecoder ?: return AskOption(decoder.decodeString())
         fun text(e: JsonElement?) = (e as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content
         return when (val el = json.decodeJsonElement()) {
-            is JsonObject -> AskOption(label = text(el["label"]).orEmpty(), q = text(el["q"]))
+            is JsonObject -> AskOption(
+                label = text(el["label"]).orEmpty(), q = text(el["q"]),
+                // an int id or "none" — either reads as its text
+                need = text(el["need"])?.takeIf { it.isNotEmpty() },
+                ctxList = text(el["ctxList"])?.takeIf { it.isNotEmpty() },
+            )
             is JsonPrimitive -> AskOption(text(el).orEmpty())
             else -> AskOption()
         }
@@ -227,6 +246,8 @@ object AskOptionSerializer : KSerializer<AskOption> {
         json.encodeJsonElement(buildJsonObject {
             put("label", value.label)
             value.q?.let { put("q", it) }
+            value.need?.let { put("need", it) }
+            value.ctxList?.let { put("ctxList", it) }
         })
     }
 }
