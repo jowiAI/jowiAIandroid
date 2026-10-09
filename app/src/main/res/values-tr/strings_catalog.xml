@@ -573,6 +573,7 @@
     <string name="line_mark_delivered_confirm">Ardından alıcı onaylar ve aşama tutarı serbest bırakılır.</string>
     <string name="link_hint">Kod yerine e-postadaki bağlantıya dokunman da yeterli.</string>
     <string name="list_archive">Arşivle</string>
+    <string name="list_provenance_title">Bu liste nasıl kuruldu</string>
     <string name="list_retry">Yeniden dene</string>
     <string name="list_stuck">Takıldı</string>
     <string name="list_unarchive">Arşivden çıkar</string>
@@ -780,6 +781,8 @@
     <string name="project_label">Proje</string>
     <string name="proposal_empty">Henüz teklif yok — satıcılar davet edildi; teklifler geldikçe öneri kendiliğinden oluşur.</string>
     <string name="proposal_title">Kapsama önerisi</string>
+    <string name="provenance_note">Ayrıca yazdınız</string>
+    <string name="provenance_skipped">atlandı</string>
     <string name="public_ask_hint">Başvuruyla ilgili her şeyi sorabilirsin — vergi levhası, üyelik, Workis\'in işleyişi. Cevaplar bilgi bankamızdan gelir; cevaplanamayan sorular ekibe ulaşır.</string>
     <string name="public_profile_title">Herkese açık profil</string>
     <string name="published_label">Yayında</string>

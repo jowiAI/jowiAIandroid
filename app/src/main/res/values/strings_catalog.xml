@@ -573,6 +573,7 @@
     <string name="line_mark_delivered_confirm">The buyer then confirms, and the stage amount is released.</string>
     <string name="link_hint">Tapping the link in the e-mail works too.</string>
     <string name="list_archive">Archive</string>
+    <string name="list_provenance_title">How this list was built</string>
     <string name="list_retry">Try again</string>
     <string name="list_stuck">Stuck</string>
     <string name="list_unarchive">Bring back</string>
@@ -780,6 +781,8 @@
     <string name="project_label">Project</string>
     <string name="proposal_empty">No quotes yet — sellers are invited; the proposal builds itself as quotes arrive.</string>
     <string name="proposal_title">Coverage proposal</string>
+    <string name="provenance_note">You also wrote</string>
+    <string name="provenance_skipped">skipped</string>
     <string name="public_ask_hint">Ask anything about the application — the tax certificate, membership, how Workis works. Answers come from our knowledge base; unanswered questions reach the team.</string>
     <string name="public_profile_title">Public profile</string>
     <string name="published_label">Visible</string>
