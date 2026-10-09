@@ -377,7 +377,7 @@ internal fun WithdrawButton(busy: Boolean, startArmed: Boolean = false, onConfir
     }
 }
 
-/** The stage word: the shared map, plus `checking` — Jowi re-reading a list built from a need (2026-10-03). */
+/** The stage word: the shared map, plus `checking` — Jowi re-reading the list; every built list polls through it (2026-10-09). */
 @Composable
 internal fun listStageWord(s: String?): String? =
     if (s == "checking") stringResource(R.string.ls_checking) else listStageText(s)

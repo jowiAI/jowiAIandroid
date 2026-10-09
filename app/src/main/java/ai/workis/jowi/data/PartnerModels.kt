@@ -1,8 +1,19 @@
 package ai.workis.jowi.data
 
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -165,7 +176,7 @@ data class PurchaseListRow(
     val isWorking get() = stage in PL_WORKING_STAGES
 }
 
-/** `checking` = Jowi re-reads a list built from a need (purchase_list.WORKING_STAGES, 2026-10-03). */
+/** `checking` = Jowi's note — every built list polls through it (2026-10-09; purchase_list.WORKING_STAGES). */
 val PL_WORKING_STAGES = setOf("parsing", "matching", "compliance", "checking")
 
 @Serializable
@@ -201,9 +212,41 @@ data class PLInfo(
     /** false = a buyer seat: every catalogue price in the payload is null and none is drawn —
      *  the first number a buyer sees is a quote (lists_seat.py, 2026-10-03). Missing = true. */
     val prices: Boolean? = null,
-    /** Jowi's re-read of a list built from a need; null = no note. */
+    /** Jowi's re-read before the buyer sees the list — on every built list with ≥ 2 rows
+     *  (2026-10-09; it was need-built lists only); null = no note. */
     val jowiNote: PLJowiNote? = null,
+    /** How a need-built list was built (2026-10-06); null for any other list or when nothing is left to show. */
+    @Serializable(with = PLProvenanceTolerant::class) val provenance: PLProvenance? = null,
 )
+
+/**
+ * `list.provenance {sentence, job, problem, qa[{question, answer, skipped, note}]}`
+ * (lists_seat.py `provenance`): the buyer's sentence, Jowi's reading of the job, the problem,
+ * the card's questions in order. `skipped` = the question was skipped; `note` = something the
+ * buyer wrote that answered no question; `question: ""` = an older list kept only the answer.
+ * Read-only history — never a price or a seller.
+ */
+data class PLProvenance(val sentence: String, val job: String, val problem: String, val qa: List<PLProvenanceQA>) {
+    val isEmpty get() = sentence.isEmpty() && job.isEmpty() && problem.isEmpty() && qa.isEmpty()
+}
+
+data class PLProvenanceQA(val question: String, val answer: String, val skipped: Boolean, val note: Boolean)
+
+/** History must never sink the list: an odd shape reads as "nothing to show" (null). */
+object PLProvenanceTolerant : KSerializer<PLProvenance?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("PLProvenance", PrimitiveKind.STRING)
+    private fun text(e: JsonElement?) = (e as? JsonPrimitive)?.takeIf { it !is JsonNull && it.isString }?.content?.trim().orEmpty()
+    private fun flag(e: JsonElement?) = (e as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content == "true"
+    override fun deserialize(decoder: Decoder): PLProvenance? {
+        val json = decoder as? JsonDecoder ?: return null
+        val o = json.decodeJsonElement() as? JsonObject ?: return null
+        val qa = (o["qa"] as? JsonArray).orEmpty().mapNotNull { r ->
+            (r as? JsonObject)?.let { PLProvenanceQA(text(it["question"]), text(it["answer"]), flag(it["skipped"]), flag(it["note"])) }
+        }
+        return PLProvenance(text(o["sentence"]), text(o["job"]), text(o["problem"]), qa).takeIf { !it.isEmpty }
+    }
+    override fun serialize(encoder: Encoder, value: PLProvenance?) = encoder.encodeNull()
+}
 
 /** One finding of Jowi's note: `kind` missing · incompatible · quantity · standard · duplicate ·
  *  problem · note; `row` = the 1-based row it names (null = the list as a whole). */

@@ -49,6 +49,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.semantics.selected
@@ -455,6 +457,7 @@ private fun ItemsSegment(
     onNeedsVariant: (PLItem, String) -> Unit, onTyping: (Boolean) -> Unit,
 ) {
     val colors = WorkisTheme.colors
+    ProvenanceCard(d)
     JowiNoteCard(d, onPick)
     SurfaceCard {
         d.items.orEmpty().forEachIndexed { i, item ->
@@ -486,7 +489,45 @@ private fun ItemsSegment(
 }
 
 /**
- * Jowi's note (2026-10-03): the salesperson's re-read before the buyer sees the list — the
+ * How the list was built (2026-10-06, `list.provenance`): collapsed, above the rows — the
+ * buyer's sentence, Jowi's reading of the job, the problem, then the card's questions in
+ * order. Read-only history: the list is the truth after the build; no price, no seller.
+ */
+@Composable
+private fun ProvenanceCard(d: PurchaseListDetail) {
+    val colors = WorkisTheme.colors
+    val p = d.list?.provenance ?: return
+    var open by rememberSaveable(d.list.id) { mutableStateOf(false) }
+    SurfaceCard {
+        Row(
+            Modifier.fillMaxWidth().clickable(role = Role.Button) { open = !open }.padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(stringResource(R.string.list_provenance_title), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink, modifier = Modifier.weight(1f))
+            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint, modifier = Modifier.size(18.dp).rotate(if (open) 90f else 0f))
+        }
+        if (open) {
+            if (p.sentence.isNotEmpty()) Text("“${p.sentence}”", fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
+            if (p.job.isNotEmpty()) Text(p.job, fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted)
+            if (p.problem.isNotEmpty()) Text(stringResource(R.string.need_problem) + ": " + p.problem, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
+            p.qa.forEach { r ->
+                Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    // a note answered no question; an older list kept only the answer (question "")
+                    if (!r.note && r.question.isNotEmpty()) Text(r.question, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
+                    when {
+                        r.note -> Text(stringResource(R.string.provenance_note) + ": " + r.answer, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
+                        r.skipped -> Text(stringResource(R.string.provenance_skipped), fontSize = 13.sp, fontStyle = FontStyle.Italic, color = colors.faint)
+                        else -> Text(r.answer, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Jowi's note (2026-10-03; on every built list with ≥ 2 rows since 2026-10-09, not only a
+ * need-built one — drawn wherever present): the salesperson's re-read before the buyer sees the list — the
  * summary, then the findings with their kind in words (incompatible / problem in the warning
  * colour, the word always); a finding naming a row (1-based) opens that row as a tap on it
  * does. No price, no seller in it.
