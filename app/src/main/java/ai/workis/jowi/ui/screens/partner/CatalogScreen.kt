@@ -46,7 +46,7 @@ import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
+import ai.workis.jowi.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -114,6 +114,9 @@ import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxHeight
 
 /**
  * Ürünler — the seller's catalogue (web /workis/panel/urunler/): three
@@ -341,7 +344,8 @@ fun CatalogScreen(vm: CatalogViewModel, onBack: () -> Unit, onOpenFamily: (Strin
                 CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Kiremit500)
             }
             else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // min 78dp, the three share the tallest — a two-line caption no longer cuts (ledger 57)
+                Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     CountTile(page.counts?.proposed ?: 0, stringResource(R.string.catalog_proposed), Modifier.weight(1f))
                     CountTile(page.counts?.approved ?: 0, stringResource(R.string.catalog_approved), Modifier.weight(1f))
                     CountTile(page.counts?.liveOffers ?: 0, stringResource(R.string.catalog_live_offers), Modifier.weight(1f))
@@ -417,7 +421,7 @@ private fun PublishCatalogContext(vm: CatalogViewModel, segment: Int) {
 @Composable
 private fun CountTile(n: Int, label: String, modifier: Modifier) {
     val colors = WorkisTheme.colors
-    Column(modifier.height(78.dp).background(colors.ink.copy(alpha = 0.06f), RoundedCornerShape(12.dp)).padding(10.dp)) {
+    Column(modifier.heightIn(min = 78.dp).fillMaxHeight().background(colors.ink.copy(alpha = 0.06f), RoundedCornerShape(12.dp)).padding(10.dp)) {
         Text("$n", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = colors.ink)
         Text(label, fontSize = 11.sp, lineHeight = 14.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }

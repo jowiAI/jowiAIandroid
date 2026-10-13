@@ -39,7 +39,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.Text
+import ai.workis.jowi.ui.theme.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -88,6 +88,7 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import ai.workis.jowi.ui.theme.readingStep
 
 /**
  * Rotalar — the carrier's runs per vehicle AND per day (Django note 2026-10-03 §I,
@@ -563,7 +564,7 @@ private fun VehicleSheet(vm: CargoRunsViewModel, onClose: () -> Unit) {
                 value = plate, onValueChange = { plate = it.take(16) },
                 singleLine = true,
                 label = { Text(stringResource(R.string.cargo_vehicle_plate)) },
-                textStyle = androidx.compose.ui.text.TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 16.sp, color = colors.ink),
+                textStyle = androidx.compose.ui.text.TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 16.sp, color = colors.ink).readingStep(),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, autoCorrectEnabled = false),
                 shape = RoundedCornerShape(14.dp), colors = fieldColors,
                 modifier = Modifier.fillMaxWidth(),
@@ -574,7 +575,7 @@ private fun VehicleSheet(vm: CargoRunsViewModel, onClose: () -> Unit) {
                 value = capacity, onValueChange = { v -> capacity = v.filter { it.isDigit() }.take(6) },
                 singleLine = true,
                 label = { Text(stringResource(R.string.cargo_vehicle_capacity_kg)) },
-                textStyle = androidx.compose.ui.text.TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 16.sp, color = colors.ink),
+                textStyle = androidx.compose.ui.text.TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 16.sp, color = colors.ink).readingStep(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 shape = RoundedCornerShape(14.dp), colors = fieldColors,
                 modifier = Modifier.fillMaxWidth(),

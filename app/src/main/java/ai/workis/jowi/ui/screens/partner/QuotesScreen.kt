@@ -50,7 +50,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Text
+import ai.workis.jowi.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -101,6 +101,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import ai.workis.jowi.ui.theme.readingStep
 
 class QuotesViewModel : ViewModel() {
     var invitations by mutableStateOf<List<SellerInvitation>?>(null)
@@ -620,7 +621,7 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
                                     Text(r.name, fontSize = 13.sp, color = colors.ink)
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Text(r.sku, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, modifier = Modifier.weight(1f))
-                                        OutlinedTextField(value = qtys[r.sku].orEmpty(), onValueChange = { qtys[r.sku] = it }, placeholder = { Text(stringResource(R.string.qty_field), color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontSize = 13.sp, color = colors.ink), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(76.dp))
+                                        OutlinedTextField(value = qtys[r.sku].orEmpty(), onValueChange = { qtys[r.sku] = it }, placeholder = { Text(stringResource(R.string.qty_field), color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontSize = 13.sp, color = colors.ink).readingStep(), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(76.dp))
                                         r.unit?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint) }
                                     }
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -628,10 +629,10 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
                                         if (list != null) {
                                             // the list price, faint; the discount moves the unit price
                                             Text(stringResource(R.string.quote_list_word) + " " + WorkisMoney.text(list.toDouble(), null), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, modifier = Modifier.weight(1f))
-                                            OutlinedTextField(value = discounts[r.sku].orEmpty(), onValueChange = { setDiscount(r, it) }, placeholder = { Text("%", color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(72.dp).semantics { contentDescription = discountLabel })
+                                            OutlinedTextField(value = discounts[r.sku].orEmpty(), onValueChange = { setDiscount(r, it) }, placeholder = { Text("%", color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink).readingStep(), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(72.dp).semantics { contentDescription = discountLabel })
                                             Text("%", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
                                         } else Spacer(Modifier.weight(1f))
-                                        OutlinedTextField(value = prices[r.sku].orEmpty(), onValueChange = { setPrice(r, it) }, placeholder = { Text(stringResource(R.string.unit_price_field), color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(120.dp))
+                                        OutlinedTextField(value = prices[r.sku].orEmpty(), onValueChange = { setPrice(r, it) }, placeholder = { Text(stringResource(R.string.unit_price_field), color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink).readingStep(), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(120.dp))
                                     }
                                 }
                             }
@@ -710,7 +711,7 @@ private fun NumberRow(label: String, value: String, placeholder: String, onChang
     val colors = WorkisTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, fontSize = 14.sp, color = colors.muted, modifier = Modifier.weight(1f))
-        OutlinedTextField(value = value, onValueChange = onChange, placeholder = { Text(placeholder, color = colors.faint) }, singleLine = true, shape = RoundedCornerShape(10.dp), textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, cursorColor = colors.blue), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.width(96.dp))
+        OutlinedTextField(value = value, onValueChange = onChange, placeholder = { Text(placeholder, color = colors.faint) }, singleLine = true, shape = RoundedCornerShape(10.dp), textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink).readingStep(), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, cursorColor = colors.blue), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.width(96.dp))
     }
 }
 

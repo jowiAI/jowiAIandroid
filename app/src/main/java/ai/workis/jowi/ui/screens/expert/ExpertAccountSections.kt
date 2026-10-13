@@ -32,7 +32,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
+import ai.workis.jowi.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -76,6 +76,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import retrofit2.HttpException
 import java.util.Locale
+import ai.workis.jowi.ui.theme.readingStep
 
 /**
  * The web Profil page as Hesap sections for the expert seat (slice 2): name
@@ -367,7 +368,7 @@ fun ExpertDepartureScreen(onClose: () -> Unit, onLeft: () -> Unit) {
                 value = typed, onValueChange = { typed = it },
                 placeholder = { Text(word, color = colors.faint, fontFamily = WorkisMono) },
                 singleLine = true, shape = RoundedCornerShape(14.dp),
-                textStyle = androidx.compose.ui.text.TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 15.sp, color = colors.ink),
+                textStyle = androidx.compose.ui.text.TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 15.sp, color = colors.ink).readingStep(),
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, cursorColor = colors.blue),
                 modifier = Modifier.fillMaxWidth(),
             )

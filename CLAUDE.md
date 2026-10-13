@@ -77,6 +77,10 @@ never duplicate a catalog key there.
 - Kiremit-400 `#E8703F` = primary button fill only; kiremit-500 `#D95F2E` = slash/icons.
   One tinted primary action per screen; success green is status, never action; no pure black/white.
 - IBM Plex bundled in `res/font` (Sans variable + Mono statics). Mono only for logo/digits/eyebrows; Sans for reading text.
+- Reading step (ledger 57, 2026-10-13): sizes written at call sites are DESIGN sizes; `ui/theme/Type.kt` renders ≤15 at +2
+  (floor 11), 16+ as written, a paired `lineHeight` grows by the same amount. It lives in `ai.workis.jowi.ui.theme.Text` —
+  import THAT `Text` in every file, never `androidx.compose.material3.Text`. A hand-built `TextStyle` for a text field goes
+  through `.readingStep()`, a `SpanStyle` size through `readingSize()`. System font scale multiplies on top; no in-app text-size setting.
 - Loading idioms: inline button spinner / breathing slash (`WorkisMark(breathing = true)`) / typing dots — never mix.
 - iOS "Liquid Glass" is NOT faked — use Material 3 tonal surfaces. Cards: `surface` color, radius 20dp, 1dp `border` hairline.
 

@@ -44,7 +44,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Text
+import ai.workis.jowi.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -136,6 +136,7 @@ import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import retrofit2.HttpException
+import ai.workis.jowi.ui.theme.readingSize
 
 /** A purchase request read by Jowi — the parsed line + the catalogue's sellers (price-blind). */
 data class AskMatch(
@@ -1579,7 +1580,7 @@ private fun NeedQuestion(q: AskNeedQuestion, n: AskNeed, line: JowiLine, vm: Jow
                 onValueChange = { vm.needDrafts[n.needId] = it },
                 placeholder = { Text(stringResource(R.string.need_answer_placeholder), fontSize = 14.sp, color = colors.faint) },
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = readingSize(14.sp)),
                 shape = RoundedCornerShape(12.dp),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { if (typed.isNotEmpty() && live) vm.answerNeed(line, value = typed) }),

@@ -28,7 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Text
+import ai.workis.jowi.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -630,7 +630,6 @@ private fun ApplyCard(onApply: () -> Unit) {
                 fontFamily = WorkisSans,
                 fontSize = 13.sp,
                 color = colors.muted,
-                maxLines = 1,
             )
         }
         Spacer(Modifier.width(10.dp))

@@ -35,7 +35,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Text
+import ai.workis.jowi.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -95,6 +95,7 @@ import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import ai.workis.jowi.ui.theme.readingStep
 
 /**
  * Kargo — the carrier seat (`GET cargo/`, 2026-09-30; the web Kargo page's
@@ -694,7 +695,7 @@ private fun DeliverOtpSheet(sh: CargoShipment, vm: CargoViewModel, onClose: () -
                 onValueChange = { v -> code = v.filter { it.isDigit() }.take(6) },
                 singleLine = true,
                 placeholder = { Text("000000", color = colors.faint, fontFamily = WorkisMono, fontSize = 28.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-                textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 28.sp, textAlign = TextAlign.Center, color = colors.ink),
+                textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 28.sp, textAlign = TextAlign.Center, color = colors.ink).readingStep(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, cursorColor = colors.blue),

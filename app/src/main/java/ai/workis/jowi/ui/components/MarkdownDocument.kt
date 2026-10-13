@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
+import ai.workis.jowi.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -39,6 +39,7 @@ import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisSans
 import ai.workis.jowi.ui.theme.WorkisTheme
+import ai.workis.jowi.ui.theme.readingSize
 
 /**
  * Server Markdown rendered natively in the Workis type and tokens — the
@@ -142,7 +143,7 @@ private fun richInline(text: String, base: Color): AnnotatedString {
                 val g = m.groups
                 when {
                     g[1] != null -> withStyle(
-                        SpanStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, color = colors.accentText, background = chipBg, fontSize = 13.sp),
+                        SpanStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, color = colors.accentText, background = chipBg, fontSize = readingSize(13.sp)),
                     ) { append(" " + g[1]!!.value + " ") }
                     g[2] != null -> withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(g[2]!!.value) }
                     g[3] != null -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(g[3]!!.value) }

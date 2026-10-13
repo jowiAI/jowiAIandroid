@@ -33,7 +33,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Text
+import ai.workis.jowi.ui.theme.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,6 +85,8 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
 /**
  * Siparişler — one card per order per seat the firm holds (Django §5). The
@@ -341,6 +343,7 @@ private fun QuotingStrip(rows: List<OrderQuoting>, onList: (String) -> Unit) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OrderCard(
     o: PartnerOrder,
@@ -411,8 +414,9 @@ private fun OrderCard(
         // one order card, as the web's (2026-09-30): how it ships, how many lines
         val mode = o.deliveryMode?.takeIf { it.isNotEmpty() }
         val nLines = o.nLines ?: 0
+        // side by side when both fit whole, else one under the other (ledger 57)
         if (mode != null || nLines > 0) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 mode?.let { dm ->
                     WorkisChip(
                         ChipSpec(
