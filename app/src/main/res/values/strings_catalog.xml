@@ -979,6 +979,13 @@
     <string name="step_of">step</string>
     <string name="step_word">STEP</string>
     <string name="stock_label">stock</string>
+    <string name="story_ask">Ask about this page…</string>
+    <string name="story_close">Close the story</string>
+    <string name="story_eyebrow">/ How it works</string>
+    <string name="story_offer">Shall I open it up a little?</string>
+    <string name="story_partly">Today · next</string>
+    <string name="story_soon">Coming soon</string>
+    <string name="story_step">Step</string>
     <string name="suggestions_sub">From the product knowledge graph — accessories and combinations sellers defined in their catalogs.</string>
     <string name="suggestions_title">Bought together</string>
     <string name="switch_account">Sign in with a different account</string>

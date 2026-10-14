@@ -979,6 +979,13 @@
     <string name="step_of">adım</string>
     <string name="step_word">ADIM</string>
     <string name="stock_label">stok</string>
+    <string name="story_ask">Bu sayfa hakkında sorun…</string>
+    <string name="story_close">Hikâyeyi kapat</string>
+    <string name="story_eyebrow">/ Nasıl çalışır?</string>
+    <string name="story_offer">Biraz daha açayım ister misin?</string>
+    <string name="story_partly">Bugün · sırada</string>
+    <string name="story_soon">Yakında</string>
+    <string name="story_step">Adım</string>
     <string name="suggestions_sub">Ürün bilgi grafiğinden — satıcıların kataloglarında tanımladığı aksesuar ve kombinasyonlar.</string>
     <string name="suggestions_title">Birlikte alınır</string>
     <string name="switch_account">Farklı hesapla gir</string>
