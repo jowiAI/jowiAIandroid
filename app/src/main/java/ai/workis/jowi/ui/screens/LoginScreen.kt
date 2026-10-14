@@ -286,28 +286,20 @@ fun LoginScreen(onApply: (String) -> Unit = {}) {
                     )
                     LaunchedEffect(Unit) { codeFocus.requestFocus() }
                     Spacer(Modifier.height(14.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PillButton(stringResource(R.string.resend), enabled = !loading) {
-                            scope.launch {
-                                loading = true
-                                Graph.auth.requestOtp(email.trim())
-                                loading = false
-                            }
-                        }
-                        PillButton(stringResource(R.string.different_email), enabled = !loading) {
-                            step = LoginStep.Email
-                            code = ""
-                            error = null
-                        }
+                    // ONE way back (web, owner 2026-10-12; app ledger 59): the e-mail step
+                    // with the address kept — fix it, or send it again and the door issues
+                    // a fresh code. "Resend" and "different e-mail" said the same thing twice.
+                    PillButton(stringResource(R.string.fix_or_resend), enabled = !loading) {
+                        step = LoginStep.Email
+                        code = ""
+                        error = null
                     }
                     Spacer(Modifier.height(14.dp))
-                    HintLine(stringResource(R.string.link_hint))
-                    // One neutral line for everyone: the server mails an explanation
-                    // instead of a code to an account whose code door is shut, and
-                    // this screen must not say which account that is.
+                    HintLine(stringResource(R.string.code_validity))
+                    // The passkey door on both steps: an account closed to the code gets a
+                    // mail instead of a code, and the screen says the same neutral thing
+                    // to everyone (no oracle).
                     if (Graph.passkeys.available) {
-                        Spacer(Modifier.height(10.dp))
-                        HintLine(stringResource(R.string.code_hint_passkey))
                         Spacer(Modifier.height(16.dp))
                         PasskeyDoor(enabled = !loading) { signInWithPasskey() }
                     }

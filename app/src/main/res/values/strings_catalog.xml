@@ -275,7 +275,7 @@
     <string name="chase_silent">Remind silent sellers</string>
     <string name="chased_tag">reminded</string>
     <string name="chat_invites_title">Seller correspondence</string>
-    <string name="check_copy">We sent a one-time sign-in link and a 6-digit code to:</string>
+    <string name="check_copy">There is an account under this address; we sent the sign-in code there:</string>
     <string name="check_title">Check your e-mail</string>
     <string name="chip_low_res">low resolution</string>
     <string name="chip_page_image">page image</string>
@@ -307,6 +307,7 @@
     <string name="code_placeholder">6-digit code</string>
     <string name="code_sign_in_footer">Your passkey works either way; this switch only opens or closes the e-mail code door. While off, only a passkey opens the account. If you turn it on, someone who reaches your mailbox can sign in too. Changing it asks for your passkey.</string>
     <string name="code_sign_in_toggle">Allow sign-in with the e-mail code</string>
+    <string name="code_validity">The code is valid for 10 minutes, with limited attempts.</string>
     <string name="collect_quotes">Collect quotes</string>
     <string name="company_address">Address</string>
     <string name="company_city">Province</string>
@@ -498,6 +499,7 @@
     <string name="family_live">Live</string>
     <string name="family_proposed">Awaiting review</string>
     <string name="filter_document">Document</string>
+    <string name="fix_or_resend">Fix the address or send again</string>
     <string name="guide_share">Share as PDF</string>
     <string name="has_email_label">will be e-mailed</string>
     <string name="held_tag">Under review</string>

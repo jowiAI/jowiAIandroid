@@ -275,7 +275,7 @@
     <string name="chase_silent">Sessiz satıcıları hatırlat</string>
     <string name="chased_tag">hatırlatıldı</string>
     <string name="chat_invites_title">Satıcı yazışmaları</string>
-    <string name="check_copy">Tek kullanımlık giriş bağlantısı ve 6 haneli kodu şu adrese gönderdik:</string>
+    <string name="check_copy">Bu adresle kayıtlı bir hesap var; giriş kodunu da bu adrese gönderdik:</string>
     <string name="check_title">E-postanı kontrol et</string>
     <string name="chip_low_res">düşük çözünürlük</string>
     <string name="chip_page_image">sayfa görseli</string>
@@ -307,6 +307,7 @@
     <string name="code_placeholder">6 haneli kod</string>
     <string name="code_sign_in_footer">Geçiş anahtarınız her iki durumda da çalışır; bu anahtar yalnız e-posta kodu kapısını açar ya da kapatır. Kapalıyken hesaba yalnız geçiş anahtarıyla girilir. Açarsanız posta kutunuza ulaşan biri de girebilir. Değiştirirken geçiş anahtarınızla onay istenir.</string>
     <string name="code_sign_in_toggle">E-posta koduyla girişe izin ver</string>
+    <string name="code_validity">Kod 10 dakika geçerli, deneme hakkı sınırlı.</string>
     <string name="collect_quotes">Teklif topla</string>
     <string name="company_address">Adres</string>
     <string name="company_city">İl</string>
@@ -498,6 +499,7 @@
     <string name="family_live">Yayında</string>
     <string name="family_proposed">İnceleme bekliyor</string>
     <string name="filter_document">Belge</string>
+    <string name="fix_or_resend">Adresi düzelt ya da yeniden gönder</string>
     <string name="guide_share">PDF olarak paylaş</string>
     <string name="has_email_label">e-posta gidecek</string>
     <string name="held_tag">İncelemede</string>
