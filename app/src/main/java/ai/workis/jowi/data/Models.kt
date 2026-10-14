@@ -41,6 +41,24 @@ data class AuthResponse(
 @Serializable
 data class OtpRequestBody(val email: String)
 
+/** `auth/door/` (2026-10-13): one address field, the server decides what comes next. */
+@Serializable
+data class DoorBody(val email: String, val lang: String)
+
+/**
+ * `known: true` — the code is out, the code step follows; `known: false` — no code, no
+ * account, the application form is the next step (`applyUrl` is only the signal: the app
+ * opens its native wizard with the address the person typed). Refusals come as
+ * `{success: false, error}` on 400 / 429 / 502 — the sentence is shown as it arrives.
+ */
+@Serializable
+data class DoorResponse(
+    val success: Boolean = false,
+    val known: Boolean? = null,
+    val applyUrl: String? = null,
+    val error: String? = null,
+)
+
 @Serializable
 data class OtpVerifyBody(
     val email: String,

@@ -78,6 +78,34 @@ class AuthRepository(
         safeCall(lang()) { api.otpRequest(OtpRequestBody(normalizedEmail(email))); Unit }
 
     /**
+     * The address door (2026-10-13, the app twin of the web's e-mail door): one field,
+     * the server decides. A known address has its code issued by this ONE call and the
+     * code step follows; an unknown one gets no code and no account — the application
+     * form is the next step, with the address on it. Nothing of ours says "no account".
+     */
+    sealed interface Door {
+        data object Known : Door
+        data class Unknown(val email: String) : Door
+    }
+
+    suspend fun door(email: String): ApiResult<Door> {
+        val address = normalizedEmail(email)
+        return try {
+            val r = api.door(DoorBody(address, if (lang().startsWith("en")) "en" else "tr"))
+            if (!r.success) ApiResult.Err(200, r.error ?: statusMessage(-1, lang()))
+            else ApiResult.Ok(if (r.known == false) Door.Unknown(address) else Door.Known)
+        } catch (e: HttpException) {
+            // 400 (not an address) · 429 (ten an hour per device, or the code core's limit) ·
+            // 502 (mail) — the server's sentence under the field, as it arrives
+            ApiResult.Err(e.code(), messageFromBody(e, lang()))
+        } catch (e: java.io.IOException) {
+            ApiResult.Err(null, statusMessage(null, lang()))
+        } catch (e: Exception) {
+            ApiResult.Err(null, statusMessage(-1, lang()))
+        }
+    }
+
+    /**
      * A correct code does not always open a session: an address nobody has an
      * account under is ASKED first, so that a mistyped address stops becoming
      * an empty Guest seat. The answer says `newAccount` — the app decides on

@@ -78,7 +78,7 @@ import kotlinx.coroutines.launch
 private enum class LoginStep { Email, Code }
 
 @Composable
-fun LoginScreen(onApply: () -> Unit = {}) {
+fun LoginScreen(onApply: (String) -> Unit = {}) {
     val colors = WorkisTheme.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -107,13 +107,21 @@ fun LoginScreen(onApply: () -> Unit = {}) {
         if (refused) { error = refusalSentence ?: sessionEnded; Graph.auth.clearRefusal() }
     }
 
+    /**
+     * One field, the server decides (ledger 56/58): a known address gets its code and
+     * the code step; an unknown one gets the wizard with the address filled in — no
+     * code, no account, no sentence of ours. The login is ONE door, as the homepage.
+     */
     fun requestCode() {
         if (loading || email.isBlank()) return
         loading = true
         error = null
         scope.launch {
-            when (val r = Graph.auth.requestOtp(email.trim())) {
-                is ApiResult.Ok -> step = LoginStep.Code
+            when (val r = Graph.auth.door(email)) {
+                is ApiResult.Ok -> when (val d = r.value) {
+                    is AuthRepository.Door.Known -> step = LoginStep.Code
+                    is AuthRepository.Door.Unknown -> onApply(d.email)
+                }
                 is ApiResult.Err -> error = r.message
             }
             loading = false
@@ -250,8 +258,6 @@ fun LoginScreen(onApply: () -> Unit = {}) {
                         Spacer(Modifier.height(16.dp))
                         PasskeyDoor(enabled = !loading) { signInWithPasskey() }
                     }
-                    Spacer(Modifier.height(22.dp))
-                    ApplyCard(onApply)
                 }
 
                 else -> {
@@ -605,47 +611,6 @@ private fun PillButton(label: String, enabled: Boolean = true, onClick: () -> Un
     )
 }
 
-@Composable
-private fun ApplyCard(onApply: () -> Unit) {
-    val colors = WorkisTheme.colors
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(colors.surface, RoundedCornerShape(20.dp))
-            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-            .padding(16.dp),
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                stringResource(R.string.new_title),
-                fontFamily = WorkisSans,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 15.sp,
-                color = colors.ink,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                stringResource(R.string.new_sub),
-                fontFamily = WorkisSans,
-                fontSize = 13.sp,
-                color = colors.muted,
-            )
-        }
-        Spacer(Modifier.width(10.dp))
-        Text(
-            stringResource(R.string.apply),
-            fontFamily = WorkisSans,
-            fontWeight = FontWeight.Medium,
-            fontSize = 14.sp,
-            color = colors.accentText,
-            modifier = Modifier
-                .border(1.dp, colors.border, CircleShape)
-                .clickable(onClick = onApply)
-                .padding(horizontal = 16.dp, vertical = 9.dp),
-        )
-    }
-}
 
 @Composable
 private fun LangTab(
@@ -681,8 +646,7 @@ private fun PublicAskContent() {
     // so Jowi stops offering controls this screen has not got (2026-09-17)
     val screenControls = listOf(
         vis(stringResource(R.string.sign_in_title)), vis(stringResource(R.string.email_placeholder)),
-        vis(stringResource(R.string.email_hint)), vis(stringResource(R.string.new_title)),
-        vis(stringResource(R.string.new_sub)), vis(stringResource(R.string.apply), VisStyle.OUTLINE),
+        vis(stringResource(R.string.email_hint)),
         vis(stringResource(R.string.privacy), VisStyle.SECONDARY), vis(stringResource(R.string.lang_tr), VisStyle.SECONDARY),
         vis(stringResource(R.string.lang_en), VisStyle.SECONDARY), vis(stringResource(R.string.jowi_tab), VisStyle.SECONDARY),
         vis(stringResource(R.string.apply_ask_prompt)), vis(stringResource(R.string.appearance), VisStyle.SECONDARY),

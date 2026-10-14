@@ -53,7 +53,10 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
 - Decode tolerantly: nullable fields + `ignoreUnknownKeys = true` (backend lights fields up after client ships).
 - 401 → wipe token, back to login. 403 → routing signal (missing seat profile → onboarding), not an error screen.
 - No pagination on `/workis/` lists, no WebSockets (poll/pull-to-refresh), push not implemented yet.
-- Login is e-mail → OTP (`/auth/otp/request|verify/` — contract proposed, backend gap). `POST /auth/validate-token/` on launch.
+- Login is ONE door (ledger 56/58): send-code calls `POST /auth/door/ {email, lang}` — `known: true` → the code step
+  (`otp/verify/`, `confirmSignup: true` kept), `known: false` → the native wizard opens with the address (`applyUrl` is only
+  the signal, never a web view). Refusals (400/429/502) show the server's `error` as it arrives. No apply card on the login.
+  `POST /auth/validate-token/` on launch.
 - Roles are exact-match ints: 1 Partner, 2 Guest, 3 Coordinator, 4 Region lead, 5 Expert. Coordinator console
   only for role 3 or 4; role 5 gets its own Panel (`ui/screens/expert/`, `/workis/expert/*`) and no Cases tab.
 - §10.2 re-acceptance: `GET /workis/agreement/pending/` after sign-in (AuthRepository.agreementPending) → the

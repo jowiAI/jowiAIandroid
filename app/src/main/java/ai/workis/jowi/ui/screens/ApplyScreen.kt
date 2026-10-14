@@ -259,9 +259,16 @@ private fun prepareFile(bytes: ByteArray, mime: String): Triple<ByteArray, Strin
 }
 
 @Composable
-fun ApplyScreen(onClose: () -> Unit, vm: ApplyViewModel = viewModel()) {
+fun ApplyScreen(onClose: () -> Unit, prefillEmail: String? = null, vm: ApplyViewModel = viewModel()) {
     val colors = WorkisTheme.colors
     val context = LocalContext.current
+
+    // The form opens with the address already known — the login door's (an unknown
+    // address at sign-in, ledger 56) or the signed-in one (ledger 55) — like the web's
+    // /basvuru/?e=. Only an empty field is filled; what the person typed stays.
+    LaunchedEffect(prefillEmail) {
+        if (vm.email.isBlank()) (prefillEmail ?: Graph.auth.email())?.let { vm.email = it.trim().lowercase() }
+    }
 
     if (vm.showExpert) {
         ExpertApplyScreen(onClose = { vm.showExpert = false })

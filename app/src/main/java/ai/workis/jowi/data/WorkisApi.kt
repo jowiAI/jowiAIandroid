@@ -20,6 +20,10 @@ interface WorkisApi {
     @POST("auth/otp/request/")
     suspend fun otpRequest(@Body body: OtpRequestBody): AuthResponse
 
+    /** The address door (Django 7a908f51) — the login's first call since ledger 56; `otp/request/` stays for other clients. */
+    @POST("auth/door/")
+    suspend fun door(@Body body: DoorBody): DoorResponse
+
     @POST("auth/otp/verify/")
     suspend fun otpVerify(@Body body: OtpVerifyBody): AuthResponse
 

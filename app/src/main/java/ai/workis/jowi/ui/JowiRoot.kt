@@ -28,6 +28,8 @@ fun JowiRoot() {
     var phase by remember { mutableStateOf(LaunchPhase.Splash) }
     // iOS: showApply presents WorkisApplyView as a fullScreenCover from login
     var showApply by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    // the login door answered `known: false`: the form is the next step, with that address on it (ledger 56)
+    var doorEmail by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     val isAuthenticated by Graph.auth.isAuthenticated.collectAsState()
 
     val activity = androidx.compose.ui.platform.LocalContext.current
@@ -56,13 +58,13 @@ fun JowiRoot() {
     }
 
     if (showApply) {
-        ApplyScreen(onClose = { showApply = false })
+        ApplyScreen(prefillEmail = doorEmail, onClose = { showApply = false; doorEmail = null })
         return
     }
 
     when (phase) {
         LaunchPhase.Splash -> SplashScreen()
-        LaunchPhase.Login -> LoginScreen(onApply = { showApply = true })
+        LaunchPhase.Login -> LoginScreen(onApply = { address -> doorEmail = address; showApply = true })
         LaunchPhase.Main -> MainScreen()
     }
 }
