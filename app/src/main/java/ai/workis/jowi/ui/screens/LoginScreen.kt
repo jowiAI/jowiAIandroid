@@ -3,6 +3,9 @@ package ai.workis.jowi.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +42,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -62,6 +66,8 @@ import ai.workis.jowi.ui.components.JowiOptions
 import ai.workis.jowi.data.VisStyle
 import ai.workis.jowi.data.vis
 import ai.workis.jowi.data.ApplyAskBody
+import ai.workis.jowi.data.PublicCard
+import ai.workis.jowi.data.PublicHome
 import ai.workis.jowi.ui.components.AnswerText
 import ai.workis.jowi.data.safeCall
 import ai.workis.jowi.ui.components.WorkisMark
@@ -630,7 +636,22 @@ private fun LangTab(
     }
 }
 
-/** Anonymous applicant Jowi (login's third tab) → POST /workis/apply/ask/. */
+/** One exchange on the login's public Jowi: the question line, the answer, its options. */
+private data class PublicTurn(
+    val q: String,
+    val a: String,
+    val options: List<AskOption>? = null,
+    val picked: Boolean = false,
+    /** the server's "shall I open it up a little?" — a free "how" question only */
+    val offerStory: Boolean = false,
+)
+
+/**
+ * Anonymous applicant Jowi (login's third tab) → POST /workis/apply/ask/.
+ * Ledger 60: the homepage's five cards (rows while nothing is asked, then a chip row of
+ * their one-word labels) and the twelve-page "Nasıl çalışır?" story — `how` opens it, the
+ * other four ask their own question; a free question carries `surface: "home"`.
+ */
 @Composable
 private fun PublicAskContent() {
     val colors = WorkisTheme.colors
@@ -644,76 +665,211 @@ private fun PublicAskContent() {
         vis(stringResource(R.string.apply_ask_prompt)), vis(stringResource(R.string.appearance), VisStyle.SECONDARY),
     )
     val scope = rememberCoroutineScope()
+    val lang by Graph.language.collectAsState()
+    val fail = stringResource(R.string.apply_ask_fail)
     var question by remember { mutableStateOf("") }
-    var answer by remember { mutableStateOf<String?>(null) }
-    var options by remember { mutableStateOf<List<AskOption>?>(null) }
-    var optionPicked by remember { mutableStateOf(false) }
+    var thread by remember { mutableStateOf<List<PublicTurn>>(emptyList()) }
     var asking by remember { mutableStateOf(false) }
     var askError by remember { mutableStateOf<String?>(null) }
     val askFocus = remember { FocusRequester() }
+    val scroll = rememberScrollState()
 
-    /** Where the visitor is (2026-09-17): the login screen's own Jowi tab. */
-    fun ask(text: String) {
-        val q = text.trim()
-        if (q.isEmpty() || asking) return
+    // the homepage's cards + story, per language (the last good answer is cached)
+    var home by remember { mutableStateOf<PublicHome?>(null) }
+    var storyOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(lang) { Graph.publicHome.publicHome(lang)?.let { home = it } }
+    val cards = home?.cards.orEmpty()
+    val story = home?.story?.takeIf { it.pages.isNotEmpty() }
+
+    LaunchedEffect(thread.size, asking) { if (thread.isNotEmpty() || asking) scroll.animateScrollTo(scroll.maxValue) }
+
+    /** Posts one way in and appends its turn; [fallbackQ] is the question line if the server sends none. */
+    fun send(body: ApplyAskBody, fallbackQ: String, offerAllowed: Boolean) {
+        if (asking) return
         asking = true
         askError = null
         scope.launch {
-            when (val r = safeCall(Graph.language.value) {
-                Graph.api.applyAsk(
-                    ApplyAskBody(q = q, lang = Graph.language.value, screen = "public.login", visible = screenControls),
+            when (val r = safeCall(Graph.language.value) { Graph.api.applyAsk(body) }) {
+                is ApiResult.Ok -> thread = thread + PublicTurn(
+                    q = r.value.q?.takeIf { it.isNotBlank() } ?: fallbackQ,
+                    a = r.value.text?.takeIf { it.isNotBlank() } ?: fail,
+                    options = r.value.options?.takeIf { it.isNotEmpty() },
+                    offerStory = offerAllowed && r.value.offerStory,
                 )
-            }) {
-                is ApiResult.Ok -> {
-                    answer = r.value.text
-                    options = r.value.options?.takeIf { it.isNotEmpty() }
-                    optionPicked = false
-                }
                 is ApiResult.Err -> askError = r.message
             }
             asking = false
         }
     }
 
-    answer?.let {
+    /** A free question — where the visitor is (2026-09-17) and, from the login, `surface: "home"`. */
+    fun ask(text: String) {
+        val q = text.trim()
+        if (q.isEmpty()) return
+        send(
+            ApplyAskBody(
+                q = q, lang = Graph.language.value, screen = "public.login", visible = screenControls,
+                surface = "home", vk = Graph.visitorKey,
+            ),
+            fallbackQ = q,
+            offerAllowed = true,
+        )
+    }
+
+    /** `how` never asks — it opens the story; the other four answer the card's own question. */
+    fun press(card: PublicCard) {
+        if (card.id == "how") { if (story != null) storyOpen = true; return }
+        send(
+            ApplyAskBody(
+                card = card.id, lang = Graph.language.value, screen = "public.login", visible = screenControls,
+                vk = Graph.visitorKey,
+            ),
+            fallbackQ = card.question,
+            offerAllowed = false,
+        )
+    }
+
+    Column(Modifier.fillMaxWidth()) {
         Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier
-                .fillMaxWidth()
-                .background(colors.surface, RoundedCornerShape(20.dp))
-                .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-                .padding(16.dp),
+                .weight(1f, fill = false)
+                .verticalScroll(scroll),
         ) {
-            // the public answer carries the md_lite grammar too (2026-09-27)
-            AnswerText(it, color = colors.ink, fontSize = 15.sp, lineHeight = 21.sp)
-            options?.let { opts ->
-                Spacer(Modifier.height(10.dp))
-                JowiOptions(opts, optionPicked, enabled = !asking) { o ->
-                    optionPicked = true
-                    val q = o.q
-                    if (!q.isNullOrEmpty()) { question = ""; ask(q) } else askFocus.requestFocus()
+            val idle = thread.isEmpty() && !asking
+            if (idle) {
+                // the web's opening sentence when the server gave one, the app's own hint otherwise
+                Text(
+                    home?.intro?.takeIf { it.isNotBlank() } ?: stringResource(R.string.public_ask_hint),
+                    fontFamily = WorkisSans,
+                    fontSize = 15.sp,
+                    lineHeight = 21.sp,
+                    color = colors.muted,
+                )
+            }
+            // the cards are the menu: full while nothing has been asked, then the
+            // web's one-word labels in a row (`short`) so the answers keep the room
+            if (cards.isNotEmpty()) {
+                if (idle) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        cards.forEach { card -> PublicCardRow(card, enabled = !asking) { press(card) } }
+                    }
+                } else {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    ) {
+                        cards.forEach { card -> PublicCardChip(card.short, enabled = !asking) { press(card) } }
+                    }
                 }
+            }
+            thread.forEachIndexed { i, turn ->
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(colors.surface, RoundedCornerShape(20.dp))
+                        .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+                        .padding(14.dp),
+                ) {
+                    Text(turn.q, fontFamily = WorkisSans, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.accentText)
+                    // the public answer carries the md_lite grammar too (2026-09-27)
+                    AnswerText(turn.a, color = colors.ink, fontSize = 15.sp, lineHeight = 21.sp)
+                    turn.options?.let { opts ->
+                        Spacer(Modifier.height(4.dp))
+                        JowiOptions(opts, turn.picked, enabled = !asking) { o ->
+                            thread = thread.toMutableList().also { it[i] = turn.copy(picked = true) }
+                            val q = o.q
+                            if (!q.isNullOrEmpty()) { question = ""; ask(q) } else askFocus.requestFocus()
+                        }
+                    }
+                    if (turn.offerStory && story != null) {
+                        Spacer(Modifier.height(4.dp))
+                        StoryOfferRow { storyOpen = true }
+                    }
+                }
+            }
+            if (asking) {
+                Text("Jowi …", fontFamily = WorkisSans, fontSize = 14.sp, color = colors.faint)
+            }
+            askError?.let {
+                Text(it, color = colors.danger, fontSize = 13.sp)
             }
         }
         Spacer(Modifier.height(14.dp))
+        GlassField(
+            value = question,
+            onChange = { question = it },
+            placeholder = stringResource(R.string.apply_ask_prompt),
+            keyboardType = KeyboardType.Text,
+            trailing = {
+                if (question.isNotBlank()) {
+                    CircularSubmit(loading = asking, enabled = true) { val q = question; question = ""; ask(q) }
+                }
+            },
+            focusRequester = askFocus,
+        )
     }
-    if (asking) {
-        Text("Jowi …", fontFamily = WorkisSans, fontSize = 14.sp, color = colors.faint)
-        Spacer(Modifier.height(10.dp))
+
+    if (storyOpen && story != null) {
+        StorySheet(story = story, startAt = null, onClose = { storyOpen = false })
     }
-    askError?.let {
-        Text(it, color = colors.danger, fontSize = 13.sp)
-        Spacer(Modifier.height(10.dp))
+}
+
+/** One homepage card as an uncoloured row: the title, its description; the app's card idiom. */
+@Composable
+private fun PublicCardRow(card: PublicCard, enabled: Boolean, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    val shape = RoundedCornerShape(20.dp)
+    Column(
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(colors.surface, shape)
+            .border(1.dp, colors.border, shape)
+            .clip(shape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    ) {
+        Text(card.title, fontFamily = WorkisSans, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
+        Text(card.description, fontFamily = WorkisSans, fontSize = 13.sp, color = colors.muted)
     }
-    GlassField(
-        value = question,
-        onChange = { question = it },
-        placeholder = stringResource(R.string.apply_ask_prompt),
-        keyboardType = KeyboardType.Text,
-        trailing = {
-            if (question.isNotBlank()) {
-                CircularSubmit(loading = asking, enabled = true) { val q = question; question = ""; ask(q) }
-            }
-        },
-        focusRequester = askFocus,
+}
+
+/** A card's one-word label once something has been asked — the menu stays. */
+@Composable
+private fun PublicCardChip(label: String, enabled: Boolean, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Text(
+        label,
+        fontFamily = WorkisSans,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        color = if (enabled) colors.ink else colors.faint,
+        modifier = Modifier
+            .background(colors.surface, CircleShape)
+            .border(1.dp, colors.border, CircleShape)
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
     )
+}
+
+/** The web's row under a "how does it work" answer: one press away from the twelve pages. */
+@Composable
+private fun StoryOfferRow(onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .background(colors.surface, CircleShape)
+            .border(1.dp, colors.border, CircleShape)
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Icon(WorkisIcons.Book, contentDescription = null, tint = colors.ink, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.story_offer), fontFamily = WorkisSans, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink)
+    }
 }

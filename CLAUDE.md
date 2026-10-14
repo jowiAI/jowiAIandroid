@@ -37,6 +37,10 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   `seat:"none"` = Başvuru tab (SeatlessScreen), `"operator"` = no partner tab. Hesap shows `CompanySections`
   whenever a firm answered. MONEY ON THIS SURFACE IS A JSON NUMBER → `WorkisMoney.text()` (2 fraction digits,
   app locale), never a decimal string. `text/polish/` only suggests — applied on the user's tap, never automatically.
+- Login's Jowi tab (ledger 60): `GET workis/public/home/?lang=` (data/PublicHome.kt, cached per language in prefs, drawn
+  offline) gives the intro, five cards and the 12-page story; `how` opens `StorySheet` (ui/screens/), the other four POST
+  `apply/ask/ {card, lang, vk}`; a free question there carries `surface: "home"`; a story-page question `story: <id>`.
+  `vk` = `Graph.visitorKey` (one UUID per install, never tied to an account). Content is the server's, never in strings.
 - Tab sets: role 3/4 and 5 → Panel · Hesap · Jowi; others → Pazar|Başvuru · Hesap · Jowi. Talepler (`cases/`) is retired.
 - Knowledge (Bilgi) is ONE screen behind a seat: `ExpertKnowledgeScreen(seat = Expert | Console)` with
   `KnowledgeViewModel` (expert/* vs console/* doors; console adds semantic search, author tags, pairs).

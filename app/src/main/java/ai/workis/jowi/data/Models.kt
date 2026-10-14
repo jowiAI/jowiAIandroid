@@ -163,7 +163,8 @@ data class ApplySubmitResponse(
 /** Anonymous applicant Jowi (login screen's Jowi tab): /workis/apply/ask/ */
 @Serializable
 data class ApplyAskBody(
-    val q: String,
+    /** Omitted on a card press — the card's own question is the question (2026-10-14). */
+    val q: String? = null,
     val lang: String? = null,
     /** public.login | public.apply | public.expert_apply (2026-09-17). */
     val screen: String? = null,
@@ -171,10 +172,26 @@ data class ApplyAskBody(
     val state: kotlinx.serialization.json.JsonObject? = null,
     /** The public door reads the controls too (2026-09-17) — it stops offering buttons the screen has not got. */
     val visible: List<VisibleItem>? = null,
+    /** The login's three ways in (2026-10-14): a card press (what · where · who · why) … */
+    val card: String? = null,
+    /** … a question asked on a story page (the page id) … */
+    val story: String? = null,
+    /** … or a free question from the login: "home" (without it the body is the Başvuru tab's ask). */
+    val surface: String? = null,
+    /** Visitor key, one per install, never tied to an account (Graph.visitorKey). */
+    val vk: String? = null,
 )
 
 @Serializable
-data class ApplyAskResponse(val ok: Boolean = false, val text: String? = null, val options: List<AskOption>? = null)
+data class ApplyAskResponse(
+    val ok: Boolean = false,
+    /** The question as the server took it — a card press answers the card's own question. */
+    val q: String? = null,
+    val text: String? = null,
+    val options: List<AskOption>? = null,
+    /** True on a free "how does it work" question: draw the story offer under the answer. */
+    val offerStory: Boolean = false,
+)
 
 @Serializable
 data class AskBody(

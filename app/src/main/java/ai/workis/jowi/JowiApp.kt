@@ -11,6 +11,7 @@ import androidx.core.os.LocaleListCompat
 import ai.workis.jowi.data.AuthRepository
 import ai.workis.jowi.data.PartnerStore
 import ai.workis.jowi.data.PasskeyService
+import ai.workis.jowi.data.PublicHomeStore
 import ai.workis.jowi.data.TokenStore
 import ai.workis.jowi.data.WorkisApi
 import ai.workis.jowi.data.buildApi
@@ -24,6 +25,7 @@ object Graph {
     lateinit var auth: AuthRepository
     lateinit var partner: PartnerStore
     lateinit var passkeys: PasskeyService
+    lateinit var publicHome: PublicHomeStore
 
     // "system" | "light" | "dark" (iOS @AppStorage("workis_appearance"))
     val appearance = MutableStateFlow("system")
@@ -52,7 +54,22 @@ object Graph {
         auth = AuthRepository(api, tokenStore) { language.value }
         partner = PartnerStore(api)
         passkeys = PasskeyService(api) { language.value }
+        publicHome = PublicHomeStore(api, prefs)
     }
+
+    /**
+     * The visitor key the homepage logs its questions under (`vk`): one per install,
+     * never tied to an account — the console's Sorular groups a visitor's presses by it.
+     */
+    val visitorKey: String
+        get() {
+            prefs.getString(VISITOR_KEY, null)?.takeIf { it.isNotEmpty() }?.let { return it }
+            val v = java.util.UUID.randomUUID().toString().lowercase()
+            prefs.edit().putString(VISITOR_KEY, v).apply()
+            return v
+        }
+
+    private const val VISITOR_KEY = "workis_vk"
 
     /** "android; Pixel 9; Android 16; app 1.0 (2)" */
     private fun describeClient(context: Context): String {

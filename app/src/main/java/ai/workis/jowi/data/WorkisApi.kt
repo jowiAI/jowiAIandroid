@@ -94,6 +94,10 @@ interface WorkisApi {
     @POST("workis/apply/ask/")
     suspend fun applyAsk(@Body body: ApplyAskBody): ApplyAskResponse
 
+    /** The homepage's five cards + the "Nasıl çalışır?" story (no token, 2026-10-14). */
+    @GET("workis/public/home/")
+    suspend fun publicHome(@Query("lang") lang: String): PublicHome
+
     @Multipart
     @POST("workis/apply/")
     suspend fun applySubmitWithFile(
