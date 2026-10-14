@@ -387,6 +387,12 @@
     <string name="departure_typed">AYRILIYORUM</string>
     <string name="departure_what">Ayrıldığınızda ne olur:</string>
     <string name="description_field">Açıklama</string>
+    <string name="dest_change">değiştir</string>
+    <string name="dest_into">Taslak listeye eklenecek</string>
+    <string name="dest_name_placeholder">Liste adı</string>
+    <string name="dest_new">Yeni liste</string>
+    <string name="dest_new_list">Yeni liste…</string>
+    <string name="dest_rows_word">satır</string>
     <string name="detail_saved">kaydedildi</string>
     <string name="different_email">Farklı e-posta</string>
     <string name="discount_pct_field">İndirim %</string>
@@ -726,6 +732,7 @@
     <string name="partners_empty">Henüz Workis partneri yok — ilk başvuruyu Başvurular ekranından partnere çevir.</string>
     <string name="partners_filter_prompt">Ad, şehir, sektör…</string>
     <string name="partners_title">Partnerler</string>
+    <string name="partners_unreadable">Liste bu sürümün okuyamadığı bir biçimde geldi.</string>
     <string name="passkey_create">Geçiş anahtarı oluştur</string>
     <string name="passkey_created">Geçiş anahtarı oluşturuldu.</string>
     <string name="passkey_created_at">oluşturuldu</string>
@@ -855,6 +862,9 @@
     <string name="row_free_text">Workis tedarikçi bulur</string>
     <string name="row_price_in_quote">fiyat teklifle gelir</string>
     <string name="sample_cleanup">Örneği kaldır</string>
+    <string name="satisfaction_note">Kısa bir not (isteğe bağlı)</string>
+    <string name="satisfaction_private">Yalnız siz görürsünüz</string>
+    <string name="satisfaction_title">Teslimat nasıldı?</string>
     <string name="search_products">Başka ürün ara…</string>
     <string name="seat_buyer">Alıcı</string>
     <string name="seat_carrier">Taşıyıcı</string>
@@ -867,6 +877,7 @@
     <string name="seatless_approval">Başvurunuz onay bekliyor</string>
     <string name="seatless_approved">Başvurunuz onaylandı — koltuk hazırlanıyor</string>
     <string name="seatless_closed">Başvuru kapatıldı</string>
+    <string name="seatless_conflict">Bu adres zaten bir Jowi firma hesabına bağlı; bu adresle yapılan bir başvuru onaylanamaz. Farklı bir e-posta adresiyle başvurun ya da koordinatörden sizi onaylı bir firmaya eklemesini isteyin.</string>
     <string name="seatless_none">Bu hesabın henüz bir firma koltuğu yok. Pazaryerine alıcı, satıcı ya da taşıyıcı olarak katılmak için başvurun.</string>
     <string name="seatless_other_email">Giriş bağlantısı ve koltuk şu adrese gider, bu hesaba değil:</string>
     <string name="seatless_review">Başvurunuz inceleniyor</string>
@@ -906,7 +917,7 @@
     <string name="sign_date">TARİH</string>
     <string name="sign_date_caption">imza tarihi</string>
     <string name="sign_here">İMZA BURADA</string>
-    <string name="sign_in_copy">Şifre yok. E-postana tek kullanımlık giriş bağlantısı ve 6 haneli kod göndereceğiz. İlk girişte hesabın otomatik oluşturulur.</string>
+    <string name="sign_in_copy">Şifre yok. E-postanı yaz: hesabın varsa giriş kodu gelir, yoksa başvuruyu birlikte açarız.</string>
     <string name="sign_in_current">bu oturum</string>
     <string name="sign_in_door_app">uygulama</string>
     <string name="sign_in_door_web">web</string>
@@ -1052,6 +1063,7 @@
     <string name="thread_retracted_trace">Bu mesaj gönderen tarafından geri çekildi</string>
     <string name="thread_seat_coordinator">koordinatör</string>
     <string name="thread_seen">görüldü</string>
+    <string name="thread_send_to_table">Tabloya ilet</string>
     <string name="thread_show_original">Orijinali göster</string>
     <string name="thread_show_translation">Çeviriyi göster</string>
     <string name="thumbs_already">Bu yanıt zaten değerlendirilmiş.</string>

@@ -387,6 +387,12 @@
     <string name="departure_typed">AYRILIYORUM</string>
     <string name="departure_what">What happens when you leave:</string>
     <string name="description_field">Description</string>
+    <string name="dest_change">change</string>
+    <string name="dest_into">Will be added to the draft list</string>
+    <string name="dest_name_placeholder">List name</string>
+    <string name="dest_new">New list</string>
+    <string name="dest_new_list">New list…</string>
+    <string name="dest_rows_word">rows</string>
     <string name="detail_saved">saved</string>
     <string name="different_email">Different e-mail</string>
     <string name="discount_pct_field">Discount %</string>
@@ -726,6 +732,7 @@
     <string name="partners_empty">No Workis partners yet — convert the first application on the Applications screen.</string>
     <string name="partners_filter_prompt">Name, city, sector…</string>
     <string name="partners_title">Partners</string>
+    <string name="partners_unreadable">The list arrived in a shape this version cannot read.</string>
     <string name="passkey_create">Create a passkey</string>
     <string name="passkey_created">The passkey was created.</string>
     <string name="passkey_created_at">created</string>
@@ -855,6 +862,9 @@
     <string name="row_free_text">Workis sources it</string>
     <string name="row_price_in_quote">price comes with the quote</string>
     <string name="sample_cleanup">Remove the example</string>
+    <string name="satisfaction_note">A short note (optional)</string>
+    <string name="satisfaction_private">Only you see this</string>
+    <string name="satisfaction_title">How was the delivery?</string>
     <string name="search_products">Search other products…</string>
     <string name="seat_buyer">Buyer</string>
     <string name="seat_carrier">Carrier</string>
@@ -867,6 +877,7 @@
     <string name="seatless_approval">Your application awaits approval</string>
     <string name="seatless_approved">Your application is approved — the seat is being set up</string>
     <string name="seatless_closed">The application was closed</string>
+    <string name="seatless_conflict">This address already belongs to a Jowi company account, so an application with it cannot be approved. Apply with a different e-mail address, or ask the coordinator to add you to an approved firm.</string>
     <string name="seatless_none">This account holds no company seat yet. Apply to join the marketplace as a buyer, seller or carrier.</string>
     <string name="seatless_other_email">The sign-in link and the seat go to this address, not to this account:</string>
     <string name="seatless_review">Your application is under review</string>
@@ -906,7 +917,7 @@
     <string name="sign_date">DATE</string>
     <string name="sign_date_caption">date signed</string>
     <string name="sign_here">SIGN HERE</string>
-    <string name="sign_in_copy">No password. We\'ll email you a one-time sign-in link and a 6-digit code. Your account is created on first sign-in.</string>
+    <string name="sign_in_copy">No password. Type your e-mail: if it has an account, a sign-in code comes; if not, we open the application together.</string>
     <string name="sign_in_current">this session</string>
     <string name="sign_in_door_app">app</string>
     <string name="sign_in_door_web">web</string>
@@ -1052,6 +1063,7 @@
     <string name="thread_retracted_trace">Withdrawn by the sender</string>
     <string name="thread_seat_coordinator">coordinator</string>
     <string name="thread_seen">seen</string>
+    <string name="thread_send_to_table">Send to the table</string>
     <string name="thread_show_original">Show original</string>
     <string name="thread_show_translation">Show translation</string>
     <string name="thumbs_already">This answer was already rated.</string>
