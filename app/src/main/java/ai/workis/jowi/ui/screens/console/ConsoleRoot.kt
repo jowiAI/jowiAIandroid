@@ -77,6 +77,8 @@ sealed interface ConsoleDest {
     data object CatalogSellers : ConsoleDest
     data class Catalog(val seller: String, val name: String?) : ConsoleDest
     data class Family(val seller: String, val name: String?, val id: String) : ConsoleDest
+    /** Gruplar (ledger 62): the Workis groups page, roles 3 | 4. */
+    data object Groups : ConsoleDest
 }
 
 @Composable
@@ -106,6 +108,12 @@ fun ConsoleRoot(vm: ConsoleViewModel = viewModel()) {
             ai.workis.jowi.ui.screens.partner.CatalogScreen(catalogVm, onBack = { dest = ConsoleDest.CatalogSellers }, onOpenFamily = { dest = ConsoleDest.Family(d.seller, d.name, it) })
         }
         is ConsoleDest.Family -> ai.workis.jowi.ui.screens.partner.FamilyScreen(d.id, onBack = { dest = ConsoleDest.Catalog(d.seller, d.name) }, seller = d.seller)
+        ConsoleDest.Groups -> {
+            val groupsVm: GroupsViewModel = viewModel()
+            ConsoleSub(stringResource(R.string.groups_title), { dest = ConsoleDest.Home }, trailing = { GroupsTitleActions(groupsVm) }) {
+                ConsoleGroupsScreen(groupsVm)
+            }
+        }
         ConsoleDest.Knowledge -> ConsoleSub(stringResource(R.string.expert_knowledge_title), { dest = ConsoleDest.Home }) {
             ExpertKnowledgeScreen(KnowledgeSeat.Console)
         }
@@ -177,6 +185,10 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
     val colors = WorkisTheme.colors
     LaunchedEffect(Unit) { if (vm.summary == null) vm.loadSummary() }
     val s = vm.summary
+    // Yazışmalar counts OPEN threads: the summary's field, else the open rows of the list
+    // (fetched only when the summary lacks the field) — never the raw list size
+    LaunchedEffect(s) { if (s != null && s.openConversations == null && vm.conversations == null) vm.loadConversations() }
+    val openConversations = s?.openConversations ?: vm.conversations?.conversations?.count { it.open == true }
 
     Column(
         modifier = Modifier
@@ -249,7 +261,7 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
                 CapsuleTile(
                     icon = WorkisIcons.Bubble,
                     title = stringResource(R.string.conversations_title),
-                    count = s?.openConversations ?: 0,
+                    count = openConversations,
                 ) { onOpen(ConsoleDest.Conversations) }
             }
         }
@@ -281,6 +293,12 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             CapsuleDoor(WorkisIcons.Pencil, stringResource(R.string.expert_knowledge_title), Modifier.weight(1f)) { onOpen(ConsoleDest.Knowledge) }
             CapsuleDoor(WorkisIcons.ShippingBox, stringResource(R.string.catalog_title), Modifier.weight(1f)) { onOpen(ConsoleDest.CatalogSellers) }
+        }
+        Spacer(Modifier.height(14.dp))
+        // Gruplar (ledger 62) — the Workis groups page, half width under Bilgi / Ürünler
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            CapsuleDoor(WorkisIcons.Grid, stringResource(R.string.groups_door), Modifier.weight(1f)) { onOpen(ConsoleDest.Groups) }
+            Spacer(Modifier.weight(1f))
         }
         Spacer(Modifier.height(14.dp))
 

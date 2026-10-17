@@ -42,6 +42,10 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   `apply/ask/ {card, lang, vk}`; a free question there carries `surface: "home"`; a story-page question `story: <id>`.
   `vk` = `Graph.visitorKey` (one UUID per install, never tied to an account). Content is the server's, never in strings.
 - Tab sets: role 3/4 and 5 → Panel · Hesap · Jowi; others → Pazar|Başvuru · Hesap · Jowi. Talepler (`cases/`) is retired.
+- Gruplar (ledger 62, roles 3|4): `ui/screens/console/GroupsScreen.kt` + `data/GroupsModels.kt`. ONE page: `GET console/groups/?sector=`
+  is the whole screen and every POST answers the page re-read with `message` spread at the top level — the state IS the last
+  answer; every body carries `sector` (the slug on screen). Actions never on Genel, never without `canWrite`; each behind its
+  own flag (`renamable/movable/deletable`). The × on an alias chip and "+ başlık bağla" are their own clickables.
 - Knowledge (Bilgi) is ONE screen behind a seat: `ExpertKnowledgeScreen(seat = Expert | Console)` with
   `KnowledgeViewModel` (expert/* vs console/* doors; console adds semantic search, author tags, pairs).
 - Expert slice 2: `ExpertEarnings.kt` (door = the Panel's "Bu ay" card) and `ExpertAccountSections.kt`

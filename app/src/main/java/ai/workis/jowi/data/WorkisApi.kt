@@ -406,6 +406,46 @@ interface WorkisApi {
     @GET("workis/console/catalog/sellers/")
     suspend fun consoleCatalogSellers(): CatalogSellers
 
+    // --- Console Gruplar (ledger 62, Django groups_api.py) ---
+    // Every POST answers the page re-read (+ `message`); a refusal is {success: false, error}.
+    /** Missing / unknown slug = the fire sector. */
+    @GET("workis/console/groups/")
+    suspend fun consoleGroups(@Query("sector") sector: String? = null): GroupsPage
+
+    /** Coordinator only; the answer is the NEW sector's page. */
+    @POST("workis/console/groups/sectors/")
+    suspend fun consoleGroupsSectorAdd(@Body body: GroupsSectorAddBody): GroupsPage
+
+    @POST("workis/console/groups/leads-write/")
+    suspend fun consoleGroupsLeadsWrite(@Body body: GroupsLeadsWriteBody): GroupsPage
+
+    /** Coordinator only; the answer is the TARGET sector's page. */
+    @POST("workis/console/groups/sellers/{mpId}/sector/")
+    suspend fun consoleGroupsSellerSector(@Path("mpId") mpId: String, @Body body: GroupsSellerSectorBody): GroupsPage
+
+    @POST("workis/console/groups/add/")
+    suspend fun consoleGroupsAdd(@Body body: GroupsAddBody): GroupsPage
+
+    @POST("workis/console/groups/{id}/rename/")
+    suspend fun consoleGroupsRename(@Path("id") id: String, @Body body: GroupsRenameBody): GroupsPage
+
+    /** {sector, parentId: id|null} within the sector; {sector, toSectorId, parentId?} across. */
+    @POST("workis/console/groups/{id}/move/")
+    suspend fun consoleGroupsMove(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): GroupsPage
+
+    @POST("workis/console/groups/{id}/merge/")
+    suspend fun consoleGroupsMerge(@Path("id") id: String, @Body body: GroupsMergeBody): GroupsPage
+
+    @POST("workis/console/groups/{id}/delete/")
+    suspend fun consoleGroupsDelete(@Path("id") id: String, @Body body: GroupsSectorOnlyBody): GroupsPage
+
+    /** {sector, key, groupId} → an existing group; {sector, key, name, parentId?} → a new one. */
+    @POST("workis/console/groups/headings/bind/")
+    suspend fun consoleGroupsHeadingBind(@Body body: GroupsHeadingBindBody): GroupsPage
+
+    @POST("workis/console/groups/{id}/aliases/remove/")
+    suspend fun consoleGroupsAliasRemove(@Path("id") id: String, @Body body: GroupsAliasRemoveBody): GroupsPage
+
     @GET("workis/seller/catalog/")
     suspend fun catalog(@Query("seller") seller: String? = null): CatalogPage
 
