@@ -12,7 +12,7 @@
     <string name="account_role_partner">Partner</string>
     <string name="active_partners_pill">aktif partner</string>
     <string name="active_seats_pill">aktif koltuk</string>
-    <string name="add_item">Kalem ekle</string>
+    <string name="add_item">Yeni satır</string>
     <string name="add_item_from_catalogue">Katalogdan</string>
     <string name="add_item_manual">Ya da elle ekleyin</string>
     <string name="add_row">Satır ekle</string>
@@ -623,8 +623,10 @@
     <string name="line_mark_delivered_confirm">Ardından alıcı onaylar ve aşama tutarı serbest bırakılır.</string>
     <string name="link_hint">Kod yerine e-postadaki bağlantıya dokunman da yeterli.</string>
     <string name="list_archive">Arşivle</string>
+    <string name="list_open_rows">satır seçiminizi bekliyor — talep, her satırın ürünü ve varyantı seçildiğinde gönderilir. Ürünü seçilmemiş satır satıcılara üzerindeki bütün benzer ürünleri sorardı; varyantı seçilmemiş ürüne kesin teklif verilemez. Satırı açın ve seçin.</string>
     <string name="list_provenance_title">Bu liste nasıl kuruldu</string>
     <string name="list_retry">Yeniden dene</string>
+    <string name="list_rows_hint">aday ve gereksinimleri açmak için satıra dokunun</string>
     <string name="list_stuck">Takıldı</string>
     <string name="list_unarchive">Arşivden çıkar</string>
     <string name="list_withdraw">Talebi geri çek</string>
@@ -652,6 +654,7 @@
     <string name="match_header">Satın alma talebi</string>
     <string name="match_offers">ürün</string>
     <string name="match_variant_unset">Seçin — ya da satıcıya bırakın</string>
+    <string name="matched_in_catalogs">satıcı kataloglarında eşleşti</string>
     <string name="matched_word">eşleşti</string>
     <string name="media_add_video">YouTube videosu ekle</string>
     <string name="media_is_primary">Ana fotoğraf</string>
@@ -669,6 +672,8 @@
     <string name="name_visibility_title">Ad görünürlüğü</string>
     <string name="need_answer_placeholder">Ya da cevabınızı yazın</string>
     <string name="need_build">Listeyi kur</string>
+    <string name="need_build_now">Listeyi şimdi kur</string>
+    <string name="need_more_items">kalem daha</string>
     <string name="need_problem">Sorun</string>
     <string name="need_questions_left">soru kaldı</string>
     <string name="need_recall">Hatırladığım</string>
@@ -677,6 +682,7 @@
     <string name="need_role_needed">gerekli</string>
     <string name="need_role_optional">isteğe bağlı</string>
     <string name="need_skip">Atla</string>
+    <string name="need_type_here">buraya yazın ya da yukarıdan seçin</string>
     <string name="new_case_placeholder">İhtiyacını anlat — ör. \"Çekvalf DN50, 20 adet\"</string>
     <string name="new_case_title">Yeni talep</string>
     <string name="new_product">Yeni ürün (katalog yok)</string>
@@ -829,11 +835,17 @@
     <string name="product_name">Ürün adı</string>
     <string name="profile_hidden">GİZLİ — yayımlamak için ad görünürlüğünü açın</string>
     <string name="profile_note">Sektörleriniz, doğrulama rozeti ve katkı göstergeleriyle gösterilir; bağlantı beyanınız asla gösterilmez. Doğruluğundan siz sorumlusunuz.</string>
+    <string name="project_hint">satın almalar bu projeye kaydedilir — teslimatlar projenin adresine gider</string>
     <string name="project_label">Proje</string>
     <string name="proposal_empty">Henüz teklif yok — satıcılar davet edildi; teklifler geldikçe öneri kendiliğinden oluşur.</string>
     <string name="proposal_title">Kapsama önerisi</string>
+    <string name="provenance_behind">Arkasındaki sorun</string>
+    <string name="provenance_job_read">Jowi işi şöyle okudu</string>
+    <string name="provenance_later">Sonradan başka bir ihtiyaçtan eklendi</string>
     <string name="provenance_note">Ayrıca yazdınız</string>
+    <string name="provenance_questions">Karttaki sorular</string>
     <string name="provenance_skipped">atlandı</string>
+    <string name="provenance_you_wrote">Yazdığınız</string>
     <string name="public_ask_hint">Başvuruyla ilgili her şeyi sorabilirsin — vergi levhası, üyelik, Workis\'in işleyişi. Cevaplar bilgi bankamızdan gelir; cevaplanamayan sorular ekibe ulaşır.</string>
     <string name="public_profile_title">Herkese açık profil</string>
     <string name="published_label">Yayında</string>
@@ -988,6 +1000,8 @@
     <string name="signup_confirm_title">Bu adresle kayıtlı bir hesap yok</string>
     <string name="signup_confirm_yes">Hesap aç ve devam et</string>
     <string name="source_page">kaynak sayfa</string>
+    <string name="sourced_seller">/ Workis</string>
+    <string name="sourced_seller_hint">Workis tedarikçi bulur — talep kalemi yazıldığı gibi taşır</string>
     <string name="specs_title">Özellikler</string>
     <string name="st_accrued">birikti</string>
     <string name="st_compliance">Gereksinimler denetleniyor</string>
@@ -1170,6 +1184,7 @@
     <string name="variants_title">Satırlar</string>
     <string name="variants_word">varyant</string>
     <string name="verifying">doğrulanıyor</string>
+    <string name="virtual_seller_hint">Workis buldu; doğrulanmamış (e-posta yazışmasından)</string>
     <string name="virtual_sub">Jowi kalemleri kendi üslubuyla e-posta ile gönderir; yanıt, onayınızın ardından karşılaştırmaya aktarılır.</string>
     <string name="virtual_title">Sanal tedarikçiler (e-posta kanalı)</string>
     <string name="vkn_label">VKN</string>

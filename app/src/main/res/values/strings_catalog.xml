@@ -12,7 +12,7 @@
     <string name="account_role_partner">Partner</string>
     <string name="active_partners_pill">active partners</string>
     <string name="active_seats_pill">active seats</string>
-    <string name="add_item">Add item</string>
+    <string name="add_item">New row</string>
     <string name="add_item_from_catalogue">From the catalogue</string>
     <string name="add_item_manual">Or add it by hand</string>
     <string name="add_row">Add row</string>
@@ -623,8 +623,10 @@
     <string name="line_mark_delivered_confirm">The buyer then confirms, and the stage amount is released.</string>
     <string name="link_hint">Tapping the link in the e-mail works too.</string>
     <string name="list_archive">Archive</string>
+    <string name="list_open_rows">rows await your pick — the request goes out once every row has its product and variant. A row without a product would ask the sellers about every similar product on it; a product without a variant cannot be quoted firmly. Open the row and choose.</string>
     <string name="list_provenance_title">How this list was built</string>
     <string name="list_retry">Try again</string>
+    <string name="list_rows_hint">tap a row to open its candidates and requirements</string>
     <string name="list_stuck">Stuck</string>
     <string name="list_unarchive">Bring back</string>
     <string name="list_withdraw">Withdraw the request</string>
@@ -652,6 +654,7 @@
     <string name="match_header">Purchase request</string>
     <string name="match_offers">products</string>
     <string name="match_variant_unset">Choose — or leave it to the seller</string>
+    <string name="matched_in_catalogs">matched in seller catalogues</string>
     <string name="matched_word">matched</string>
     <string name="media_add_video">Add YouTube video</string>
     <string name="media_is_primary">Main photo</string>
@@ -669,6 +672,8 @@
     <string name="name_visibility_title">Name visibility</string>
     <string name="need_answer_placeholder">Or type your answer</string>
     <string name="need_build">Build the list</string>
+    <string name="need_build_now">Build the list now</string>
+    <string name="need_more_items">more items</string>
     <string name="need_problem">The problem</string>
     <string name="need_questions_left">questions left</string>
     <string name="need_recall">I remember</string>
@@ -677,6 +682,7 @@
     <string name="need_role_needed">needed</string>
     <string name="need_role_optional">optional</string>
     <string name="need_skip">Skip</string>
+    <string name="need_type_here">type here or pick above</string>
     <string name="new_case_placeholder">Describe what you need — e.g. \"DN50 check valve, 20 pcs\"</string>
     <string name="new_case_title">New case</string>
     <string name="new_product">New product (no catalogue)</string>
@@ -829,11 +835,17 @@
     <string name="product_name">Product name</string>
     <string name="profile_hidden">HIDDEN — turn on name visibility to publish</string>
     <string name="profile_note">Shown with your sectors, the verification badge and the contribution indicators; your affiliation declaration is never shown. You are responsible for its accuracy.</string>
+    <string name="project_hint">purchases are filed under this project — deliveries go to its address</string>
     <string name="project_label">Project</string>
     <string name="proposal_empty">No quotes yet — sellers are invited; the proposal builds itself as quotes arrive.</string>
     <string name="proposal_title">Coverage proposal</string>
+    <string name="provenance_behind">The problem behind it</string>
+    <string name="provenance_job_read">How Jowi read the job</string>
+    <string name="provenance_later">Added later from another need</string>
     <string name="provenance_note">You also wrote</string>
+    <string name="provenance_questions">The questions on the card</string>
     <string name="provenance_skipped">skipped</string>
+    <string name="provenance_you_wrote">You wrote</string>
     <string name="public_ask_hint">Ask anything about the application — the tax certificate, membership, how Workis works. Answers come from our knowledge base; unanswered questions reach the team.</string>
     <string name="public_profile_title">Public profile</string>
     <string name="published_label">Visible</string>
@@ -901,7 +913,7 @@
     <string name="role_maker">I\'m a maker</string>
     <string name="role_maker_sub">My products go on display; AI matches the right buyer.</string>
     <string name="role_partner">PARTNER</string>
-    <string name="row_choose_product">choose the product</string>
+    <string name="row_choose_product">select the product</string>
     <string name="row_choose_variant">choose the variant</string>
     <string name="row_free_text">Workis sources it</string>
     <string name="row_price_in_quote">price comes with the quote</string>
@@ -988,6 +1000,8 @@
     <string name="signup_confirm_title">No account is registered under this address</string>
     <string name="signup_confirm_yes">Open the account and continue</string>
     <string name="source_page">source page</string>
+    <string name="sourced_seller">/ Workis</string>
+    <string name="sourced_seller_hint">Workis sources it — the request carries it as written</string>
     <string name="specs_title">Specifications</string>
     <string name="st_accrued">accrued</string>
     <string name="st_compliance">Checking requirements</string>
@@ -1170,6 +1184,7 @@
     <string name="variants_title">Rows</string>
     <string name="variants_word">variants</string>
     <string name="verifying">verifying</string>
+    <string name="virtual_seller_hint">Found by Workis; unverified (from an e-mail correspondence)</string>
     <string name="virtual_sub">Jowi e-mails the items in its own words; the reply joins the comparison after your approval.</string>
     <string name="virtual_title">Virtual suppliers (e-mail channel)</string>
     <string name="vkn_label">Tax ID</string>
