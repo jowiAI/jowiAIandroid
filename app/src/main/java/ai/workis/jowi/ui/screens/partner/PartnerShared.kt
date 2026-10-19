@@ -46,13 +46,14 @@ fun ComplianceChip(c: PLCompliance?) {
 }
 
 @Composable
-fun SurfaceCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+/** A card; `border` / `fill` say what a block IS (ledger 64: Jowi's note in beige, a draft's rows in kiremit) — the hairline otherwise. */
+fun SurfaceCard(modifier: Modifier = Modifier, border: Color? = null, fill: Color? = null, content: @Composable () -> Unit) {
     val colors = WorkisTheme.colors
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(colors.surface, RoundedCornerShape(20.dp))
-            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+            .background(fill ?: colors.surface, RoundedCornerShape(20.dp))
+            .border(1.dp, border ?: colors.border, RoundedCornerShape(20.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) { content() }

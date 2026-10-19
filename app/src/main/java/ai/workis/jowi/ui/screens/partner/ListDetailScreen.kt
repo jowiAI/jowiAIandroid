@@ -41,6 +41,9 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import ai.workis.jowi.ui.theme.Text
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -565,13 +568,19 @@ private fun ItemsSegment(
     // the web's order: Jowi's note, then how the list was built, then the rows
     JowiNoteCard(d, onPick)
     ProvenanceCard(d)
-    SurfaceCard {
+    // the web frames the rows in kiremit while the list is being written (ledger 64): the one
+    // block on the page that asks for the buyer's hand. Sent lists keep the plain card.
+    SurfaceCard(border = if (d.isDraft) Kiremit500 else null) {
         // rows a seller carries whose product or variant is still unpicked (the web's `#liOpenNote`)
         if (d.isDraft) {
             val open = d.items.orEmpty().count { !it.candidates.isNullOrEmpty() && it.complete != true }
             if (open > 0) Text(
-                "$open " + stringResource(R.string.list_open_rows), fontSize = 13.sp, lineHeight = 18.sp, color = Beige,
-                modifier = Modifier.fillMaxWidth().background(BeigeBg, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 8.dp),
+                // the web's sentence: the count leads in ink, the rest in the muted tone
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = colors.ink, fontWeight = FontWeight.SemiBold)) { append("$open ") }
+                    withStyle(SpanStyle(color = colors.muted)) { append(stringResource(R.string.list_open_rows)) }
+                },
+                fontSize = 12.sp, lineHeight = 17.sp,
             )
         }
         d.items.orEmpty().forEachIndexed { i, item ->
@@ -581,8 +590,9 @@ private fun ItemsSegment(
         if (d.isDraft) {
             Text("+ " + stringResource(R.string.add_item), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable(onClick = onAdd).padding(vertical = 6.dp))
         }
-        Text(stringResource(R.string.list_rows_hint), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)
     }
+    // the section's footer, under the frame
+    Text(stringResource(R.string.list_rows_hint), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
     val sug = d.suggestions.orEmpty()
     if (sug.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -692,7 +702,8 @@ private fun JowiNoteCard(d: PurchaseListDetail, onPick: (PLItem) -> Unit) {
         val at = note.at
         val head = stringResource(R.string.jowi_note_title) + if (at != null && at.length >= 16) " · " + at.take(16).replace('T', ' ') else ""
         Eyebrow(head.uppercase())
-        SurfaceCard {
+        // the web's card (ledger 64): a note has a beige frame — colour says what the block IS (information)
+        SurfaceCard(border = Beige.copy(alpha = 0.6f), fill = BeigeBg.copy(alpha = 0.35f)) {
             if (summary.isNotEmpty()) Text(summary, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
             findings.forEach { f ->
                 val n = f.row?.toInt()
