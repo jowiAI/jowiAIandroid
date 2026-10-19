@@ -39,6 +39,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SegmentedButton
@@ -294,8 +296,11 @@ class JowiViewModel : ViewModel() {
     /** The chosen variant SKU; "" = "leave it to the seller". */
     val pickSkus = mutableStateMapOf<String, String>()
 
-    /** The need card's free-text answer, per needId. */
-    val needDrafts = mutableStateMapOf<String, String>()
+    /**
+     * Need cards whose "+ N kalem daha" was opened while a question is still open (web
+     * 2026-10-18) — session state, survives history reloads.
+     */
+    val needUnfolded = mutableStateListOf<String>()
     /**
      * The need cards of this session by needId — their latest reading, the answers given and
      * the list built. `lines` is rebuilt on every history reload; this outlives it.
@@ -650,6 +655,16 @@ class JowiViewModel : ViewModel() {
     fun isLastReply(line: JowiLine) = lines.lastOrNull { it.who != "user" && !it.hidden }?.id == line.id
 
     /**
+     * The open need card's question on the newest reply — the main field answers it (2026-10-06:
+     * the server moves the card under the typed message) and its placeholder names it (the web's
+     * `syncAsk`, 2026-10-18).
+     */
+    val openNeedQuestion: AskNeedQuestion?
+        get() = lines.lastOrNull { it.who != "user" && !it.hidden }
+            ?.takeIf { it.listId == null && !it.needBusy }
+            ?.need?.question?.takeIf { it.text.isNotEmpty() }
+
+    /**
      * `ctxNeed` / `chipList`: what a "which list?" chip named (2026-10-06) — its card, or its list,
      * `"none"` sent literally (= a general question). The chip's list wins over the scope picker.
      */
@@ -770,7 +785,6 @@ class JowiViewModel : ViewModel() {
             val res = r.first
             if (res == null) { lines[j] = lines[j].copy(needBusy = false, needError = r.second); return@launch }
             lines[j] = lines[j].copy(needBusy = false, needAnswers = lines[j].needAnswers + shown)
-            if (!skip) needDrafts.remove(n.needId)
             val fresh = res.need
             val lid = res.listId?.takeIf { it.isNotEmpty() }
             when {
@@ -1014,7 +1028,13 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
             OutlinedTextField(
                 value = question,
                 onValueChange = { question = it },
-                placeholder = { Text(stringResource(R.string.jowi_prompt), color = colors.faint) },
+                placeholder = {
+                    val open = vm.openNeedQuestion
+                    Text(
+                        if (open != null) "${open.text} — " + stringResource(R.string.need_type_here) else stringResource(R.string.jowi_prompt),
+                        color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                },
                 singleLine = true,
                 shape = RoundedCornerShape(26.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -1470,39 +1490,48 @@ private fun NeedAnswerBubble(text: String) {
 @Composable
 private fun NeedCard(n: AskNeed, line: JowiLine, vm: JowiViewModel) {
     val colors = WorkisTheme.colors
+    // the web's order (2026-10-18): the job, the problem, the recollection, the open question
+    // FIRST, then the components — folded to the core rows while a question is open — and the
+    // button with "N soru kaldı" beside it
+    val open = line.listId == null && !line.needBusy && n.question != null
+    val folded = open && n.needId !in vm.needUnfolded
+    val shown = if (folded) n.components.filter { it.role == "core" } else n.components
+    val hidden = if (folded) n.components.filter { it.role != "core" } else emptyList()
     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (n.job.isNotEmpty()) {
             Text(n.job, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 21.sp, color = colors.ink)
         }
+        if (n.problem.isNotEmpty()) {
+            Text(stringResource(R.string.need_problem) + ": " + n.problem, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
+        }
         // N.2: a courtesy recollection — faint and italic, never a problem or a fact to act on
         if (n.recall.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(stringResource(R.string.need_recall).uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.faint)
-                Text(n.recall, fontSize = 13.sp, lineHeight = 18.sp, fontStyle = FontStyle.Italic, color = colors.faint)
+            Text(stringResource(R.string.need_recall) + ": " + n.recall, fontSize = 13.sp, lineHeight = 18.sp, fontStyle = FontStyle.Italic, color = colors.faint)
+        }
+        if (open) n.question?.let { NeedQuestion(it, n, line, vm) }
+        if (shown.isNotEmpty() || hidden.isNotEmpty()) {
+            Column {
+                shown.forEach { NeedComponentRow(it) }
+                if (hidden.isNotEmpty()) {
+                    Text(
+                        "+ ${hidden.size} " + stringResource(R.string.need_more_items) + ": " + hidden.joinToString(", ") { it.name.orEmpty() },
+                        fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().clickable { if (n.needId !in vm.needUnfolded) vm.needUnfolded += n.needId }.padding(vertical = 8.dp),
+                    )
+                }
             }
-        }
-        if (n.problem.isNotEmpty()) {
-            Text(
-                buildAnnotatedString {
-                    withStyle(SpanStyle(color = colors.muted, fontWeight = FontWeight.Medium)) { append(stringResource(R.string.need_problem) + ": ") }
-                    withStyle(SpanStyle(color = colors.ink)) { append(n.problem) }
-                },
-                fontSize = 14.sp, lineHeight = 20.sp,
-            )
-        }
-        if (n.components.isNotEmpty()) {
-            Column { n.components.forEach { NeedComponentRow(it) } }
         }
         // the list exists: "Listeyi aç" (ReplyBubble) takes over; question and footer go
         if (line.listId == null) {
             if (line.needBusy) {
                 CircularProgressIndicator(Modifier.size(16.dp).padding(vertical = 2.dp), strokeWidth = 2.dp, color = Kiremit500)
             } else {
-                n.question?.let { NeedQuestion(it, n, line, vm) }
-                if (n.questionsLeft > 1) {
-                    Text("${n.questionsLeft} " + stringResource(R.string.need_questions_left), fontSize = 12.sp, color = colors.faint)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    NeedBuildButton(n, line, vm)
+                    if (n.questionsLeft > 1) {
+                        Text("${n.questionsLeft} " + stringResource(R.string.need_questions_left), fontSize = 12.sp, color = colors.faint)
+                    }
                 }
-                NeedBuildButton(n, line, vm)
             }
             line.needError?.let {
                 Row(verticalAlignment = Alignment.Top) {
@@ -1522,7 +1551,14 @@ private fun NeedCard(n: AskNeed, line: JowiLine, vm: JowiViewModel) {
 @Composable
 private fun NeedComponentRow(c: AskNeedComponent) {
     val colors = WorkisTheme.colors
-    val fix = c.role == "fix"
+    // the web's role tag (_feed.html): uppercase mono — core in the accent, needed green,
+    // optional faint, fix in the warning idiom; the words carry the meaning, not the colour
+    val tint = when (c.role) {
+        "core" -> colors.accentText
+        "optional" -> colors.faint
+        "fix" -> Beige
+        else -> SuccessGreen
+    }
     val role = stringResource(
         when (c.role) {
             "core" -> R.string.need_role_core
@@ -1534,10 +1570,8 @@ private fun NeedComponentRow(c: AskNeedComponent) {
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                role, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = if (fix) Beige else colors.muted,
-                modifier = Modifier
-                    .background(if (fix) BeigeBg else colors.ink.copy(alpha = 0.07f), CircleShape)
-                    .padding(horizontal = 7.dp, vertical = 2.dp),
+                role.uppercase(if (ai.workis.jowi.Graph.language.value == "en") java.util.Locale.UK else java.util.Locale.forLanguageTag("tr")),
+                fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = tint,
             )
             Spacer(Modifier.width(8.dp))
             Text(c.name.orEmpty(), fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, color = colors.ink, modifier = Modifier.weight(1f))
@@ -1559,13 +1593,15 @@ private fun NeedComponentRow(c: AskNeedComponent) {
     Box(Modifier.fillMaxWidth().height(1.dp).background(colors.ink.copy(alpha = 0.08f)))
 }
 
-/** The card's ONE question: the text, why it is asked, the chips, a free-text line with a send arrow, and "Atla". */
+/**
+ * The card's ONE question: the text, why it is asked, the chips and "Atla". A typed answer goes
+ * through the main field (its placeholder names the question); the card's own line went with
+ * the web's (2026-10-18).
+ */
 @Composable
 private fun NeedQuestion(q: AskNeedQuestion, n: AskNeed, line: JowiLine, vm: JowiViewModel) {
     val colors = WorkisTheme.colors
     val live = !vm.busy
-    val draft = vm.needDrafts[n.needId].orEmpty()
-    val typed = draft.trim()
     val skipWord = stringResource(R.string.need_skip)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 2.dp)) {
         Text(q.text, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, color = colors.ink)
@@ -1573,27 +1609,6 @@ private fun NeedQuestion(q: AskNeedQuestion, n: AskNeed, line: JowiLine, vm: Jow
         // a chip IS the answer (`q` = its own words, so no open-ended pencil)
         JowiOptions(q.options.map { AskOption(it, it) }, picked = false, enabled = live) { o ->
             vm.answerNeed(line, value = o.label)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = draft,
-                onValueChange = { vm.needDrafts[n.needId] = it },
-                placeholder = { Text(stringResource(R.string.need_answer_placeholder), fontSize = 14.sp, color = colors.faint) },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = readingSize(14.sp)),
-                shape = RoundedCornerShape(12.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { if (typed.isNotEmpty() && live) vm.answerNeed(line, value = typed) }),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colors.muted, unfocusedBorderColor = colors.border,
-                    focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue,
-                ),
-                modifier = Modifier.weight(1f),
-            )
-            val canSend = typed.isNotEmpty() && live
-            IconButton(onClick = { vm.answerNeed(line, value = typed) }, enabled = canSend) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send), tint = if (canSend) colors.ink else colors.faint)
-            }
         }
         Text(
             skipWord, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (live) colors.muted else colors.faint,
@@ -1610,7 +1625,7 @@ private fun NeedQuestion(q: AskNeedQuestion, n: AskNeed, line: JowiLine, vm: Jow
 private fun NeedBuildButton(n: AskNeed, line: JowiLine, vm: JowiViewModel) {
     val colors = WorkisTheme.colors
     val live = !vm.busy
-    val label = stringResource(R.string.need_build)
+    val label = stringResource(if (n.question == null) R.string.need_build else R.string.need_build_now)
     if (n.question == null && vm.isLastReply(line)) {
         Button(
             onClick = { vm.buildNeed(line) },
@@ -1623,13 +1638,17 @@ private fun NeedBuildButton(n: AskNeed, line: JowiLine, vm: JowiViewModel) {
             Text(label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         }
     } else {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable(enabled = live) { vm.buildNeed(line) }.padding(vertical = 4.dp),
+        // plain while a question is open (iOS `WorkisGlassButton(tint: muted)`): outlined, un-tinted
+        OutlinedButton(
+            onClick = { vm.buildNeed(line) },
+            enabled = live,
+            border = BorderStroke(1.dp, colors.border),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.muted, disabledContentColor = colors.faint),
+            modifier = Modifier.height(40.dp),
         ) {
-            Icon(WorkisIcons.Checklist, contentDescription = null, tint = if (live) colors.accentText else colors.faint, modifier = Modifier.size(16.dp))
+            Icon(WorkisIcons.Checklist, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (live) colors.accentText else colors.faint)
+            Text(label, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         }
     }
 }

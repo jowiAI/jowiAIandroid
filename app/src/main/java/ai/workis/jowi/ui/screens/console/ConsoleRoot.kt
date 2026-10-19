@@ -140,6 +140,8 @@ fun ConsoleSub(
     title: String,
     onBack: () -> Unit,
     trailing: @Composable RowScope.() -> Unit = {},
+    /** Replaces the plain bar title when given (the list's editable name) — it takes the title's weight(1f) slot itself. */
+    titleContent: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
     val colors = WorkisTheme.colors
@@ -161,7 +163,7 @@ fun ConsoleSub(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = colors.ink)
             }
             Spacer(Modifier.width(12.dp))
-            Text(
+            if (titleContent != null) titleContent() else Text(
                 title,
                 style = MaterialTheme.typography.headlineMedium,
                 fontSize = 22.sp,

@@ -41,6 +41,11 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   offline) gives the intro, five cards and the 12-page story; `how` opens `StorySheet` (ui/screens/), the other four POST
   `apply/ask/ {card, lang, vk}`; a free question there carries `surface: "home"`; a story-page question `story: <id>`.
   `vk` = `Graph.visitorKey` (one UUID per install, never tied to an account). Content is the server's, never in strings.
+- Lists (ledger 63): the title renames in the bar only while `draft`/`quoting` (`POST lists/{id}/rename/ {title}`; 400/409 sentence =
+  the screen note, title falls back). Seller labels are drawn AS THE SERVER SENDS them — a virtual seller already carries "/ NAME",
+  never prepend anything for `verified == false`; `virtualInvites[].name` is raw, draw "/ " + name. A row with no `candidates` shows
+  "/ Workis" (`sourcedSeller`) — the app's own word, the API row has no seller. Need card (Jowi tab): question first, components folded
+  to `core` while open, the main composer answers the open card (placeholder = the question); no field on the card.
 - Tab sets: role 3/4 and 5 → Panel · Hesap · Jowi; others → Pazar|Başvuru · Hesap · Jowi. Talepler (`cases/`) is retired.
 - Gruplar (ledger 62, roles 3|4): `ui/screens/console/GroupsScreen.kt` + `data/GroupsModels.kt`. ONE page: `GET console/groups/?sector=`
   is the whole screen and every POST answers the page re-read with `message` spread at the top level — the state IS the last

@@ -558,6 +558,11 @@ interface WorkisApi {
     @POST("workis/lists/{id}/withdraw/")
     suspend fun listWithdraw(@Path("id") id: String): ListActionResult
 
+    /** The list's name, by its owner (2026-10-19): a draft or a list out for quotes; `{success, list}`,
+     *  400 under two characters, 409 once ordered/closed — `error` carries the sentence. */
+    @POST("workis/lists/{id}/rename/")
+    suspend fun listRename(@Path("id") id: String, @Body body: ListRenameBody): ListActionResult
+
     @Multipart
     @POST("workis/lists/upload/")
     suspend fun listUpload(@Part file: okhttp3.MultipartBody.Part): ListCreated

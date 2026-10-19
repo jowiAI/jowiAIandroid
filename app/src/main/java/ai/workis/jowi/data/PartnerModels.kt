@@ -224,9 +224,10 @@ data class PLInfo(
  * (lists_seat.py `provenance`): the buyer's sentence, Jowi's reading of the job, the problem,
  * the card's questions in order. `skipped` = the question was skipped; `note` = something the
  * buyer wrote that answered no question; `question: ""` = an older list kept only the answer.
- * Read-only history — never a price or a seller.
+ * Read-only history — never a price or a seller. `more` = the needs built into this draft
+ * later (2026-10-09, the same shape, present only when there is one).
  */
-data class PLProvenance(val sentence: String, val job: String, val problem: String, val qa: List<PLProvenanceQA>) {
+data class PLProvenance(val sentence: String, val job: String, val problem: String, val qa: List<PLProvenanceQA>, val more: List<PLProvenance> = emptyList()) {
     val isEmpty get() = sentence.isEmpty() && job.isEmpty() && problem.isEmpty() && qa.isEmpty()
 }
 
@@ -240,6 +241,10 @@ object PLProvenanceTolerant : KSerializer<PLProvenance?> {
     override fun deserialize(decoder: Decoder): PLProvenance? {
         val json = decoder as? JsonDecoder ?: return null
         val o = json.decodeJsonElement() as? JsonObject ?: return null
+        val more = (o["more"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(::block) }
+        return block(o)?.copy(more = more) ?: more.firstOrNull()?.copy(more = more.drop(1))
+    }
+    private fun block(o: JsonObject): PLProvenance? {
         val qa = (o["qa"] as? JsonArray).orEmpty().mapNotNull { r ->
             (r as? JsonObject)?.let { PLProvenanceQA(text(it["question"]), text(it["answer"]), flag(it["skipped"]), flag(it["note"])) }
         }
@@ -559,6 +564,10 @@ data class ListItemAdded(
     val message: String? = null,
     val error: String? = null,
 )
+
+/** `POST lists/{id}/rename/ {title}` — draft or quoting only; 400 under two characters, 409 once ordered. */
+@Serializable
+data class ListRenameBody(val title: String)
 
 @Serializable
 data class NoteBody(val note: String? = null, val letter: String? = null)

@@ -496,12 +496,16 @@ data class AskNeedComponent(
     val why: String? = null,
     val attributes: JsonElement? = null,
 ) {
-    /** "name: value" in the server's order; a list or a bare string is read too. */
+    /**
+     * The known attributes' VALUES, as the web row shows them (2026-10-18) — a JSON object's
+     * name order is not guaranteed, so sorted by name for a stable row; a list or a bare
+     * string is read too.
+     */
     val attributeTexts: List<String>
         get() {
             fun text(e: JsonElement?) = (e as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content.orEmpty()
             return when (val a = attributes) {
-                is JsonObject -> a.mapNotNull { (k, v) -> text(v).takeIf { it.isNotEmpty() }?.let { "$k: $it" } }
+                is JsonObject -> a.entries.sortedBy { it.key }.mapNotNull { (_, v) -> text(v).takeIf { it.isNotEmpty() } }
                 is JsonArray -> a.map { text(it) }.filter { it.isNotEmpty() }
                 is JsonPrimitive -> listOfNotNull(text(a).takeIf { it.isNotEmpty() })
                 else -> emptyList()

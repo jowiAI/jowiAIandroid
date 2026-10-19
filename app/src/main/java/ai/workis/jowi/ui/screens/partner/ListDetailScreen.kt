@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,6 +22,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.AlertDialog
@@ -29,6 +33,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -40,6 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +61,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -71,6 +82,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.BindBody
+import ai.workis.jowi.data.ListRenameBody
+import ai.workis.jowi.data.PLProvenance
 import ai.workis.jowi.data.NoteBody
 import ai.workis.jowi.data.PLAssignment
 import ai.workis.jowi.data.PLCandidate
@@ -110,6 +123,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.util.Locale
 
 class ListDetailViewModel : ViewModel() {
     var detail by mutableStateOf<PurchaseListDetail?>(null)
@@ -154,6 +168,23 @@ class ListDetailViewModel : ViewModel() {
             withdrawing = false
             if (r == null || !r.success) note = r?.error ?: r?.message ?: err
             load(); readWithdrawable()
+        }
+    }
+
+    /** The name the bar shows while `rename/` is out (null = the detail's own title). */
+    var pendingTitle by mutableStateOf<String?>(null)
+        private set
+
+    /** `POST lists/{id}/rename/ {title}` (draft/quoting, 2026-10-19) → re-read; a refusal
+     *  (400 under two characters, 409 once ordered) is the screen note and the title falls back. */
+    fun rename(title: String) {
+        val listId = id ?: return
+        if (pendingTitle != null) return
+        pendingTitle = title; note = null
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.listRename(listId, ListRenameBody(title)) }
+            if (r != null && r.success) reload() else note = r?.error ?: r?.message ?: err
+            pendingTitle = null
         }
     }
 
@@ -321,9 +352,12 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
         if (!showSend && p != null) { delay(350); pendingPick = null; pickVariantCpid = null; pickItem = p }
     }
 
+    // the web shows the pencil for draft and quoting only (panel_list_detail.html:185)
+    val canRename = d != null && (d.isDraft || d.isQuoting)
     ConsoleSub(
         title = d?.list?.title ?: "",
         onBack = onBack,
+        titleContent = { ListTitle(vm.pendingTitle ?: d?.list?.title.orEmpty(), editable = canRename, onRename = vm::rename) },
         trailing = {
             // one tinted action: request quotes (draft + stage ready + items)
             if (d != null && d.isDraft && d.isReady && !d.items.isNullOrEmpty()) {
@@ -415,11 +449,82 @@ private fun Header(d: PurchaseListDetail) {
             if (d.list?.demo == true) StatusPill(stringResource(R.string.demo_tag))
             if (d.list?.held != null) StatusPill(stringResource(R.string.held_tag), Beige)
             Spacer(Modifier.weight(1f))
-            d.list?.createdAt?.let { Text(it.take(10), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
+            // the web's meta line: "19.10.2026 01:55 · Chat" (the status is the pill)
+            val lang by Graph.language.collectAsState()
+            val meta = listOfNotNull(metaDate(d.list?.createdAt), sourceWord(d.list?.source, lang)).filter { it.isNotEmpty() }
+            if (meta.isNotEmpty()) Text(meta.joinToString(" · "), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
         }
         val project = d.projects?.firstOrNull { it.id == d.list?.projectId }?.name ?: d.projects?.firstOrNull { it.isDefault == true }?.name
-        project?.let { Text("📁 " + stringResource(R.string.project_label) + ": $it", fontSize = 12.sp, color = colors.muted) }
+        project?.let {
+            Text("📁 " + stringResource(R.string.project_label) + ": $it", fontSize = 12.sp, color = colors.muted)
+            Text(stringResource(R.string.project_hint), fontSize = 11.sp, lineHeight = 15.sp, color = colors.faint)
+        }
     }
+}
+
+/** "2026-10-19T01:55:12…" → "19.10.2026 01:55" — the web's `d.m.Y H:i` (string slicing, as iOS). */
+private fun metaDate(iso: String?): String? {
+    if (iso == null) return null
+    if (iso.length < 16) return iso.take(10)
+    val p = iso.take(10).split("-")
+    if (p.size != 3) return iso.take(10)
+    return "${p[2]}.${p[1]}.${p[0]} " + iso.substring(11, 16)
+}
+
+/** The web's source display ("Chat", "PDF"): the server's word with a capital, nothing else. */
+private fun sourceWord(source: String?, lang: String): String? {
+    val s = source?.trim().orEmpty()
+    if (s.isEmpty()) return null
+    return s.take(1).uppercase(Locale.forLanguageTag(lang)) + s.drop(1)
+}
+
+/**
+ * The list's name in the bar (`POST lists/{id}/rename/`, 2026-10-19): tap-to-edit while the
+ * list is a draft or out for quotes (a faint pencil says so), a plain title otherwise. Done or
+ * focus loss commits a trimmed, non-empty, changed value; a refusal falls back to the title.
+ */
+@Composable
+private fun RowScope.ListTitle(title: String, editable: Boolean, onRename: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    var editing by remember { mutableStateOf(false) }
+    LaunchedEffect(editable) { if (!editable) editing = false }
+    if (!editable || !editing) {
+        Row(
+            Modifier.weight(1f).then(
+                if (editable) Modifier.clickable(role = Role.Button, onClickLabel = stringResource(R.string.groups_rename)) { editing = true } else Modifier,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(title, style = MaterialTheme.typography.headlineMedium, fontSize = 22.sp, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            if (editable) {
+                Spacer(Modifier.width(6.dp))
+                Icon(WorkisIcons.Pencil, contentDescription = null, tint = colors.faint, modifier = Modifier.size(14.dp))
+            }
+        }
+        return
+    }
+    var field by remember { mutableStateOf(TextFieldValue(title, selection = TextRange(title.length))) }
+    val focus = remember { FocusRequester() }
+    var hadFocus by remember { mutableStateOf(false) }
+    fun commit() {
+        if (!editing) return
+        editing = false
+        val want = field.text.trim()
+        if (want.isNotEmpty() && want != title) onRename(want)
+    }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    BasicTextField(
+        value = field,
+        onValueChange = { field = it },
+        singleLine = true,
+        textStyle = MaterialTheme.typography.headlineMedium.copy(fontSize = 22.sp, color = colors.ink),
+        cursorBrush = SolidColor(colors.accentText),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { commit() }),
+        modifier = Modifier.weight(1f).focusRequester(focus).onFocusChanged {
+            if (it.isFocused) hadFocus = true else if (hadFocus) commit()
+        },
+    )
 }
 
 // ---------- Liste ----------
@@ -457,9 +562,18 @@ private fun ItemsSegment(
     onNeedsVariant: (PLItem, String) -> Unit, onTyping: (Boolean) -> Unit,
 ) {
     val colors = WorkisTheme.colors
-    ProvenanceCard(d)
+    // the web's order: Jowi's note, then how the list was built, then the rows
     JowiNoteCard(d, onPick)
+    ProvenanceCard(d)
     SurfaceCard {
+        // rows a seller carries whose product or variant is still unpicked (the web's `#liOpenNote`)
+        if (d.isDraft) {
+            val open = d.items.orEmpty().count { !it.candidates.isNullOrEmpty() && it.complete != true }
+            if (open > 0) Text(
+                "$open " + stringResource(R.string.list_open_rows), fontSize = 13.sp, lineHeight = 18.sp, color = Beige,
+                modifier = Modifier.fillMaxWidth().background(BeigeBg, RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 8.dp),
+            )
+        }
         d.items.orEmpty().forEachIndexed { i, item ->
             ItemRow(item, draft = d.isDraft, prices = d.showsPrices, onClick = { onPick(item) }, onDelete = { item.id?.let { vm.deleteItem(it) } })
             if (i < d.items.orEmpty().lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
@@ -467,6 +581,7 @@ private fun ItemsSegment(
         if (d.isDraft) {
             Text("+ " + stringResource(R.string.add_item), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable(onClick = onAdd).padding(vertical = 6.dp))
         }
+        Text(stringResource(R.string.list_rows_hint), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)
     }
     val sug = d.suggestions.orEmpty()
     if (sug.isNotEmpty()) {
@@ -507,18 +622,50 @@ private fun ProvenanceCard(d: PurchaseListDetail) {
             Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint, modifier = Modifier.size(18.dp).rotate(if (open) 90f else 0f))
         }
         if (open) {
-            if (p.sentence.isNotEmpty()) Text("“${p.sentence}”", fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
-            if (p.job.isNotEmpty()) Text(p.job, fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted)
-            if (p.problem.isNotEmpty()) Text(stringResource(R.string.need_problem) + ": " + p.problem, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
-            p.qa.forEach { r ->
-                Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    // a note answered no question; an older list kept only the answer (question "")
-                    if (!r.note && r.question.isNotEmpty()) Text(r.question, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
-                    when {
-                        r.note -> Text(stringResource(R.string.provenance_note) + ": " + r.answer, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
-                        r.skipped -> Text(stringResource(R.string.provenance_skipped), fontSize = 13.sp, fontStyle = FontStyle.Italic, color = colors.faint)
-                        else -> Text(r.answer, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
-                    }
+            ProvenanceBlock(p)
+            // the needs built into this draft later (`more`), under the first block
+            p.more.forEach { m ->
+                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+                ProvenanceLabel(stringResource(R.string.provenance_later))
+                ProvenanceBlock(m)
+            }
+        }
+    }
+}
+
+/** The web's small labels over each part of the block ("Yazdığınız", "Jowi işi şöyle okudu"…). */
+@Composable
+private fun ProvenanceLabel(s: String) {
+    val lang by Graph.language.collectAsState()
+    Text(s.uppercase(Locale.forLanguageTag(lang)), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = WorkisTheme.colors.faint)
+}
+
+/** One need's block, labelled as on the web: the buyer's sentence, the job, the problem, the questions answered. */
+@Composable
+private fun ProvenanceBlock(p: PLProvenance) {
+    val colors = WorkisTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (p.sentence.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            ProvenanceLabel(stringResource(R.string.provenance_you_wrote))
+            Text("“${p.sentence}”", fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
+        }
+        if (p.job.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            ProvenanceLabel(stringResource(R.string.provenance_job_read))
+            Text(p.job, fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted)
+        }
+        if (p.problem.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            ProvenanceLabel(stringResource(R.string.provenance_behind))
+            Text(p.problem, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
+        }
+        if (p.qa.isNotEmpty()) ProvenanceLabel(stringResource(R.string.provenance_questions))
+        p.qa.forEach { r ->
+            Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                // a note answered no question; an older list kept only the answer (question "")
+                if (!r.note && r.question.isNotEmpty()) Text(r.question, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
+                when {
+                    r.note -> Text(stringResource(R.string.provenance_note) + ": " + r.answer, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
+                    r.skipped -> Text(stringResource(R.string.provenance_skipped), fontSize = 13.sp, fontStyle = FontStyle.Italic, color = colors.faint)
+                    else -> Text(r.answer, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
                 }
             }
         }
@@ -541,7 +688,10 @@ private fun JowiNoteCard(d: PurchaseListDetail, onPick: (PLItem) -> Unit) {
     if (summary.isEmpty() && findings.isEmpty()) return
     val items = d.items.orEmpty()
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Eyebrow(stringResource(R.string.jowi_note_title).uppercase())
+        // the web's title carries `at[:16]`
+        val at = note.at
+        val head = stringResource(R.string.jowi_note_title) + if (at != null && at.length >= 16) " · " + at.take(16).replace('T', ' ') else ""
+        Eyebrow(head.uppercase())
         SurfaceCard {
             if (summary.isNotEmpty()) Text(summary, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
             findings.forEach { f ->
@@ -593,9 +743,21 @@ private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -
             // as "İstenen: …". With the generic name on top the row read as a family.
             val sel = item.selected
             Row(verticalAlignment = Alignment.Top) {
+                // the web's dot: green = a seller catalogue carries the row, kiremit = Workis
+                // sources it — the words under the name say the same (never colour alone)
+                val carried = !item.candidates.isNullOrEmpty()
+                val dotWords = stringResource(if (carried) R.string.matched_in_catalogs else R.string.row_free_text)
+                Box(Modifier.padding(top = 7.dp, end = 7.dp).size(7.dp).background(if (carried) SuccessGreen else Kiremit500, CircleShape).semantics { contentDescription = dotWords })
                 // on a draft the product (family) leads and the chosen VARIANT's name sits
                 // under it once one stands for it (`resolved`, 2026-10-02)
-                Text((if (draft) sel?.name?.takeIf { it.isNotEmpty() } else sel?.displayName) ?: item.name ?: "—", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, color = colors.ink, maxLines = 3, modifier = Modifier.weight(1f))
+                Text((if (draft) sel?.name?.takeIf { it.isNotEmpty() } else sel?.displayName) ?: item.name ?: "—", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, color = colors.ink, maxLines = 3, modifier = Modifier.weight(1f, fill = false))
+                // "+3": the other candidates, while none is bound (the web's `n_cands-1`)
+                val n = item.candidates?.size ?: 0
+                if (draft && item.boundCpid == null && n > 1) {
+                    Spacer(Modifier.width(6.dp))
+                    Text("+${n - 1}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 20.sp, color = colors.faint)
+                }
+                Spacer(Modifier.weight(1f))
                 if (item.qty != null || !item.unit.isNullOrEmpty()) {
                     Spacer(Modifier.width(6.dp))
                     Text(WorkisMoney.qty(item.qty) + " " + item.unit.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
@@ -611,22 +773,18 @@ private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -
                 DraftRowState(item, prices)
             } else if (sel != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Box(Modifier.size(6.dp).background(if (item.matchState == "bound") SuccessGreen else colors.faint, CircleShape))
                     sel.sku?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)) }
                     Spacer(Modifier.weight(1f))
                     ComplianceChip(sel.compliance)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text((if (sel.verified == false) "✋ " else "") + sel.seller.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
+                    // the server's label carries the mark of a virtual seller ("/ NAME", 2026-10-19)
+                    SellerLabel(sel)
                     Spacer(Modifier.weight(1f))
                     VariantPrice(sel, prices)
                 }
             } else {
-                // nobody carries it: sourcing is the platform's backstage work — never "no match"
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Icon(WorkisIcons.TextLeft, contentDescription = null, tint = colors.faint, modifier = Modifier.size(13.dp))
-                    Text(stringResource(R.string.row_free_text), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)
-                }
+                SourcedLine()
             }
             if (draft) Text(stringResource(R.string.delete_item), fontSize = 11.sp, color = colors.danger, modifier = Modifier.clickable(onClick = onDelete))
         }
@@ -643,10 +801,7 @@ private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -
 private fun DraftRowState(item: PLItem, prices: Boolean) {
     val colors = WorkisTheme.colors
     if (item.candidates.isNullOrEmpty()) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            Icon(WorkisIcons.TextLeft, contentDescription = null, tint = colors.faint, modifier = Modifier.size(13.dp))
-            Text(stringResource(R.string.row_free_text), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)
-        }
+        SourcedLine()
         return
     }
     val sel = item.selected
@@ -676,7 +831,36 @@ private fun DraftRowState(item: PLItem, prices: Boolean) {
         }
         ComplianceChip(sel?.compliance)
     }
-    sel?.let { Text((if (it.verified == false) "✋ " else "") + it.seller.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint) }
+    sel?.let { SellerLabel(it) }
+}
+
+/**
+ * No seller carries it: sourcing is the platform's backstage work — never "no match" (Django
+ * note 2026-10-03 §N). The seller cell says "/ Workis", muted, as the web grid does since
+ * 2026-10-19 (the API's row has no seller; the empty candidate list decides).
+ */
+@Composable
+private fun SourcedLine() {
+    val colors = WorkisTheme.colors
+    val hint = stringResource(R.string.sourced_seller_hint)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Icon(WorkisIcons.TextLeft, contentDescription = null, tint = colors.faint, modifier = Modifier.size(13.dp))
+        Text(stringResource(R.string.row_free_text), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)
+        Spacer(Modifier.weight(1f))
+        Text(stringResource(R.string.sourced_seller), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, modifier = Modifier.semantics { contentDescription = hint })
+    }
+}
+
+/** The seller as the server labels it — a virtual seller already carries "/ NAME" (2026-10-19);
+ *  `sellerHover` is the spoken hint. */
+@Composable
+private fun SellerLabel(c: PLCandidate, fontSize: Int = 10) {
+    val hover = c.sellerHover?.takeIf { it.isNotBlank() }
+    val seller = c.seller.orEmpty()
+    Text(
+        seller, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = fontSize.sp, color = WorkisTheme.colors.faint,
+        modifier = if (hover != null) Modifier.semantics { contentDescription = "$seller, $hover" } else Modifier,
+    )
 }
 
 /** "İstenen: <generic name> · <demands>" — the buyer's own words, faint, under the product. */
@@ -798,7 +982,10 @@ private fun RfqSegment(d: PurchaseListDetail, vm: ListDetailViewModel, awardSkip
         SurfaceCard {
             vi.forEach { v ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("✋ " + v.name.orEmpty(), fontSize = 13.sp, color = colors.ink, modifier = Modifier.weight(1f))
+                    // the raw company name: the virtual mark is the slash (2026-10-19)
+                    val vName = "/ " + v.name.orEmpty()
+                    val vHint = stringResource(R.string.virtual_seller_hint)
+                    Text(vName, fontSize = 13.sp, color = colors.ink, modifier = Modifier.weight(1f).semantics { contentDescription = "$vName, $vHint" })
                     Text(inviteStatusText(v.status), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
                     v.total?.let { Spacer(Modifier.width(8.dp)); Text(WorkisMoney.text(it, null), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink) }
                 }
@@ -1181,7 +1368,7 @@ private fun CandidateRow(c: PLCandidate, bound: Boolean, prices: Boolean, onClic
             if (bound) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(18.dp))
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text((if (c.verified == false) "✋ " else "") + c.seller.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
+            SellerLabel(c)
             c.sku?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint) }
             Spacer(Modifier.weight(1f))
             ComplianceChip(c.compliance)
