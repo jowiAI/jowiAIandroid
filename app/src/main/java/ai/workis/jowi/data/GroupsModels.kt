@@ -84,6 +84,9 @@ data class GroupUnboundHeading(
     val productCount: Int? = null,
     val familyCount: Int? = null,
     val sellers: List<String>? = null,
+    /** The sectors whose sellers print it (names) and the slug a row opens on (ledger 65). */
+    val sectors: List<String>? = null,
+    val homeSector: String? = null,
     val isCode: Boolean? = null,
 )
 
@@ -122,6 +125,8 @@ data class GroupNode(
     val key: String,
     val groupId: String? = null,
     val name: String? = null,
+    /** A new group in ANOTHER sector (ledger 65): the target sector's id; `parentId` is a top group there. */
+    val toSectorId: String? = null,
     val parentId: String? = null,
 )
 @Serializable data class GroupsAliasRemoveBody(val sector: String, val alias: String)

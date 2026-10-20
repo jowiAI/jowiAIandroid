@@ -443,6 +443,19 @@ interface WorkisApi {
     @POST("workis/console/groups/headings/bind/")
     suspend fun consoleGroupsHeadingBind(@Body body: GroupsHeadingBindBody): GroupsPage
 
+    /** The headings tab (ledger 65): every seller's unbound headings, the targets, the groups a bind may name. */
+    @GET("workis/console/groups/headings/")
+    suspend fun consoleGroupsHeadings(): GroupsHeadingsPage
+
+    /** Jowi's three for every heading on the tab — one slow call (cached an hour), fetched AFTER the list renders. */
+    @GET("workis/console/groups/headings/suggestions/")
+    suspend fun consoleGroupsHeadingSuggestions(): GroupSuggestions
+
+    /** Jowi's three for the seller's waiting families (no parameter = every one), one family or one product;
+     *  `groups` = the search list for a seat that cannot read the console's. */
+    @GET("workis/seller/catalog/group-suggestions/")
+    suspend fun catalogGroupSuggestions(@Query("family") family: String? = null, @Query("product") product: String? = null, @Query("seller") seller: String? = null): GroupSuggestions
+
     @POST("workis/console/groups/{id}/aliases/remove/")
     suspend fun consoleGroupsAliasRemove(@Path("id") id: String, @Body body: GroupsAliasRemoveBody): GroupsPage
 
