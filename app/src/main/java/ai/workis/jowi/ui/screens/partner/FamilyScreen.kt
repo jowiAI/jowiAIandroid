@@ -26,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -82,6 +84,7 @@ import ai.workis.jowi.ui.components.FormRow
 import ai.workis.jowi.ui.components.FormSection
 import ai.workis.jowi.ui.components.openInApp
 import ai.workis.jowi.ui.screens.console.ConsoleSub
+import ai.workis.jowi.ui.screens.console.GroupCardSheet
 import ai.workis.jowi.ui.screens.expert.NoteBand
 import ai.workis.jowi.ui.theme.Beige
 import ai.workis.jowi.ui.theme.Kiremit400
@@ -155,6 +158,15 @@ class FamilyViewModel : ViewModel() {
     fun commitDescription() { if (description != detail?.description.orEmpty()) viewModelScope.launch { cell(jsonBody("field" to "description", "value" to description), "description") } }
     fun deleteRow(code: String) { viewModelScope.launch { cell(jsonBody("field" to "delete", "code" to code)) } }
     fun deleteSpec(key: String) { viewModelScope.launch { cell(jsonBody("field" to "specDel", "key" to key)) } }
+
+    /** The group card (ledger 65) — the same door as Ürünler's rows, with this screen's own read of `?family=`. */
+    val groupDoor = FamilyGroupDoor(viewModelScope) { seller }
+
+    /** A card's choice → the review cell (the answer re-renders the family); the band says what happened. */
+    fun chooseGroup(choice: ai.workis.jowi.data.GroupCardChoice, movedText: String, onClosed: () -> Unit) =
+        groupDoor.choose(id, choice, movedText, post = { groupId ->
+            cell(jsonBody("field" to "category", "value" to groupId))
+        }) { _, msg -> onClosed(); note = msg }
 
     private fun simple(block: suspend () -> ai.workis.jowi.data.SimpleResult, leave: Boolean) {
         busy = true; note = null
@@ -254,6 +266,7 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
     var fullImage by remember { mutableStateOf<String?>(null) }
     var openMedia by remember { mutableStateOf<CatalogMedia?>(null) }
     var showAddVideo by remember { mutableStateOf(false) }
+    var showGroupCard by remember { mutableStateOf(false) }
     val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@rememberLauncherForActivityResult
@@ -286,6 +299,7 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
         add(vis(stringResource(R.string.media_primary), VisStyle.SECONDARY)); add(vis(stringResource(R.string.media_note), VisStyle.SECONDARY))
         add(vis(stringResource(R.string.media_remove), VisStyle.DESTRUCTIVE))
         if (!isLive) add(vis(stringResource(R.string.reject_family), VisStyle.DESTRUCTIVE))
+        if (!isLive) add(vis(stringResource(R.string.groups_word), VisStyle.SECONDARY))
         noticeChip?.let { add(vis(it, VisStyle.CHIP)) }
         webChipText?.let { add(vis(it, VisStyle.CHIP)) }
     }
@@ -343,6 +357,30 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
                     FormRow(stringResource(R.string.product_name), vm.name, { vm.name = it }, { vm.commitName() }, vm.tick == "name", stacked = true, maxLines = 3)
                     FormRow(stringResource(R.string.description_field), vm.description, { vm.description = it }, { vm.commitDescription() }, vm.tick == "description", stacked = true, minLines = 1, maxLines = 6)
                     if (!isLive) {
+                        // the web's group button: the one card — Jowi's three, a new group, the search (ledger 65).
+                        // The family carries no Workis group yet, so the row names the one chosen here, or Jowi's first.
+                        LaunchedEffect(familyId) { vm.groupDoor.loadOne(familyId) }
+                        val chosenGroup = vm.groupDoor.chosen[familyId]
+                        val firstPick = vm.groupDoor.picks?.get(familyId)?.firstOrNull()?.name?.takeIf { it.isNotEmpty() }
+                        val jowiFirstHint = stringResource(R.string.groups_jowi_first)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable { vm.groupDoor.open(familyId); showGroupCard = true }.padding(horizontal = 14.dp, vertical = 12.dp),
+                        ) {
+                            Icon(WorkisIcons.Grid, contentDescription = null, tint = colors.ink, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.groups_word), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.ink)
+                            Spacer(Modifier.width(8.dp))
+                            if (chosenGroup != null) Text(chosenGroup, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = SuccessGreen, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                            else if (firstPick != null) Text(
+                                "Jowi: $firstPick", fontSize = 12.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.End,
+                                modifier = Modifier.weight(1f).semantics { contentDescription = "Jowi: $firstPick · $jowiFirstHint" },
+                            )
+                            else Spacer(Modifier.weight(1f))
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint, modifier = Modifier.size(18.dp))
+                        }
+                        Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { confirm = "reject" }.padding(horizontal = 14.dp, vertical = 12.dp)) {
                             Icon(Icons.Filled.Close, contentDescription = null, tint = colors.danger, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
@@ -504,6 +542,18 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
         }
     }
     if (showAddRow) VariantSheet(vm, null) { showAddRow = false }
+    if (showGroupCard && d != null) {
+        val moved = stringResource(R.string.groups_moved)
+        GroupCardSheet(
+            title = d.name.orEmpty(),
+            picks = vm.groupDoor.picks?.get(familyId), reading = vm.groupDoor.reading(familyId), forProduct = true,
+            canMakeNew = vm.groupDoor.canMakeNew, targets = vm.groupDoor.targets,
+            suggestedName = d.category?.takeIf { it.isNotBlank() && it != "—" } ?: d.name.orEmpty(),
+            homeSectorSlug = null, groups = vm.groupDoor.groups, busy = vm.groupDoor.busy,
+            onChoose = { choice -> vm.chooseGroup(choice, moved) { showGroupCard = false } },
+            onDismiss = { showGroupCard = false },
+        )
+    }
     editVariant?.let { v -> VariantSheet(vm, v) { editVariant = null } }
     fullImage?.let { SourcePageDialog(it, stringResource(R.string.media_title)) { fullImage = null } }
     openMedia?.let { m -> MediaSheet(m, vm, seller, onFull = { fullImage = it }) { openMedia = null } }

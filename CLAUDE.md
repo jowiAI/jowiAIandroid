@@ -51,6 +51,12 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   is the whole screen and every POST answers the page re-read with `message` spread at the top level — the state IS the last
   answer; every body carries `sector` (the slug on screen). Actions never on Genel, never without `canWrite`; each behind its
   own flag (`renamable/movable/deletable`). The × on an alias chip and "+ başlık bağla" are their own clickables.
+  Ledger 65: two tabs when `canWrite` (tree · headings); the headings tab is `GET console/groups/headings/` then
+  `headings/suggestions/` ONCE after the list renders (slow, cached an hour) — a bind re-GETs `headings/` only and keeps the
+  picks. The ONE group card is `ui/screens/console/GroupCardSheet.kt` (Jowi's picks · New group over `targets` · search over
+  `groups`); it only chooses, the caller posts (`headings/bind/ {key, groupId} | {key, name, toSectorId, parentId?}`; on Ürünler the
+  review cell `{field:"category", value: groupId}`, a new group via `console/groups/add/` found by name in the page, then the cell).
+  Ürünler reads `seller/catalog/group-suggestions/` once per screen; "New group" rights come from the headings door, console mode only.
 - Knowledge (Bilgi) is ONE screen behind a seat: `ExpertKnowledgeScreen(seat = Expert | Console)` with
   `KnowledgeViewModel` (expert/* vs console/* doors; console adds semantic search, author tags, pairs).
 - Expert slice 2: `ExpertEarnings.kt` (door = the Panel's "Bu ay" card) and `ExpertAccountSections.kt`

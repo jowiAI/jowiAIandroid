@@ -5,7 +5,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
@@ -55,6 +57,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,6 +97,15 @@ import ai.workis.jowi.data.vis
 import ai.workis.jowi.data.WorkisMoney
 import ai.workis.jowi.data.catalogImageUrl
 import ai.workis.jowi.data.catalogSourceUrl
+import ai.workis.jowi.data.GroupCardChoice
+import ai.workis.jowi.data.GroupListRow
+import ai.workis.jowi.data.GroupNode
+import ai.workis.jowi.data.GroupPick
+import ai.workis.jowi.data.GroupSuggestions
+import ai.workis.jowi.data.GroupTarget
+import ai.workis.jowi.data.GroupsAddBody
+import ai.workis.jowi.data.GroupsHeadingsPage
+import ai.workis.jowi.data.decodeFamily
 import ai.workis.jowi.data.jsonBody
 import ai.workis.jowi.data.jsonError
 import ai.workis.jowi.data.partnerCall
@@ -99,6 +113,7 @@ import ai.workis.jowi.ui.components.AuthImage
 import ai.workis.jowi.ui.components.FormRow
 import ai.workis.jowi.ui.components.FormSection
 import ai.workis.jowi.ui.screens.console.ConsoleSub
+import ai.workis.jowi.ui.screens.console.GroupCardSheet
 import ai.workis.jowi.ui.screens.expert.NoteBand
 import ai.workis.jowi.ui.theme.Beige
 import ai.workis.jowi.ui.theme.Kiremit500
@@ -106,6 +121,7 @@ import ai.workis.jowi.ui.theme.SuccessGreen
 import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
@@ -238,6 +254,129 @@ class CatalogViewModel : ViewModel() {
         val (r, err) = partnerCall(lang) { Graph.api.catalogOfferCell(offerId, jsonBody("field" to field, "value" to value), seller) }
         return if (r?.success == true) null else (r?.error ?: r?.message ?: err)
     }
+
+    /** The group card on the waiting families (ledger 65): Jowi's picks, the rights, the names chosen here. */
+    val groupDoor = FamilyGroupDoor(viewModelScope) { seller }
+
+    /** A card's choice → the review cell; the band says what happened, the page reloads on a move. */
+    fun chooseGroup(familyId: String, choice: GroupCardChoice, movedText: String, onClosed: () -> Unit) =
+        groupDoor.choose(familyId, choice, movedText, post = { groupId ->
+            val (r, err) = partnerCall(lang) { Graph.api.catalogFamilyCell(familyId, jsonBody("field" to "category", "value" to groupId), seller) }
+            if (r != null && decodeFamily(r) != null) null else (jsonError(r) ?: err ?: "")
+        }) { ok, msg ->
+            onClosed()
+            note = msg
+            if (ok) load()
+        }
+}
+
+/**
+ * The one group card's state on Ürünler's waiting families (ledger 65; iOS
+ * `WorkisFamilyGroupModel`) — shared by the catalogue and the family screen.
+ * `GET seller/catalog/group-suggestions/` (every waiting family once, or one family)
+ * gives Jowi's picks and the groups the search may name; in console mode (a seller
+ * param) `GET console/groups/headings/` adds the rights for "New group" — a refusal
+ * there means no new group, silently. A pick moves via the review cell `category`.
+ */
+class FamilyGroupDoor(private val scope: CoroutineScope, private val sellerOf: () -> String?) {
+    /** Keyed by family id: null = not read, `[]` = read and nothing fits. */
+    var picks by mutableStateOf<Map<String, List<GroupPick>>?>(null)
+        private set
+    private var readingAll by mutableStateOf(false)
+    private var inFlight by mutableStateOf<Set<String>>(emptySet())
+    /** The seller door's groups (every active sector's main groups, the seller's own first). */
+    private var sellerGroups by mutableStateOf<List<GroupListRow>>(emptyList())
+    private var rights by mutableStateOf<GroupsHeadingsPage?>(null)
+    private var rightsAsked = false
+    private var readAll = false
+    /** Family id → the group name chosen this session (the rows carry no Workis group yet). */
+    val chosen = mutableStateMapOf<String, String>()
+    var busy by mutableStateOf(false)
+        private set
+    private val lang get() = Graph.language.value
+
+    private val isConsole get() = sellerOf() != null
+    val canMakeNew get() = isConsole && rights?.canWrite == true
+    val targets: List<GroupTarget> get() = if (isConsole) rights?.targets.orEmpty() else emptyList()
+    /** The search's list: the seller door's groups, then the console's (deduped by id). */
+    val groups: List<GroupListRow> get() {
+        val console = if (isConsole) rights?.groups.orEmpty() else emptyList()
+        return (sellerGroups + console).distinctBy { it.id ?: "${it.sectorSlug}/${it.name}" }
+    }
+    fun reading(familyId: String) = picks?.get(familyId) == null && (readingAll || familyId in inFlight)
+
+    private fun absorb(r: GroupSuggestions) {
+        r.suggestions?.let { picks = picks.orEmpty() + it }
+        r.groups?.takeIf { it.isNotEmpty() }?.let { sellerGroups = it }
+    }
+
+    /** Every waiting family at once — once per screen life; a failure leaves the picks unread. */
+    fun loadAll() {
+        if (readAll) return
+        readAll = true; readingAll = true
+        scope.launch {
+            val (r, _) = partnerCall(lang) { Graph.api.catalogGroupSuggestions(seller = sellerOf()) }
+            readingAll = false
+            if (r != null && r.success != false) absorb(r)
+        }
+    }
+
+    /** One family, when its card opens before the background read answered (or missed it). */
+    fun loadOne(familyId: String) {
+        if (picks?.get(familyId) != null || familyId in inFlight) return
+        inFlight = inFlight + familyId
+        scope.launch {
+            val (r, _) = partnerCall(lang) { Graph.api.catalogGroupSuggestions(family = familyId, seller = sellerOf()) }
+            inFlight = inFlight - familyId
+            if (r != null && r.success != false) absorb(r)
+        }
+    }
+
+    /** "New group" rights — console mode only, read lazily the first time a card opens. */
+    fun loadRights() {
+        if (!isConsole || rightsAsked) return
+        rightsAsked = true
+        scope.launch {
+            val (r, _) = partnerCall(lang) { Graph.api.consoleGroupsHeadings() }
+            if (r != null && r.success != false) rights = r
+        }
+    }
+
+    /** Opening a card: the rights, and this family's picks if the background read has not given them. */
+    fun open(familyId: String) { loadRights(); loadOne(familyId) }
+
+    /**
+     * Existing → the cell; New → `console/groups/add/`, the group found by name in the
+     * answered page, then the cell. `post(groupId)` → the error sentence, or null.
+     * `done(ok, sentence)` — the caller closes the card and shows the sentence.
+     */
+    fun choose(familyId: String, choice: GroupCardChoice, movedText: String, post: suspend (String) -> String?, done: (Boolean, String?) -> Unit) {
+        if (busy) return
+        busy = true
+        scope.launch {
+            val (groupId, name) = when (choice) {
+                is GroupCardChoice.Existing -> choice.groupId to choice.name
+                is GroupCardChoice.New -> {
+                    val (page, err) = partnerCall(lang) {
+                        Graph.api.consoleGroupsAdd(GroupsAddBody(sector = choice.sectorSlug, name = choice.name.trim(), parentId = choice.parentId))
+                    }
+                    if (page == null || page.success == false) { busy = false; done(false, page?.error ?: page?.message ?: err); return@launch }
+                    val all = flatten(page.groups.orEmpty())
+                    val want = choice.name.trim().lowercase()
+                    val g = all.firstOrNull { it.name?.trim()?.lowercase() == want && it.parentId == choice.parentId }
+                        ?: all.firstOrNull { it.name?.trim()?.lowercase() == want }
+                    if (g?.id == null) { busy = false; done(false, page.message ?: page.error); return@launch }
+                    rightsAsked = false // the console's list now has one more group
+                    g.id to (g.name ?: choice.name.trim())
+                }
+            }
+            val err = post(groupId)
+            busy = false
+            if (err == null) { chosen[familyId] = name; done(true, movedText) } else done(false, err.ifEmpty { null })
+        }
+    }
+
+    private fun flatten(nodes: List<GroupNode>): List<GroupNode> = nodes.flatMap { listOf(it) + flatten(it.children.orEmpty()) }
 }
 
 // MARK: - chips (the web's table, 2026-09-16)
@@ -389,6 +528,7 @@ private fun PublishCatalogContext(vm: CatalogViewModel, segment: Int) {
         when (segment) {
             0 -> {
                 add(vis(stringResource(R.string.reject_family), VisStyle.DESTRUCTIVE))
+                add(vis(stringResource(R.string.groups_word), VisStyle.SECONDARY))
                 add(vis(stringResource(R.string.source_page))); add(vis(stringResource(R.string.variants_word), VisStyle.CHIP))
                 vm.page?.families.orEmpty().forEach { f ->
                     webChip(f.web)?.let { add(vis(it.text, VisStyle.CHIP)) }
@@ -435,20 +575,41 @@ private fun SectionHeader(text: String) {
     )
 }
 
-/** A row that reveals one destructive action on a trailing swipe; the swipe snaps back and asks first. */
+/**
+ * A row that reveals one destructive action on a trailing swipe; the swipe snaps back and asks first.
+ * `leadingLabel` + `onLeading` add a leading (start-to-end) action with the grid glyph — the group card (ledger 65).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SwipeRow(actionLabel: String, actionTint: Color, onAction: () -> Unit, content: @Composable () -> Unit) {
+private fun SwipeRow(
+    actionLabel: String, actionTint: Color, onAction: () -> Unit,
+    leadingLabel: String? = null, onLeading: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    val action by rememberUpdatedState(onAction)
+    val leading by rememberUpdatedState(onLeading)
     val state = rememberSwipeToDismissBoxState(confirmValueChange = { v ->
-        if (v == SwipeToDismissBoxValue.EndToStart) onAction()
+        if (v == SwipeToDismissBoxValue.EndToStart) action()
+        if (v == SwipeToDismissBoxValue.StartToEnd) leading?.invoke()
         false
     })
     SwipeToDismissBox(
         state = state,
-        enableDismissFromStartToEnd = false,
+        enableDismissFromStartToEnd = onLeading != null,
         backgroundContent = {
-            Box(Modifier.fillMaxSize().background(actionTint.copy(alpha = 0.18f)).padding(end = 16.dp), contentAlignment = Alignment.CenterEnd) {
-                Text(actionLabel, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = actionTint)
+            if (state.dismissDirection == SwipeToDismissBoxValue.StartToEnd && leadingLabel != null) {
+                Row(
+                    Modifier.fillMaxSize().background(Kiremit500.copy(alpha = 0.16f)).padding(start = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(WorkisIcons.Grid, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(leadingLabel, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Kiremit500)
+                }
+            } else {
+                Box(Modifier.fillMaxSize().background(actionTint.copy(alpha = 0.18f)).padding(end = 16.dp), contentAlignment = Alignment.CenterEnd) {
+                    Text(actionLabel, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = actionTint)
+                }
             }
         },
     ) { content() }
@@ -456,10 +617,19 @@ private fun SwipeRow(actionLabel: String, actionTint: Color, onAction: () -> Uni
 
 // MARK: - İnceleme bekliyor
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ReviewSections(page: CatalogPage, vm: CatalogViewModel, onOpenFamily: (String) -> Unit) {
     val colors = WorkisTheme.colors
     var rejectTarget by remember { mutableStateOf<CatalogFamilyRow?>(null) }
+    var cardFamily by remember { mutableStateOf<CatalogFamilyRow?>(null) }
+    val door = vm.groupDoor
+    // Jowi's picks for every waiting family — read once in the background (ledger 65)
+    val hasWaiting = page.families.orEmpty().isNotEmpty()
+    LaunchedEffect(hasWaiting) { if (hasWaiting) door.loadAll() }
+    val openCard: (CatalogFamilyRow) -> Unit = { f -> f.id?.let { door.open(it); cardFamily = f } }
+    val groupsWord = stringResource(R.string.groups_word)
+    val jowiFirstHint = stringResource(R.string.groups_jowi_first)
     val groups = page.families.orEmpty().groupBy { it.category?.takeIf { c -> c.isNotEmpty() } ?: "—" }
     Text(stringResource(R.string.review_sub), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
     Spacer(Modifier.height(6.dp))
@@ -468,10 +638,12 @@ private fun ReviewSections(page: CatalogPage, vm: CatalogViewModel, onOpenFamily
         SectionHeader("${cat.uppercase()} · ${rows.size}")
         SurfaceCard {
             rows.forEachIndexed { i, f ->
-                SwipeRow(stringResource(R.string.reject_family), colors.danger, { rejectTarget = f }) {
+                SwipeRow(stringResource(R.string.reject_family), colors.danger, { rejectTarget = f }, leadingLabel = groupsWord, onLeading = { openCard(f) }) {
                     Row(
                         verticalAlignment = Alignment.Top,
-                        modifier = Modifier.fillMaxWidth().background(colors.surface).clickable { f.id?.let(onOpenFamily) }.padding(vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().background(colors.surface)
+                            .combinedClickable(onClick = { f.id?.let(onOpenFamily) }, onLongClick = { openCard(f) }, onLongClickLabel = groupsWord)
+                            .padding(vertical = 8.dp),
                     ) {
                         AuthImage(catalogImageUrl(f.img, "thumb", vm.seller), Modifier.size(44.dp))
                         Spacer(Modifier.width(10.dp))
@@ -487,6 +659,23 @@ private fun ReviewSections(page: CatalogPage, vm: CatalogViewModel, onOpenFamily
                                 f.code?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)) }
                                 f.page?.let { Text(stringResource(R.string.source_page) + " $it", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint) }
                             }
+                            // the group chosen here this session, else Jowi's first pick as a hint of the card
+                            val chosen = f.id?.let { door.chosen[it] }
+                            val first = f.id?.let { door.picks?.get(it) }?.firstOrNull()?.name?.takeIf { it.isNotEmpty() }
+                            if (chosen != null) {
+                                Text(
+                                    buildAnnotatedString {
+                                        withStyle(SpanStyle(color = colors.faint)) { append("$groupsWord: ") }
+                                        withStyle(SpanStyle(color = SuccessGreen, fontWeight = FontWeight.SemiBold)) { append(chosen) }
+                                    },
+                                    fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                )
+                            } else if (first != null) {
+                                Text(
+                                    "Jowi: $first", fontSize = 12.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.semantics { contentDescription = "Jowi: $first · $jowiFirstHint" },
+                                )
+                            }
                         }
                         Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint)
                     }
@@ -500,6 +689,19 @@ private fun ReviewSections(page: CatalogPage, vm: CatalogViewModel, onOpenFamily
         ConfirmDialog(stringResource(R.string.reject_family), stringResource(R.string.reject_confirm), destructive = true, onDismiss = { rejectTarget = null }) {
             f.id?.let { vm.reject(it) }
         }
+    }
+    cardFamily?.let { f ->
+        val id = f.id.orEmpty()
+        val moved = stringResource(R.string.groups_moved)
+        GroupCardSheet(
+            title = f.name ?: f.code ?: "—",
+            picks = door.picks?.get(id), reading = door.reading(id), forProduct = true,
+            canMakeNew = door.canMakeNew, targets = door.targets,
+            suggestedName = f.category?.takeIf { it.isNotBlank() && it != "—" } ?: f.name.orEmpty(),
+            homeSectorSlug = null, groups = door.groups, busy = door.busy,
+            onChoose = { choice -> vm.chooseGroup(id, choice, moved) { cardFamily = null } },
+            onDismiss = { cardFamily = null },
+        )
     }
 }
 

@@ -295,6 +295,8 @@ data class CatalogFamilyDetail(
     val brand: String? = null,
     val code: String? = null,
     val description: String? = null,
+    /** The catalogue's own heading, as on the review row (not the Workis group). */
+    val category: String? = null,
     val status: String? = null,
     @Serializable(with = FlexString::class) val productId: String? = null,
     val specAttrs: List<CatalogSpecAttr>? = null,

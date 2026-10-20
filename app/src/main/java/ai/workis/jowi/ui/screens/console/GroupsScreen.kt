@@ -62,7 +62,15 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.runtime.key
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
+import ai.workis.jowi.ui.theme.Kiremit400
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,7 +80,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.ApiResult
+import ai.workis.jowi.data.GroupCardChoice
 import ai.workis.jowi.data.GroupHeading
+import ai.workis.jowi.data.GroupPick
+import ai.workis.jowi.data.GroupsHeadingsPage
 import ai.workis.jowi.data.GroupNode
 import ai.workis.jowi.data.GroupUnboundHeading
 import ai.workis.jowi.data.GroupsAddBody
@@ -109,8 +120,10 @@ import java.util.Locale
 // Console → Gruplar (ledger 62): the Workis groups page. One page, one door — `GET console/groups/`
 // is the whole page and every write answers the page re-read, so the screen's state IS the last
 // answer. Sector · the coordinator's switch · the sector's sellers · the two-level tree with the
-// catalogue headings under each row · the headings no group answers to. Search and collapse are
-// the list's own (client-side); every write carries the slug on screen as `sector`.
+// catalogue headings under each row. The headings no group answers to are the SECOND TAB (ledger
+// 65, web 2026-10-19): `GET console/groups/headings/` across every sector, Jowi's picks read once in
+// the background, one door per row — the group card (GroupCardSheet.kt). Search and collapse are the
+// list's own (client-side); every write carries the slug on screen as `sector`.
 
 /** A text ask (alert with one field), one per task. */
 sealed interface GroupsPrompt {
@@ -118,14 +131,12 @@ sealed interface GroupsPrompt {
     data object GroupAdd : GroupsPrompt
     data class Subgroup(val parent: GroupNode) : GroupsPrompt
     data class Rename(val node: GroupNode) : GroupsPrompt
-    data class Make(val heading: GroupUnboundHeading) : GroupsPrompt
 }
 
 /** A picker sheet over the server's lists. */
 sealed interface GroupsPick {
     data class Merge(val node: GroupNode) : GroupsPick
     data class Bind(val node: GroupNode) : GroupsPick
-    data class Attach(val heading: GroupUnboundHeading) : GroupsPick
     data class Move(val node: GroupNode) : GroupsPick
 }
 
@@ -157,6 +168,26 @@ class GroupsViewModel : ViewModel() {
     var prompt by mutableStateOf<GroupsPrompt?>(null)
     var pick by mutableStateOf<GroupsPick?>(null)
     var confirm by mutableStateOf<GroupsConfirm?>(null)
+
+    // --- the headings tab (ledger 65) ---
+    /** 0 = the tree, 1 = the headings no Workis group answers to (drawn only for `canWrite`). */
+    var tab by mutableStateOf(0)
+    var headings by mutableStateOf<GroupsHeadingsPage?>(null)
+        private set
+    var headingsError by mutableStateOf<String?>(null)
+        private set
+    var headingsLoading by mutableStateOf(false)
+        private set
+    /** Jowi's picks per heading key — null until the one slow call answers; a key absent = not read. */
+    var headingPicks by mutableStateOf<Map<String, List<GroupPick>>?>(null)
+        private set
+    var picksReading by mutableStateOf(false)
+        private set
+    var headingSearch by mutableStateOf("")
+    /** The seller chip on; null = all. */
+    var sellerFilter by mutableStateOf<String?>(null)
+    /** The heading whose group card is open. */
+    var card by mutableStateOf<GroupUnboundHeading?>(null)
 
     private var messageJob: Job? = null
     private val lang get() = Graph.language.value
@@ -194,16 +225,78 @@ class GroupsViewModel : ViewModel() {
     }
 
     /** Every write: one at a time; the answer replaces the page, `message` shows under the title. */
-    private fun send(call: suspend (sector: String) -> GroupsPage) {
+    private fun send(onOk: (() -> Unit)? = null, call: suspend (sector: String) -> GroupsPage) {
         if (busy || page == null) return
         val sector = slug
         busy = true
         viewModelScope.launch {
             when (val r = exchange { call(sector) }) {
-                is ApiResult.Ok -> { page = r.value; show(r.value.message.orEmpty(), false) }
+                is ApiResult.Ok -> { page = r.value; show(r.value.message.orEmpty(), false); onOk?.invoke() }
                 is ApiResult.Err -> show(r.message, true)
             }
             busy = false
+        }
+    }
+
+    /** The tab: the list first, Jowi's picks after it lands (one slow call, once; silent on failure). */
+    fun loadHeadings() {
+        if (headingsLoading) return
+        headingsLoading = true
+        headingsError = null
+        viewModelScope.launch {
+            val r = readHeadings()
+            headingsLoading = false
+            when (r) {
+                is ApiResult.Ok -> { headings = r.value; readPicksOnce() }
+                is ApiResult.Err -> if (headings == null) headingsError = r.message else show(r.message, true)
+            }
+        }
+    }
+
+    private suspend fun readHeadings(): ApiResult<GroupsHeadingsPage> =
+        try {
+            val hp = Graph.api.consoleGroupsHeadings()
+            if (hp.success == false) ApiResult.Err(null, hp.error ?: statusMessage(-1, lang)) else ApiResult.Ok(hp)
+        } catch (e: HttpException) {
+            ApiResult.Err(e.code(), serverSentence(e) ?: statusMessage(e.code(), lang))
+        } catch (e: java.io.IOException) {
+            ApiResult.Err(null, statusMessage(null, lang))
+        } catch (e: Exception) {
+            android.util.Log.e("Groups", "headings read failed", e)
+            ApiResult.Err(null, statusMessage(-1, lang))
+        }
+
+    private fun readPicksOnce() {
+        if (headingPicks != null || picksReading) return
+        picksReading = true
+        viewModelScope.launch {
+            try {
+                val s = Graph.api.consoleGroupsHeadingSuggestions()
+                if (s.success != false) s.suggestions?.let { headingPicks = it }
+            } catch (e: Exception) {
+                // iOS is silent here: no picks, no band
+                android.util.Log.w("Groups", "heading suggestions failed", e)
+            }
+            picksReading = false
+        }
+    }
+
+    /** The card chose: bind (an existing group) or make (a new group where the card says). The answered
+     *  page replaces the tree, its sentence shows in the band; then the tab re-reads (not the picks).
+     *  A refusal keeps the card open; its sentence shows in the band. */
+    fun chooseForHeading(h: GroupUnboundHeading, choice: GroupCardChoice) {
+        val key = h.key ?: return
+        send(onOk = {
+            card = null
+            headingPicks = headingPicks?.minus(key)
+            viewModelScope.launch { (readHeadings() as? ApiResult.Ok)?.let { headings = it.value } }
+        }) { s ->
+            Graph.api.consoleGroupsHeadingBind(
+                when (choice) {
+                    is GroupCardChoice.Existing -> GroupsHeadingBindBody(s, key, groupId = choice.groupId)
+                    is GroupCardChoice.New -> GroupsHeadingBindBody(s, key, name = choice.name, toSectorId = choice.sectorId, parentId = choice.parentId)
+                },
+            )
         }
     }
 
@@ -248,8 +341,6 @@ class GroupsViewModel : ViewModel() {
     fun delete(id: String) = send { s -> Graph.api.consoleGroupsDelete(id, GroupsSectorOnlyBody(s)) }
     fun bindHeading(key: String, groupId: String) =
         send { s -> Graph.api.consoleGroupsHeadingBind(GroupsHeadingBindBody(s, key, groupId = groupId)) }
-    fun makeFromHeading(key: String, name: String) =
-        send { s -> Graph.api.consoleGroupsHeadingBind(GroupsHeadingBindBody(s, key, name = name)) }
     fun forgetAlias(groupId: String, alias: String) =
         send { s -> Graph.api.consoleGroupsAliasRemove(groupId, GroupsAliasRemoveBody(s, alias)) }
 }
@@ -265,7 +356,6 @@ private fun fold(s: String, locale: Locale): String =
 
 private fun String.capFirst(locale: Locale) = replaceFirstChar { it.titlecase(locale) }
 
-private fun allNodes(groups: List<GroupNode>): List<GroupNode> = groups.flatMap { listOf(it) + it.children.orEmpty() }
 
 // MARK: - the title row's overflow (expand / collapse all) + the busy slash
 
@@ -274,8 +364,9 @@ fun GroupsTitleActions(vm: GroupsViewModel) {
     val colors = WorkisTheme.colors
     var open by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
-        if (vm.busy) WorkisMark(size = 16, breathing = true)
-        Box {
+        if (vm.busy || vm.headingsLoading) WorkisMark(size = 16, breathing = true)
+        // expand / collapse belong to the tree; the headings tab has no trailing menu
+        if (vm.tab == 0 || vm.page?.canWrite != true) Box {
             IconButton(onClick = { open = true }) {
                 Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.groups_collapse_all), tint = colors.ink)
             }
@@ -331,9 +422,20 @@ fun ConsoleGroupsScreen(vm: GroupsViewModel = viewModel()) {
                 WorkisMark(size = 24, breathing = true)
             }
             else -> {
-                GroupsField(vm.search, { vm.search = it }, stringResource(R.string.groups_search_prompt), leadingSearch = true)
-                Spacer(Modifier.height(10.dp))
-                GroupsList(vm, page, locale)
+                val tabs = page.canWrite == true
+                if (tabs) {
+                    GroupsTabs(vm)
+                    Spacer(Modifier.height(10.dp))
+                }
+                if (tabs && vm.tab == 1) {
+                    GroupsField(vm.headingSearch, { vm.headingSearch = it }, stringResource(R.string.groups_headings_search), leadingSearch = true)
+                    Spacer(Modifier.height(10.dp))
+                    HeadingsList(vm, locale)
+                } else {
+                    GroupsField(vm.search, { vm.search = it }, stringResource(R.string.groups_search_prompt), leadingSearch = true)
+                    Spacer(Modifier.height(10.dp))
+                    GroupsList(vm, page, locale)
+                }
             }
         }
     }
@@ -352,7 +454,6 @@ private fun GroupsList(vm: GroupsViewModel, page: GroupsPage, locale: Locale) {
         hit(g.name) || g.headings.orEmpty().any { hit(it.label) } || g.children.orEmpty().any { hits(it) }
     val groups = page.groups.orEmpty()
     val shown = if (searching) groups.filter { hits(it) } else groups
-    val unbound = page.unboundHeadings.orEmpty().let { u -> if (searching) u.filter { hit(it.label) } else u }
 
     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
         // 1. Sector
@@ -443,20 +544,194 @@ private fun GroupsList(vm: GroupsViewModel, page: GroupsPage, locale: Locale) {
         }
         item(key = "tree-foot") {
             Footer(stringResource(R.string.groups_tree_hint))
+            Spacer(Modifier.height(12.dp))
         }
-        // 5. Unbound headings
-        if (canWrite && page.unboundHeadings.orEmpty().isNotEmpty()) {
-            item(key = "unbound") {
-                Eyebrow(stringResource(R.string.groups_unbound_title), locale)
-                if (unbound.isEmpty()) Muted(stringResource(R.string.groups_no_match))
-                else GroupsCard {
-                    unbound.forEachIndexed { i, h ->
-                        UnboundRow(vm, h, locale)
-                        if (i < unbound.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+    }
+}
+
+// MARK: - the two tabs (ledger 65; drawn only for a seat that may write)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GroupsTabs(vm: GroupsViewModel) {
+    val colors = WorkisTheme.colors
+    val n = vm.headings?.headings?.size
+    val labels = listOf(
+        stringResource(R.string.groups_tab_tree),
+        stringResource(R.string.groups_tab_headings) + (n?.let { " · $it" } ?: ""),
+    )
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        labels.forEachIndexed { i, label ->
+            SegmentedButton(
+                selected = vm.tab == i,
+                onClick = {
+                    vm.tab = i
+                    if (i == 1 && vm.headings == null) vm.loadHeadings()
+                },
+                shape = SegmentedButtonDefaults.itemShape(index = i, count = labels.size),
+                colors = SegmentedButtonDefaults.colors(
+                    activeContainerColor = colors.canvas,
+                    activeContentColor = colors.ink,
+                    inactiveContainerColor = colors.surface,
+                    inactiveContentColor = colors.muted,
+                ),
+                // the selection reads from the weight and the fill; the label keeps the width
+                icon = {},
+                modifier = if (i == 1) Modifier.weight(1.6f) else Modifier.weight(1f),
+            ) {
+                Text(
+                    label, fontSize = 13.sp, lineHeight = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center, fontWeight = if (vm.tab == i) FontWeight.SemiBold else null,
+                )
+            }
+        }
+    }
+}
+
+// MARK: - the headings tab
+
+@Composable
+private fun HeadingsList(vm: GroupsViewModel, locale: Locale) {
+    val colors = WorkisTheme.colors
+    LaunchedEffect(Unit) { if (vm.headings == null && vm.headingsError == null) vm.loadHeadings() }
+    val hp = vm.headings
+    when {
+        hp == null && vm.headingsError != null -> Column(Modifier.padding(4.dp)) {
+            Text(vm.headingsError.orEmpty(), fontSize = 13.sp, color = colors.danger)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.retry), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.accentText,
+                modifier = Modifier.clickable(enabled = !vm.headingsLoading) { vm.loadHeadings() }.padding(vertical = 6.dp),
+            )
+        }
+        hp == null -> Box(Modifier.fillMaxWidth().padding(top = 30.dp), contentAlignment = Alignment.Center) {
+            WorkisMark(size = 24, breathing = true)
+        }
+        else -> {
+            val all = hp.headings.orEmpty()
+            val sellers = remember(all, locale) {
+                val c = java.text.Collator.getInstance(locale)
+                all.flatMap { it.sellers.orEmpty() }.filter { it.isNotBlank() }.distinct().sortedWith(c)
+            }
+            val filter = vm.sellerFilter?.takeIf { it in sellers }
+            val q = fold(vm.headingSearch.trim(), locale)
+            fun hit(s: String?) = s != null && fold(s, locale).contains(q)
+            val shown = all.filter { h ->
+                (filter == null || filter in h.sellers.orEmpty()) &&
+                    (q.isEmpty() || hit(h.label) || h.sellers.orEmpty().any { hit(it) } || h.sectors.orEmpty().any { hit(it) })
+            }
+            LazyColumn(Modifier.fillMaxSize()) {
+                if (sellers.size > 1) {
+                    item(key = "sellers") {
+                        Eyebrow(stringResource(R.string.groups_seller_filter), locale)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 2.dp),
+                        ) {
+                            FilterChipPill(stringResource(R.string.groups_all_word), filter == null) { vm.sellerFilter = null }
+                            sellers.forEach { s -> FilterChipPill(s, filter == s) { vm.sellerFilter = s } }
+                        }
+                        Spacer(Modifier.height(18.dp))
                     }
                 }
-                Spacer(Modifier.height(30.dp))
+                item(key = "head") {
+                    Eyebrow("${stringResource(R.string.groups_tab_headings)} · ${all.size}", locale)
+                    if (all.isEmpty()) Muted(stringResource(R.string.groups_headings_empty))
+                    else if (shown.isEmpty()) Muted(stringResource(R.string.groups_no_match))
+                }
+                if (shown.isNotEmpty()) {
+                    item(key = "rows") {
+                        GroupsCard {
+                            shown.forEachIndexed { i, h ->
+                                HeadingRow(vm, h, locale)
+                                if (i < shown.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+                            }
+                        }
+                    }
+                }
+                item(key = "foot") {
+                    Footer(stringResource(R.string.groups_headings_intro))
+                    Spacer(Modifier.height(12.dp))
+                }
             }
+        }
+    }
+}
+
+/** A seller chip: the selected one carries a kiremit ring AND a tick (status never colour-only). */
+@Composable
+private fun FilterChipPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(colors.ink.copy(alpha = 0.07f), CircleShape)
+            .then(if (selected) Modifier.border(2.dp, Kiremit400, CircleShape) else Modifier)
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+    ) {
+        if (selected) {
+            Icon(WorkisIcons.Check, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(4.dp))
+        }
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.ink, maxLines = 1)
+    }
+}
+
+/** The web row: label · "N ÜRÜN" · "N aile · sellers" · "Jowi: first pick" once read · "Grubunu seç ›".
+ *  The whole row is the one door — it opens the group card. */
+@Composable
+private fun HeadingRow(vm: GroupsViewModel, h: GroupUnboundHeading, locale: Locale) {
+    val colors = WorkisTheme.colors
+    val n = h.productCount ?: 0
+    val first = h.key?.let { vm.headingPicks?.get(it) }?.firstOrNull { !it.name.isNullOrBlank() }
+    val firstHint = stringResource(R.string.groups_jowi_first)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable(enabled = h.key != null && !vm.busy) { vm.card = h }
+            .padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(WorkisIcons.Grid, contentDescription = null, tint = colors.faint, modifier = Modifier.size(13.dp))
+            Spacer(Modifier.width(7.dp))
+            Text(
+                h.label.orEmpty(),
+                fontSize = 14.sp,
+                fontWeight = if (h.isCode == true) FontWeight.Medium else FontWeight.SemiBold,
+                fontFamily = if (h.isCode == true) WorkisMono else null,
+                color = colors.ink,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                ("$n " + stringResource(R.string.groups_product_unit)).uppercase(locale),
+                fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, letterSpacing = 0.5.sp,
+                color = if (n > 0) colors.accentText else colors.faint,
+                modifier = Modifier.background(colors.ink.copy(alpha = 0.07f), CircleShape).padding(horizontal = 7.dp, vertical = 3.dp),
+            )
+        }
+        val sellers = h.sellers.orEmpty().joinToString(", ")
+        Text(
+            "${h.familyCount ?: 0} " + stringResource(R.string.groups_family_unit) + (if (sellers.isNotEmpty()) " · $sellers" else ""),
+            fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (first != null) {
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = colors.faint)) { append("Jowi: ") }
+                        withStyle(SpanStyle(color = colors.ink, fontWeight = FontWeight.SemiBold)) { append(first.name.orEmpty()) }
+                    },
+                    fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).semantics { contentDescription = "$firstHint: ${first.name.orEmpty()}" },
+                )
+            } else Spacer(Modifier.weight(1f))
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.groups_choose), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
+            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -701,41 +976,6 @@ private fun HeadingChip(vm: GroupsViewModel, h: GroupHeading, g: GroupNode, canW
     }
 }
 
-@Composable
-private fun UnboundRow(vm: GroupsViewModel, h: GroupUnboundHeading, locale: Locale) {
-    val colors = WorkisTheme.colors
-    var open by remember { mutableStateOf(false) }
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
-        Column(Modifier.weight(1f)) {
-            Text(h.label.orEmpty(), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink)
-            val sellers = h.sellers.orEmpty()
-            if (sellers.isNotEmpty()) {
-                Text(sellers.joinToString(" · "), fontSize = 12.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-        Spacer(Modifier.width(6.dp))
-        Text(
-            "${h.productCount ?: 0} " + stringResource(R.string.groups_product_unit).lowercase(locale),
-            fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint,
-        )
-        if (h.key != null) Box {
-            IconButton(onClick = { open = true }, enabled = !vm.busy, modifier = Modifier.size(32.dp)) {
-                Icon(Icons.Filled.MoreVert, contentDescription = null, tint = colors.muted, modifier = Modifier.size(18.dp))
-            }
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = colors.surface) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.groups_unbound_make), color = colors.ink) },
-                    onClick = { open = false; vm.prompt = GroupsPrompt.Make(h) },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.groups_unbound_attach), color = colors.ink) },
-                    onClick = { open = false; vm.pick = GroupsPick.Attach(h) },
-                )
-            }
-        }
-    }
-}
-
 // MARK: - prompts, pickers, confirms
 
 @Composable
@@ -759,10 +999,6 @@ private fun GroupsOverlays(vm: GroupsViewModel, locale: Locale) {
             stringResource(R.string.groups_rename).capFirst(locale), stringResource(R.string.groups_word), p.node.name.orEmpty(),
             message = p.node.name, onDismiss = { vm.prompt = null },
         ) { vm.prompt = null; vm.rename(p.node.id.orEmpty(), it) }
-        is GroupsPrompt.Make -> TextPromptDialog(
-            stringResource(R.string.groups_unbound_make), stringResource(R.string.groups_new_placeholder), p.heading.suggestedName.orEmpty(),
-            message = p.heading.label, confirmLabel = R.string.groups_add, onDismiss = { vm.prompt = null },
-        ) { vm.prompt = null; vm.makeFromHeading(p.heading.key.orEmpty(), it) }
         null -> {}
     }
 
@@ -789,21 +1025,30 @@ private fun GroupsOverlays(vm: GroupsViewModel, locale: Locale) {
             locale = locale,
             onDismiss = { vm.pick = null },
         ) { h -> vm.pick = null; vm.bindHeading(h.key.orEmpty(), k.node.id.orEmpty()) }
-        is GroupsPick.Attach -> {
-            val subLabel = stringResource(R.string.groups_subgroup_add)
-            val topLabel = stringResource(R.string.groups_word)
-            SearchSheet(
-                title = stringResource(R.string.groups_unbound_attach),
-                prompt = stringResource(R.string.groups_merge_prompt),
-                items = allNodes(page.groups.orEmpty()).filter { it.isGenel != true && it.id != null },
-                label = { it.name.orEmpty() },
-                subtitle = { if (it.parentId == null) topLabel else subLabel },
-                locale = locale,
-                onDismiss = { vm.pick = null },
-            ) { g -> vm.pick = null; vm.bindHeading(k.heading.key.orEmpty(), g.id.orEmpty()) }
-        }
         is GroupsPick.Move -> MoveSheet(vm, page, k.node, locale)
         null -> {}
+    }
+
+    // the one group card on a heading — it chooses; the VM posts and closes it on success
+    vm.card?.let { h ->
+        val hp = vm.headings
+        val picks = h.key?.let { vm.headingPicks?.get(it) }
+        key(h.key) {
+            GroupCardSheet(
+                title = h.label.orEmpty(),
+                picks = picks,
+                reading = vm.picksReading && picks == null,
+                forProduct = false,
+                canMakeNew = hp?.canWrite == true,
+                targets = hp?.targets.orEmpty(),
+                suggestedName = h.suggestedName ?: h.label.orEmpty(),
+                homeSectorSlug = h.homeSector,
+                groups = hp?.groups.orEmpty(),
+                busy = vm.busy,
+                onChoose = { vm.chooseForHeading(h, it) },
+                onDismiss = { vm.card = null },
+            )
+        }
     }
 
     vm.confirm?.let { c ->
