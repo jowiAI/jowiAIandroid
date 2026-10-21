@@ -586,11 +586,16 @@ interface WorkisApi {
     @GET("workis/lists/{id}/")
     suspend fun listDetail(@Path("id") id: String): PurchaseListDetail
 
+    /** A manual row `{name, qty?, unit?, fromItem?}` — the same door and reply as `listAddProduct`. */
     @POST("workis/lists/{id}/items/")
-    suspend fun listAddItem(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+    suspend fun listAddItem(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): ListItemAdded
 
     @POST("workis/lists/items/{id}/bind/")
     suspend fun listItemBind(@Path("id") id: String, @Body body: BindBody): SimpleResult
+
+    /** Jowi's stage (2026-10-20): the row's answer to "Ne için kullanacaksınız?" `{use}` | `{skip: true}` → `{success, card | null}`. */
+    @POST("workis/lists/items/{id}/use/")
+    suspend fun listItemUse(@Path("id") id: String, @Body body: UseBody): UseReply
 
     @POST("workis/lists/items/{id}/delete/")
     suspend fun listItemDelete(@Path("id") id: String): SimpleResult
@@ -602,7 +607,7 @@ interface WorkisApi {
     @GET("workis/lists/search/")
     suspend fun listsSearch(@Query("q") q: String): PLSearchResults
 
-    /** A product row `{cpid, sellerId?, sku?, q?}` → `{matched, item_id, needs_variant}` (2026-10-02). */
+    /** A product row `{cpid, sellerId?, sku?, q?, fromItem?}` → `{matched, item_id, needs_variant, askUse}` (2026-10-02 / -20). */
     @POST("workis/lists/{id}/items/")
     suspend fun listAddProduct(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): ListItemAdded
 

@@ -217,7 +217,76 @@ data class PLInfo(
     val jowiNote: PLJowiNote? = null,
     /** How a need-built list was built (2026-10-06); null for any other list or when nothing is left to show. */
     @Serializable(with = PLProvenanceTolerant::class) val provenance: PLProvenance? = null,
+    /** Jowi's stage counts + the server's sentence (2026-10-20, ledger 66); null = nothing to say. */
+    val jowiSummary: PLJowiSummary? = null,
 )
+
+/** `list.jowiSummary {waiting, better, fits, answered, added, line}` — `line` is the sentence the page shows. */
+@Serializable
+data class PLJowiSummary(
+    val waiting: Int? = null,
+    val better: Int? = null,
+    val fits: Int? = null,
+    val answered: Int? = null,
+    val added: Int? = null,
+    val line: String? = null,
+)
+
+/** A row's answer to "Ne için kullanacaksınız?" and Jowi's card for it (`items[].use`, 2026-10-20). */
+data class PLUse(val text: String?, val card: PLUseCard?)
+
+/** `use_card` (row_use.py): verdict fits | better | unsure; NO price anywhere on it. */
+@Serializable
+data class PLUseCard(
+    val kind: String? = null,
+    @Serializable(with = FlexString::class) val itemId: String? = null,
+    val product: String? = null,
+    val use: String? = null,
+    val verdict: String? = null,
+    val reason: String? = null,
+    val alternative: PLUseAlternative? = null,
+    val complements: List<PLUseComplement>? = null,
+)
+
+@Serializable
+data class PLUseAlternative(
+    @Serializable(with = FlexString::class) val cpid: String? = null,
+    val name: String? = null,
+    val seller: String? = null,
+    @Serializable(with = FlexString::class) val sellerId: String? = null,
+    val why: String? = null,
+)
+
+/** `role` needed | optional; `cpid`/`catalogueName`/`seller`/`sellerId` only when the catalogue carries it. */
+@Serializable
+data class PLUseComplement(
+    val name: String? = null,
+    val why: String? = null,
+    val role: String? = null,
+    val inCatalogue: Boolean? = null,
+    @Serializable(with = FlexString::class) val cpid: String? = null,
+    val catalogueName: String? = null,
+    val seller: String? = null,
+    @Serializable(with = FlexString::class) val sellerId: String? = null,
+) {
+    /** One complement on one card — the session's "added" memory keys on it. */
+    val key get() = cpid?.takeIf { it.isNotEmpty() } ?: name.orEmpty()
+}
+
+/** `use` must never sink the list: anything but an object reads as null; a card that fails to
+ *  decode leaves the text standing. */
+object PLUseTolerant : KSerializer<PLUse?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("PLUse", PrimitiveKind.STRING)
+    override fun deserialize(decoder: Decoder): PLUse? {
+        val json = decoder as? JsonDecoder ?: return null
+        val o = json.decodeJsonElement() as? JsonObject ?: return null
+        val text = (o["text"] as? JsonPrimitive)?.takeIf { it !is JsonNull && it.isString }?.content?.trim().orEmpty()
+        val card = (o["card"] as? JsonObject)?.let { runCatching { json.json.decodeFromJsonElement(PLUseCard.serializer(), it) }.getOrNull() }
+        if (text.isEmpty() && card == null) return null
+        return PLUse(text.ifEmpty { null }, card)
+    }
+    override fun serialize(encoder: Encoder, value: PLUse?) = encoder.encodeNull()
+}
 
 /**
  * `list.provenance {sentence, job, problem, qa[{question, answer, skipped, note}]}`
@@ -336,6 +405,14 @@ data class PLItem(
     /** The row's tick: a selected product AND one variant stands for it. "Teklif iste"
      *  refuses until every matched row has it; a free-text row never blocks (2026-10-03). */
     val complete: Boolean? = null,
+    /** Jowi's stage (2026-10-20): the row asks what it is for (drafts; once per row). */
+    val askUse: Boolean? = null,
+    /** Up to four application phrases from the product's facts — a tap fills the line, never sends. */
+    val useChips: List<String>? = null,
+    /** The answer and its card once given; null until then (decoded leniently). */
+    @Serializable(with = PLUseTolerant::class) val use: PLUse? = null,
+    /** The row came from another row's card ("+ Ekle") — "Jowi ekledi". */
+    val jowiAdded: Boolean? = null,
 ) {
     /** the bound candidate, else the top one (the web's `sel`) */
     val selected: PLCandidate?
@@ -561,9 +638,23 @@ data class ListItemAdded(
     val matched: Int? = null,
     @SerialName("item_id") @Serializable(with = FlexString::class) val itemId: String? = null,
     @SerialName("needs_variant") val needsVariant: Boolean? = null,
+    /** The new row asks what it is for (2026-10-20) — camelCase since Django's view renamed it; */
+    val askUse: Boolean? = null,
+    /** … `ask_use` as `lists_seat.add_item` first answered. Read both. */
+    @SerialName("ask_use") val askUseSnake: Boolean? = null,
     val message: String? = null,
     val error: String? = null,
-)
+) {
+    val asksUse get() = askUse ?: askUseSnake ?: false
+}
+
+/** `POST lists/items/{id}/use/` — `{use}` answers, `{skip: true}` closes the question for good. */
+@Serializable
+data class UseBody(val use: String? = null, val skip: Boolean? = null)
+
+/** `{success, card | null}` — a null card on an answer = Jowi found nothing to say. */
+@Serializable
+data class UseReply(val success: Boolean = false, val card: PLUseCard? = null, val error: String? = null, val message: String? = null)
 
 /** `POST lists/{id}/rename/ {title}` — draft or quoting only; 400 under two characters, 409 once ordered. */
 @Serializable

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -96,6 +97,10 @@ import ai.workis.jowi.data.PLQuoteTerm
 import ai.workis.jowi.data.PLSearchResult
 import ai.workis.jowi.data.PLSendRow
 import ai.workis.jowi.data.PLSuggestion
+import ai.workis.jowi.data.PLUseAlternative
+import ai.workis.jowi.data.PLUseCard
+import ai.workis.jowi.data.PLUseComplement
+import ai.workis.jowi.data.UseBody
 import ai.workis.jowi.data.PLVariant
 import ai.workis.jowi.data.PLVariantList
 import ai.workis.jowi.data.PurchaseListDetail
@@ -231,10 +236,16 @@ class ListDetailViewModel : ViewModel() {
      *  line is ONE variant of a multi-variant family (the per-row search's rule). */
     fun addSearchResult(r: PLSearchResult, q: String, onNeedsVariant: (PLItem, String) -> Unit) {
         val sku = if (r.resolved == true && (r.nVariants ?: 0) > 1) r.sku else null
-        addProductRow(r.cpid ?: return, r.sellerId, sku, q, onNeedsVariant)
+        addProductRow(r.cpid ?: return, r.sellerId, sku, q, onNeedsVariant = onNeedsVariant)
     }
 
-    private fun addProductRow(cpid: String, sellerId: String?, sku: String? = null, q: String? = null, onNeedsVariant: (PLItem, String) -> Unit) {
+    /** `fromItem` = the row whose Jowi card added this one ("+ Ekle", 2026-10-20) — the stage
+     *  then stays on that source row; any other add whose reply says `askUse` opens the stage
+     *  on the new row (the variant sheet, when `needs_variant`, opens over it first). */
+    private fun addProductRow(
+        cpid: String, sellerId: String?, sku: String? = null, q: String? = null, fromItem: String? = null,
+        onAdded: () -> Unit = {}, onNeedsVariant: (PLItem, String) -> Unit,
+    ) {
         val listId = id ?: return
         if (busy) return
         busy = true
@@ -242,20 +253,129 @@ class ListDetailViewModel : ViewModel() {
             val body = jsonBody(
                 "cpid" to cpid, "sellerId" to sellerId?.let { it.toIntOrNull() ?: it },
                 "sku" to sku?.takeIf { it.isNotEmpty() }, "q" to q?.takeIf { it.isNotEmpty() },
+                "fromItem" to fromItem?.takeIf { it.isNotEmpty() },
             )
             val (r, err) = partnerCall(lang) { Graph.api.listAddProduct(listId, body) }
             busy = false
             if (r?.success != true) { note = r?.error ?: r?.message ?: err; load(); return@launch }
+            onAdded()
+            if (fromItem == null && r.asksUse) r.itemId?.let { showStage(it) }
             val fresh = reload()
             if (r.needsVariant == true) fresh?.items?.firstOrNull { it.id == r.itemId }?.let { onNeedsVariant(it, cpid) }
         }
     }
-    fun addItem(name: String, qty: Double?, unit: String, onDone: (Boolean, String?) -> Unit) {
+    fun addItem(name: String, qty: Double?, unit: String, fromItem: String? = null, onDone: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
-            val (r, err) = partnerCall(lang) { Graph.api.listAddItem(id!!, jsonBody("name" to name, "qty" to qty, "unit" to unit.ifBlank { null })) }
+            val (r, err) = partnerCall(lang) {
+                Graph.api.listAddItem(id!!, jsonBody("name" to name, "qty" to qty, "unit" to unit.ifBlank { null }, "fromItem" to fromItem?.takeIf { it.isNotEmpty() }))
+            }
             val ok = r?.success == true
             onDone(ok, r?.message ?: r?.error ?: err)
-            if (ok) load()
+            if (ok) {
+                // a manual row never asks today (it binds nothing) — honoured all the same
+                if (fromItem == null && r.asksUse) r.itemId?.let { showStage(it) }
+                load()
+            }
+        }
+    }
+
+    // ---------- Jowi's stage (2026-10-20, ledger 66) ----------
+
+    /** The row the buyer put on the stage (a badge, an add that asks, an answer); null = Jowi's own pick. */
+    var stageItemId by mutableStateOf<String?>(null)
+        private set
+    /** × / "Atla" / the summary line shut the stage; a badge or the summary line opens it again. */
+    var stageClosed by mutableStateOf(false)
+        private set
+    /** The question's text line — a chip SETS it, only "Jowi'ye söyle" sends it. */
+    var useDraft by mutableStateOf("")
+    /** `use/` is out — the stage's slash breathes. */
+    var useReading by mutableStateOf(false)
+        private set
+    /** Cards that landed from a `use/` reply before the re-read carries them on the row (by item id). */
+    var stageCards by mutableStateOf<Map<String, PLUseCard>>(emptyMap())
+        private set
+    /** "sourceItemId|complementKey" added from a card this session → "Eklendi". */
+    var addedFromStage by mutableStateOf<Set<String>>(emptySet())
+        private set
+    /** The page scrolls to the stage once it is drawn (the stage clears it). */
+    var stageScrollPending by mutableStateOf(false)
+
+    fun cardOf(item: PLItem): PLUseCard? = item.use?.card ?: item.id?.let { stageCards[it] }
+
+    /** The stage's row: the explicit one, else the first that asks, else the first `better` card not taken. Drafts only. */
+    fun stageItem(d: PurchaseListDetail): PLItem? {
+        if (!d.isDraft || stageClosed) return null
+        val items = d.items.orEmpty()
+        stageItemId?.let { sid -> items.firstOrNull { it.id == sid }?.let { return it } }
+        return items.firstOrNull { it.askUse == true }
+            ?: items.firstOrNull { val c = cardOf(it); c?.verdict == "better" && !useSwitched(it, c) }
+    }
+
+    fun complementKey(itemId: String, c: PLUseComplement) = "$itemId|${c.key}"
+
+    /** A badge tap or an add that asks: that row on the stage, scrolled to. */
+    fun showStage(itemId: String) {
+        if (stageItemId != itemId) useDraft = ""
+        stageItemId = itemId; stageClosed = false; stageScrollPending = true
+    }
+    fun closeStage() { stageClosed = true; stageScrollPending = false }
+    /** The summary line under a shut stage: Jowi picks the row again. */
+    fun reopenStage() { stageClosed = false; stageItemId = null }
+
+    /**
+     * `POST lists/items/{id}/use/` — `{use}` (a real answer) or `{skip: true}` (blank text).
+     * A card lands on the stage at once and the re-read then carries it on the row; a null card
+     * on an answer → `nothing` as the screen note and the stage closes; a skip closes it.
+     */
+    fun answerUse(itemId: String, text: String?, nothing: String) {
+        if (useReading) return
+        val t = text?.trim().orEmpty()
+        useReading = true; note = null
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.listItemUse(itemId, if (t.isEmpty()) UseBody(skip = true) else UseBody(use = t)) }
+            useReading = false
+            if (r == null || !r.success) { note = r?.error ?: r?.message ?: err; load(); return@launch }
+            val card = r.card
+            when {
+                t.isEmpty() -> closeStage()
+                card == null -> { note = nothing; closeStage() }
+                else -> { stageCards = stageCards + (itemId to card); stageItemId = itemId }
+            }
+            useDraft = ""
+            load()
+        }
+    }
+
+    /** "Buna geç": the bind door with the alternative's `cpid` + `sellerId`, re-read, then the
+     *  variant rule as on any bind (the variant list opens when one must still be chosen). */
+    fun switchTo(itemId: String, alt: PLUseAlternative, onNeedsVariant: (PLItem, String) -> Unit) {
+        val cpid = alt.cpid?.takeIf { it.isNotEmpty() } ?: return
+        if (busy) return
+        busy = true; note = null
+        viewModelScope.launch {
+            val (ok, msg) = bindItem(itemId, cpid, sellerId = alt.sellerId)
+            busy = false
+            if (!ok) { note = msg; return@launch }
+            val row = reload()?.items?.firstOrNull { it.id == itemId } ?: return@launch
+            val c = row.candidates?.firstOrNull { it.cpid == cpid }
+            if (c != null && c.canChooseVariant == true && c.resolved != true) onNeedsVariant(row, cpid)
+        }
+    }
+
+    /** "+ Ekle": a catalogue complement through the product door (`cpid`, `sellerId`, `fromItem`),
+     *  a free one through the manual door (`{name, fromItem}`). The stage stays on the source row;
+     *  the new row's own badge waits. */
+    fun addComplement(fromItemId: String, c: PLUseComplement, onNeedsVariant: (PLItem, String) -> Unit) {
+        val key = complementKey(fromItemId, c)
+        if (key in addedFromStage) return
+        stageItemId = fromItemId
+        val cpid = c.cpid?.takeIf { it.isNotEmpty() }
+        if (cpid != null) {
+            addProductRow(cpid, c.sellerId, fromItem = fromItemId, onAdded = { addedFromStage = addedFromStage + key }, onNeedsVariant = onNeedsVariant)
+        } else {
+            val name = c.name?.trim().orEmpty().ifEmpty { return }
+            addItem(name, null, "", fromItem = fromItemId) { ok, msg -> if (ok) addedFromStage = addedFromStage + key else note = msg }
         }
     }
     /** `{cpid}` selects, `{cpid: ""}` unselects, `+ sku` chooses the variant, a search pick adds `sellerId` + `q`. → (ok, the server's sentence) */
@@ -372,7 +492,9 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
             }
         },
     ) {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // hoisted: Jowi's stage scrolls the page to itself (a badge tap, an add that asks)
+        val pageScroll = rememberScrollState()
+        Column(Modifier.fillMaxSize().verticalScroll(pageScroll).imePadding(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             ChangesWatch("lists", typing = typing) { vm.load() } // changes/ (2026-10-03)
             when {
                 d != null -> {
@@ -405,6 +527,7 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
                             onAdd = { showAdd = true },
                             onNeedsVariant = { row, cpid -> pickVariantCpid = cpid; pickItem = row },
                             onTyping = { typing = it },
+                            pageScroll = pageScroll,
                         )
                         ChatInvitesSection(d, onThread)
                     }
@@ -562,12 +685,14 @@ private fun ChatInvitesSection(d: PurchaseListDetail, onThread: (String) -> Unit
 @Composable
 private fun ItemsSegment(
     d: PurchaseListDetail, vm: ListDetailViewModel, onPick: (PLItem) -> Unit, onAdd: () -> Unit,
-    onNeedsVariant: (PLItem, String) -> Unit, onTyping: (Boolean) -> Unit,
+    onNeedsVariant: (PLItem, String) -> Unit, onTyping: (Boolean) -> Unit, pageScroll: ScrollState,
 ) {
     val colors = WorkisTheme.colors
-    // the web's order: Jowi's note, then how the list was built, then the rows
+    // the web's order: Jowi's note, then how the list was built, Jowi's stage, then the rows
     JowiNoteCard(d, onPick)
     ProvenanceCard(d)
+    // Jowi's stage (ledger 66): one row at a time, drafts only — a section, never a sheet
+    if (d.isDraft) JowiStage(d, vm.stageItem(d), vm, pageScroll, onNeedsVariant)
     // the web frames the rows in kiremit while the list is being written (ledger 64): the one
     // block on the page that asks for the buyer's hand. Sent lists keep the plain card.
     SurfaceCard(border = if (d.isDraft) Kiremit500 else null) {
@@ -584,7 +709,10 @@ private fun ItemsSegment(
             )
         }
         d.items.orEmpty().forEachIndexed { i, item ->
-            ItemRow(item, draft = d.isDraft, prices = d.showsPrices, onClick = { onPick(item) }, onDelete = { item.id?.let { vm.deleteItem(it) } })
+            ItemRow(
+                item, draft = d.isDraft, prices = d.showsPrices, onClick = { onPick(item) }, onDelete = { item.id?.let { vm.deleteItem(it) } },
+                card = vm.cardOf(item), onBadge = { item.id?.let(vm::showStage) },
+            )
             if (i < d.items.orEmpty().lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
         }
         if (d.isDraft) {
@@ -744,7 +872,7 @@ private fun noteKindWord(kind: String?): String = stringResource(
 
 /** `prices` false = a buyer seat (`list.prices`): no catalogue price, range or placeholder. */
 @Composable
-private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -> Unit, onDelete: () -> Unit) {
+private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -> Unit, onDelete: () -> Unit, card: PLUseCard? = null, onBadge: () -> Unit = {}) {
     val colors = WorkisTheme.colors
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
         Text("${item.n ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint, modifier = Modifier.width(24.dp))
@@ -780,6 +908,8 @@ private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -
                 }
             }
             AskedLine(if (sel != null) item.name else null, item.requirements)
+            // Jowi's line (ledger 66): the badge — a door to the stage — and "Kullanım: …"
+            JowiRowLine(item, card, draft, onBadge)
             if (draft) {
                 DraftRowState(item, prices)
             } else if (sel != null) {

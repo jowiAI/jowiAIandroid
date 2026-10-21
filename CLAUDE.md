@@ -46,6 +46,11 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   never prepend anything for `verified == false`; `virtualInvites[].name` is raw, draw "/ " + name. A row with no `candidates` shows
   "/ Workis" (`sourcedSeller`) — the app's own word, the API row has no seller. Need card (Jowi tab): question first, components folded
   to `core` while open, the main composer answers the open card (placeholder = the question); no field on the card.
+- Jowi's stage on a draft list (ledger 66): `ui/screens/partner/JowiStage.kt`, a SECTION above the rows (never a sheet), one row
+  at a time (tapped badge → first `askUse` → first `better` not yet bound). A chip only fills the line; `POST lists/items/{id}/use/
+  {use}|{skip:true}` → `{card|null}`; "Buna geç" = bind `{cpid, sellerId}`; "+ Ekle" = add door with `fromItem` (the stage stays on
+  the source row). Add replies carry `askUse` (and `ask_use`) → the stage opens on the new row. No price on the stage; its buttons
+  are bordered — "Teklif iste" stays the page's one fill. `use` on a row decodes tolerantly (`PLUseTolerant`).
 - Tab sets: role 3/4 and 5 → Panel · Hesap · Jowi; others → Pazar|Başvuru · Hesap · Jowi. Talepler (`cases/`) is retired.
 - Gruplar (ledger 62, roles 3|4): `ui/screens/console/GroupsScreen.kt` + `data/GroupsModels.kt`. ONE page: `GET console/groups/?sector=`
   is the whole screen and every POST answers the page re-read with `message` spread at the top level — the state IS the last
