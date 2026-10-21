@@ -717,6 +717,8 @@ data class InvListItem(
     val unit: String? = null,
     val alts: List<SellerProduct>? = null,
     val requirements: List<String>? = null,
+    /** What the buyer said the row is for (ledger 69, Django slice 3): '' when unanswered. */
+    val use: String? = null,
 )
 
 /** `listPrice` + `discountPct` echo what the line was priced against (2026-10-01). */

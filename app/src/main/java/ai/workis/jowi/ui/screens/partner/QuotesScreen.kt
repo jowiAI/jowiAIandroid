@@ -283,6 +283,8 @@ private fun ListItemBlock(li: InvListItem) {
             }
         }
         if (asked.isNotEmpty()) Text(stringResource(R.string.asked_label) + ": " + asked.joinToString(" · "), fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, maxLines = 3)
+        // the use travels (ledger 69): what the buyer will do with it, under the demands
+        li.use?.trim()?.takeIf { it.isNotEmpty() }?.let { Text(stringResource(R.string.use_label) + ": " + it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, maxLines = 3) }
     }
 }
 
@@ -612,8 +614,12 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Eyebrow((g.ifEmpty { stringResource(R.string.shortlist_label) }).uppercase())
                         // the buyer's demands for this item, so the seller prices the asked size
-                        inv.listItems?.firstOrNull { it.itemName == g }?.requirements?.takeIf { g.isNotEmpty() && it.isNotEmpty() }?.let { reqs ->
+                        val groupItem = inv.listItems?.firstOrNull { it.itemName == g }?.takeIf { g.isNotEmpty() }
+                        groupItem?.requirements?.takeIf { it.isNotEmpty() }?.let { reqs ->
                             Text(stringResource(R.string.asked_label) + ": " + reqs.joinToString(" · "), fontSize = 12.sp, lineHeight = 16.sp, color = colors.ink, modifier = Modifier.padding(horizontal = 4.dp))
+                        }
+                        groupItem?.use?.trim()?.takeIf { it.isNotEmpty() }?.let { use ->
+                            Text(stringResource(R.string.use_label) + ": " + use, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, modifier = Modifier.padding(horizontal = 4.dp))
                         }
                         SurfaceCard {
                             rs.forEach { r ->
