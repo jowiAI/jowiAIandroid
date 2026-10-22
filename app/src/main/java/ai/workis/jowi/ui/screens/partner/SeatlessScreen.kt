@@ -80,19 +80,38 @@ import kotlinx.coroutines.launch
  * steps down to a secondary control — applying afresh would open a second firm
  * beside the one already waiting. While the team switch is off the list simply
  * comes back empty and this screen is exactly what it was.
+ *
+ * The straight door (ledger 55, owner call 2026-10-12): nothing to show on this
+ * tab — no seat, no application, no invitation waiting, no address conflict —
+ * so the form opens itself, ONCE per tab life, the way the web's no-seat page
+ * goes straight to /basvuru/?e=. It waits for the invitations answer: an
+ * invitation outranks the form. The "once" lives with the caller
+ * (`autoOpened`) because this screen leaves the composition while the wizard
+ * is up — a flag kept here would open it again on the way back.
  */
 @Composable
-fun SeatlessScreen(onApply: () -> Unit) {
+fun SeatlessScreen(onApply: () -> Unit, autoOpened: Boolean = true, onAutoOpen: () -> Unit = {}) {
     // a tab root: no seller screen is open (2026-09-17)
     LaunchedEffect(Unit) { ScreenContext.clear() }
     val colors = WorkisTheme.colors
     val seat by Graph.partner.seat.collectAsState()
     var invitations by remember { mutableStateOf<List<MyInvitation>>(emptyList()) }
+    var invitationsLoaded by remember { mutableStateOf(false) }
     var reload by remember { mutableStateOf(0) }
     LaunchedEffect(reload) {
         // `off` is the switch: an empty list, and the screen is unchanged
         val r = teamCall(Graph.language.value) { Graph.api.myInvitations() }
         invitations = if (r is TeamOutcome.Ok) r.value.invitations.orEmpty() else emptyList()
+        invitationsLoaded = true
+    }
+    // the straight door: both answers in, and nothing on either of them
+    LaunchedEffect(seat, invitationsLoaded, invitations.size) {
+        val s = seat
+        if (autoOpened || !invitationsLoaded || invitations.isNotEmpty()) return@LaunchedEffect
+        if (s is PartnerSeatState.None && s.application == null && !s.emailConflict) {
+            onAutoOpen()
+            onApply()
+        }
     }
 
     Box(Modifier.fillMaxSize().background(colors.canvas)) {
@@ -102,9 +121,13 @@ fun SeatlessScreen(onApply: () -> Unit) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Kiremit500) }
             invitations.isNotEmpty() ->
                 InvitationsView(invitations, onApply) { reload++; }
+            // the web's warning, word for word: this address already belongs to a
+            // firm account, so a form with it would never be approved — and no
+            // straight door on that path
             s.application == null -> OutcomeView(
                 title = stringResource(R.string.seatless_title),
-                message = stringResource(R.string.seatless_none),
+                message = if (s.emailConflict) stringResource(R.string.seatless_none) + "\n\n" + stringResource(R.string.seatless_conflict)
+                          else stringResource(R.string.seatless_none),
                 footnote = stringResource(R.string.seatless_sub),
                 icon = Icons.Filled.AccountCircle,
                 iconColor = colors.accentText,

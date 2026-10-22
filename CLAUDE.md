@@ -71,6 +71,10 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   (the line above the reading; chips tick rows LOCALLY by `partnerId`, never sent) — `JowiCardMemory.kt`; history rows carry neither,
   the session keeps its values (`destPicks`/`keptMatch`/`KeptNeed`).
 - Tab sets: role 3/4 and 5 → Panel · Hesap · Jowi; others → Pazar|Başvuru · Hesap · Jowi. Talepler (`cases/`) is retired.
+  Başvuru (ledger 55, `SeatlessScreen`): on `seat:"none"` with `application: null`, `emailConflict: false` and the invitations
+  answer in and EMPTY, the native wizard opens itself ONCE per tab life (`applyAutoOpened` in `MainScreen`, never a flag on the
+  screen — it leaves the composition while the wizard is up); back from the intro = the plain page. `emailConflict: true` appends
+  `seatlessConflict` under the text and never auto-opens. `applyUrl` is only the signal; the wizard prefills the signed-in address.
 - Gruplar (ledger 62, roles 3|4): `ui/screens/console/GroupsScreen.kt` + `data/GroupsModels.kt`. ONE page: `GET console/groups/?sector=`
   is the whole screen and every POST answers the page re-read with `message` spread at the top level — the state IS the last
   answer; every body carries `sector` (the slug on screen). Actions never on Genel, never without `canWrite`; each behind its

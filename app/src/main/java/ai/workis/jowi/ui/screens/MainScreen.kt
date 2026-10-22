@@ -116,6 +116,9 @@ fun MainScreen() {
     if (showDeparture) { ExpertDepartureScreen(onClose = { showDeparture = false }, onLeft = {}); return }
     // the apply wizard as a full-screen cover from the Başvuru tab; company/ re-asked on close
     var showApply by rememberSaveable { mutableStateOf(false) }
+    // the straight door opened itself once already (ledger 55) — back from the
+    // wizard's intro lands on the plain page, never on the wizard again
+    var applyAutoOpened by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(showApply) { if (!showApply && partnerTab == MainTab.Seatless) Graph.partner.refresh() }
     if (showApply) {
         ApplyScreen(onClose = { showApply = false })
@@ -152,7 +155,11 @@ fun MainScreen() {
             when (current) {
                 MainTab.Panel -> if (isExpert) ExpertRoot() else ai.workis.jowi.ui.screens.console.ConsoleRoot()
                 MainTab.Market -> MarketRoot(onAskJowi = { selected = MainTab.Jowi.name; userPicked = true })
-                MainTab.Seatless -> SeatlessScreen(onApply = { showApply = true })
+                MainTab.Seatless -> SeatlessScreen(
+                    onApply = { showApply = true },
+                    autoOpened = applyAutoOpened,
+                    onAutoOpen = { applyAutoOpened = true },
+                )
                 MainTab.Account -> AccountScreen(onReaccept = { showReaccept = true }, onDeparture = { showDeparture = true })
                 MainTab.Jowi -> JowiScreen()
             }
