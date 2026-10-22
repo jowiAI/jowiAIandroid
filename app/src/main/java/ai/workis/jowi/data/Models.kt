@@ -412,6 +412,7 @@ data class AskResponse(
     @SerialName("question") val questionRaw: JsonElement? = null,
     /** The turn's row ids + `canHide`, so "Soruyu geri çek" works right after sending (2026-09-19). */
     val turn: AskTurn? = null,
+    /** No layer could answer (2026-10-22): the team holds the question now; `answer` is Jowi's "ekibe ilettim" line. */
     val handedOff: Boolean? = null,
     /** Which list the picks went to (2026-10-02): true = appended to the open draft named by `listId`, false = a new list. */
     val appended: Boolean? = null,
@@ -561,6 +562,8 @@ data class AskLine(
     val kb: String? = null,
     val source: String? = null,
     val surface: String? = null,
+    /** This answer sent the question to the team (jowi_history.py `row`, 2026-10-22); `source == "handoff"` reads the same. */
+    val handedOff: Boolean? = null,
     @Serializable(with = AskNextTolerant::class) val next: AskNext? = null,
     val scene: String? = null, // a scene answer's id (2026-09-27)
     val nextScene: String? = null,

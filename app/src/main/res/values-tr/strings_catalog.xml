@@ -124,6 +124,7 @@
     <string name="ask_answer_source_knowledge">bilgi katmanından</string>
     <string name="ask_answer_source_page">bu sayfadan</string>
     <string name="ask_answer_source_wall">Teklif duvarı — fiyatlar satıcısına ve alıcısına mühürlüdür</string>
+    <string name="ask_handed_off">Ekibe iletildi</string>
     <string name="ask_handoff_reopened">Sorunuz ekibe yeniden iletildi.</string>
     <string name="ask_placeholder">Jowi\'ye sor…</string>
     <string name="asked_label">İstenen</string>

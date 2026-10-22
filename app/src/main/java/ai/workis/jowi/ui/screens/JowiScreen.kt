@@ -214,6 +214,7 @@ data class JowiLine(
     val pending: Boolean = false,
     val error: String? = null, // guidance (null answer), never a red error
     val label: String? = null, // "🎓 Uzman doğrulamalı" | "Üretken model bilgisi"
+    val handedOff: Boolean = false, // the team holds the question (2026-10-22) → "Ekibe iletildi" in the stamp's slot
     val kb: String? = null, // session key → thumbs
     val verdict: String? = null, // "thanks" | "already"
     val listId: String? = null, // a chat-born purchase list → "Listeyi aç"
@@ -354,6 +355,7 @@ class JowiViewModel : ViewModel() {
                 id = newId(), who = l.who ?: "jowi", text = l.text.orEmpty(),
                 original = l.qOriginal, href = l.href?.takeIf { it.isNotEmpty() },
                 match = match, source = l.source, surface = l.surface, label = l.label, kb = l.kb,
+                handedOff = l.handedOff == true || l.source == "handoff",
                 listId = l.listId?.takeIf { it.isNotEmpty() }, next = l.next,
                 scene = l.scene, nextScene = l.nextScene?.takeIf { it.isNotEmpty() }, accent = l.accent,
                 question = if (isUser) null else lastQ,
@@ -705,6 +707,7 @@ class JowiViewModel : ViewModel() {
                 val idx = i(); if (idx >= 0) lines[idx] = lines[idx].copy(
                     pending = false, text = r.answer.orEmpty(), error = guidance,
                     source = r.source, surface = r.surface, match = match, label = r.label, kb = r.kb,
+                    handedOff = r.handedOff == true || r.source == "handoff",
                     listId = r.listId?.takeIf { it.isNotEmpty() }, next = r.next,
                     scene = r.scene, nextScene = r.nextScene?.takeIf { it.isNotEmpty() },
                     // a match's chips belong to its card (AskMatch.options), not the clarify set
@@ -1324,6 +1327,13 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Uni
                             "🔒 " + stringResource(R.string.ask_answer_source_wall),
                             fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint,
                         )
+                    } else if (line.handedOff) {
+                        // no layer could answer (2026-10-22): the team holds the question — said
+                        // under the bubble so the hand-off is seen, not guessed; icon + words, never colour alone
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Icon(WorkisIcons.People, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
+                            Text(stringResource(R.string.ask_handed_off), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.muted)
+                        }
                     } else if (line.source == "clarify" || line.options != null || line.need != null) Unit
                     else if (!label.isNullOrEmpty()) {
                         Text(label, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.5.sp, color = colors.muted)

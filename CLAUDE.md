@@ -29,7 +29,9 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
 - Jowi tab (`ui/screens/JowiScreen.kt`) is the SERVER's thread (`GET ask/history/`, shared with the
   web drawer; no device storage): `ask/preview/` before every send (10 s, fallback = typed text),
   policy-B stamp + 👍/👎 via `ask/like/`, match card, "Aç" links in-app. OkHttp read timeout is 90 s
-  because answers are model calls.
+  because answers are model calls. `handedOff` (ledger 70) on the live reply and on history rows (`source == "handoff"` reads
+  the same) draws `WorkisIcons.People` + "Ekibe iletildi" in the stamp's slot — icon + words, never colour alone. Answers are
+  md_lite blocks through `AnswerText`, never plain text.
 - Server Markdown (expert guide) renders through `MarkdownDocument` (ui/components/) — the dialect in
   API_CONTRACT (##/###, > quote box, GFM tables, lists, `code` chips). Never re-author guide text.
 - Partner seat (role 1) lives in `ui/screens/partner/` (Django `docs/WORKIS_PARTNER_API.md`): `PartnerStore`

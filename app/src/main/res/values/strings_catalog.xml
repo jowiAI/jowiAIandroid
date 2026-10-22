@@ -124,6 +124,7 @@
     <string name="ask_answer_source_knowledge">from the knowledge layer</string>
     <string name="ask_answer_source_page">from this page</string>
     <string name="ask_answer_source_wall">Quote wall — prices are sealed to their seller and buyer</string>
+    <string name="ask_handed_off">Sent to the team</string>
     <string name="ask_handoff_reopened">Your question was sent to the team again.</string>
     <string name="ask_placeholder">Ask Jowi…</string>
     <string name="asked_label">Asked</string>

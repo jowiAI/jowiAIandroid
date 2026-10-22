@@ -103,6 +103,16 @@ object WorkisIcons {
         }
     }
 
+    /** SF `person.2` — the team holds the question ("Ekibe iletildi"). */
+    val People: ImageVector = stroked("People") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(5.5f, 8.5f); arcToRelative(3.5f, 3.5f, 0f, true, false, 7f, 0f); arcToRelative(3.5f, 3.5f, 0f, true, false, -7f, 0f)
+            moveTo(2f, 19f); curveTo(2f, 15.5f, 5f, 13.5f, 9f, 13.5f); curveTo(13f, 13.5f, 16f, 15.5f, 16f, 19f)
+            moveTo(15f, 5.2f); arcToRelative(3.2f, 3.2f, 0f, true, true, 1.5f, 6.1f)
+            moveTo(17.5f, 13.6f); curveTo(20.5f, 14.2f, 22f, 16f, 22f, 19f)
+        }
+    }
+
     /** The receiver's delivery code on the order card (SF `key`). */
     val Key: ImageVector = stroked("Key") {
         path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
