@@ -60,6 +60,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.draw.alpha
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -116,6 +118,7 @@ import ai.workis.jowi.ui.screens.console.ConsoleSub
 import ai.workis.jowi.ui.screens.console.GroupCardSheet
 import ai.workis.jowi.ui.screens.expert.NoteBand
 import ai.workis.jowi.ui.theme.Beige
+import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.SuccessGreen
 import ai.workis.jowi.ui.theme.WorkisIcons
@@ -630,9 +633,33 @@ private fun ReviewSections(page: CatalogPage, vm: CatalogViewModel, onOpenFamily
     val openCard: (CatalogFamilyRow) -> Unit = { f -> f.id?.let { door.open(it); cardFamily = f } }
     val groupsWord = stringResource(R.string.groups_word)
     val jowiFirstHint = stringResource(R.string.groups_jowi_first)
-    val groups = page.families.orEmpty().groupBy { it.category?.takeIf { c -> c.isNotEmpty() } ?: "—" }
+    // Two filters that COMBINE (ledger 19) — chips, not tabs: the list groups by
+    // category, so a second catalogue reads as one list and a brand that appears in
+    // two documents stays one brand. A row is drawn only when there is something to
+    // choose; each count is the family count under the OTHER filter.
+    var docFilter by remember { mutableStateOf<String?>(null) }
+    var brandFilter by remember { mutableStateOf<String?>(null) }
+    val families = page.families.orEmpty()
+    fun matches(f: CatalogFamilyRow, doc: String?, brand: String?) =
+        (doc == null || f.ingestionId == doc) && (brand == null || f.brand == brand)
+    val docChips: List<FilterChipSpec> = run {
+        val order = families.mapNotNull { it.ingestionId?.takeIf { id -> id.isNotEmpty() } }.distinct()
+        if (order.size < 2) emptyList() else {
+            // the document's NAME is the server's `label` — never assembled here
+            val names = page.ingestions.orEmpty().associate { it.id.orEmpty() to firstNonEmpty(it.label, it.filename, it.id) }
+            order.map { id -> FilterChipSpec(id, names[id] ?: id, families.count { it.ingestionId == id && matches(it, null, brandFilter) }) }
+        }
+    }
+    val brandChips: List<FilterChipSpec> = run {
+        val order = families.mapNotNull { it.brand?.takeIf { b -> b.isNotEmpty() } }.distinct()
+        if (order.size < 2) emptyList()
+        else order.map { b -> FilterChipSpec(b, b, families.count { it.brand == b && matches(it, docFilter, null) }) }
+    }
+    val groups = families.filter { matches(it, docFilter, brandFilter) }.groupBy { it.category?.takeIf { c -> c.isNotEmpty() } ?: "—" }
     Text(stringResource(R.string.review_sub), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
     Spacer(Modifier.height(6.dp))
+    if (docChips.isNotEmpty()) FilterChipRow(stringResource(R.string.filter_document), docChips, docFilter) { docFilter = it }
+    if (brandChips.isNotEmpty()) FilterChipRow(stringResource(R.string.brand_field), brandChips, brandFilter) { brandFilter = it }
     if (groups.isEmpty()) Text(stringResource(R.string.review_empty), fontSize = 13.sp, color = colors.faint, modifier = Modifier.padding(4.dp))
     groups.forEach { (cat, rows) ->
         SectionHeader("${cat.uppercase()} · ${rows.size}")
@@ -703,6 +730,44 @@ private fun ReviewSections(page: CatalogPage, vm: CatalogViewModel, onOpenFamily
             onDismiss = { cardFamily = null },
         )
     }
+}
+
+data class FilterChipSpec(val id: String, val name: String, val count: Int)
+
+/**
+ * One filter row (ledger 19). No filter by default; tapping the chosen chip clears it.
+ * A selected chip is a solid kiremit BORDER — this app's selection grammar, a tinted
+ * fill belongs to the one primary action per screen — and a chip whose count is 0
+ * is disabled rather than leading to an empty list.
+ */
+@Composable
+private fun FilterChipRow(title: String, chips: List<FilterChipSpec>, selection: String?, onSelect: (String?) -> Unit) {
+    val colors = WorkisTheme.colors
+    SectionHeader(title.uppercase())
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 4.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        chips.forEach { chip ->
+            val on = selection == chip.id
+            val enabled = on || chip.count > 0
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                modifier = Modifier
+                    .background(colors.surface, RoundedCornerShape(50))
+                    .border(if (on) 2.dp else 1.dp, if (on) Kiremit400 else colors.border, RoundedCornerShape(50))
+                    .clickable(enabled = enabled) { onSelect(if (on) null else chip.id) }
+                    .semantics { contentDescription = "$title: ${chip.name}, ${chip.count}"; if (on) selected = true }
+                    .padding(horizontal = 12.dp, vertical = 7.dp)
+                    .alpha(if (enabled) 1f else 0.45f),
+            ) {
+                Text(chip.name, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${chip.count}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
 }
 
 @Composable
@@ -923,7 +988,13 @@ private fun UploadSections(page: CatalogPage, vm: CatalogViewModel) {
             Text(stringResource(R.string.new_product), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
         }
     }
-    Text(stringResource(R.string.upload_sub), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
+    Column(Modifier.padding(horizontal = 4.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(stringResource(R.string.upload_sub), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)
+        // a product rule, not an error (ledger 18): two documents holding the same
+        // products, both approved, put that product in the live catalogue twice —
+        // Django's known gap, the "price changed" diff review is not written yet
+        Text(stringResource(R.string.upload_one_doc_note), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)
+    }
 
     val all = page.ingestions.orEmpty()
     // as on the web: a planned document stays on the list while a section is still

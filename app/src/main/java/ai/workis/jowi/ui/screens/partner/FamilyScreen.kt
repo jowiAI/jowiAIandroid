@@ -337,7 +337,7 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
                 // header: photo · status · name · brand · code · photo replace · description · reject
                 SurfaceCard {
                     Row(verticalAlignment = Alignment.Top) {
-                        AuthImage(catalogImageUrl(d.imageKey, "card", seller), Modifier.size(96.dp).clickable { fullImage = catalogImageUrl(d.imageKey, "card", seller) }, corner = 12.dp)
+                        AuthImage(catalogImageUrl(d.heroKey, "card", seller), Modifier.size(96.dp).clickable { fullImage = catalogImageUrl(d.heroKey, "card", seller) }, corner = 12.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

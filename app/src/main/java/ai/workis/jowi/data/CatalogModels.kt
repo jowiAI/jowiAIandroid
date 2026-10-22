@@ -307,6 +307,10 @@ data class CatalogFamilyDetail(
     val imageKey: String? = null,
     val imageQuality: String? = null,
 ) {
+    /** The hero (ledger 18): the PRIMARY row of `media[]` — the main photo lives there now, the
+     *  one it replaced stays behind it — with `imageKey` only as the fallback. One slot, never two. */
+    val heroKey: String? get() = media?.firstOrNull { it.isPrimary == true && !it.key.isNullOrEmpty() }?.key ?: imageKey
+
     val isLive get() = status == "approved" || !productId.isNullOrEmpty()
 }
 
