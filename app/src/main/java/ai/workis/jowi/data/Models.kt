@@ -302,6 +302,100 @@ object AskNextTolerant : KSerializer<AskNext> {
     override fun serialize(encoder: Encoder, value: AskNext) = AskNext.serializer().serialize(encoder, value)
 }
 
+// ---------- Alım hafızası on the cards (ledger 54, Django 2026-10-09; contract "Alım hafızası on the app") ----------
+
+/** `destination.default {mode: into|new|ask, listId, title}` — where the card's rows go. */
+@Serializable
+data class AskDestDefault(
+    val mode: String? = null,
+    @Serializable(with = FlexString::class) val listId: String? = null,
+    val title: String? = null,
+)
+
+/** One open draft the rows may join: `{id, title, rows, updatedAt}`. */
+@Serializable
+data class AskDraft(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val title: String? = null,
+    val rows: Int? = null,
+    val updatedAt: String? = null,
+)
+
+/**
+ * `destination` on the need and match cards: ONE line above the card's button — `into` →
+ * "→ Taslak listeye eklenecek: <title> (<rows> satır)", `new` → "→ Yeni liste: <title>" (a name
+ * field when `title` is ""), "değiştir" → a picker of `drafts` + "Yeni liste…"; `needsChoice`
+ * (a match card with several drafts) → the line IS the chips, the button waits.
+ * History rows never carry it — the session keeps its own values.
+ */
+@Serializable
+data class AskDestination(
+    val default: AskDestDefault? = null,
+    val drafts: List<AskDraft>? = null,
+    val needsChoice: Boolean? = null,
+)
+
+/** `action {select: seller|all|except, partnerId}` — a chip acts on the card's rows LOCALLY, nothing is sent. */
+@Serializable
+data class AskMemoryAction(
+    val select: String? = null,
+    @Serializable(with = FlexString::class) val partnerId: String? = null,
+)
+
+/** `evidence` = date · quantity · unit price · outcome, the chip's secondary text; `label` the chip. */
+@Serializable
+data class AskMemoryChip(
+    val kind: String? = null,
+    val label: String? = null,
+    val evidence: String? = null,
+    @Serializable(with = FlexString::class) val partnerId: String? = null,
+    @Serializable(with = FlexString::class) val sellerId: String? = null,
+    val action: AskMemoryAction? = null,
+)
+
+/**
+ * `memory` on the match and need cards (`purchase_memory.py`): `null` = no history with the
+ * product (draw the card as before), else `line` (light markdown, a seller name in bold) above the
+ * card's reading, `ring` exact|category|words, `thin` = few sellers carry it, `chips` that tick the
+ * card's rows by `partnerId`. The need card's chips are always `[]`. Words as sent, never rebuilt.
+ */
+@Serializable
+data class AskMemory(
+    val line: String? = null,
+    val ring: String? = null,
+    val thin: Boolean? = null,
+    val chips: List<AskMemoryChip>? = null,
+)
+
+/** Anything but an object reads as null — the memory block must never sink an answer. */
+object AskMemoryTolerant : KSerializer<AskMemory?> {
+    override val descriptor: SerialDescriptor = AskMemory.serializer().descriptor
+    override fun deserialize(decoder: Decoder): AskMemory? {
+        val json = decoder as? JsonDecoder ?: return null
+        val el = json.decodeJsonElement()
+        return if (el is JsonObject) runCatching { json.json.decodeFromJsonElement(AskMemory.serializer(), el) }.getOrNull() else null
+    }
+    override fun serialize(encoder: Encoder, value: AskMemory?) = encoder.encodeNull()
+}
+
+/** Anything but an object reads as null — the destination block must never sink an answer. */
+object AskDestinationTolerant : KSerializer<AskDestination?> {
+    override val descriptor: SerialDescriptor = AskDestination.serializer().descriptor
+    override fun deserialize(decoder: Decoder): AskDestination? {
+        val json = decoder as? JsonDecoder ?: return null
+        val el = json.decodeJsonElement()
+        return if (el is JsonObject) runCatching { json.json.decodeFromJsonElement(AskDestination.serializer(), el) }.getOrNull() else null
+    }
+    override fun serialize(encoder: Encoder, value: AskDestination?) = encoder.encodeNull()
+}
+
+/** `POST ask/need/{id}/build/` — `{into: <draft id>}` appends to that open draft, `{newTitle}` names a new list; `{}` = the server's default. */
+@Serializable
+data class AskNeedBuildBody(
+    @Serializable(with = FlexString::class) val into: String? = null,
+    val newTitle: String? = null,
+)
+
 /**
  * One seller's PRODUCT rows on a match (2026-10-01): `{partnerId, seller,
  * products[…]}`. Every field tolerant — an odd value must never sink the answer.
@@ -414,6 +508,10 @@ data class AskResponse(
     val turn: AskTurn? = null,
     /** No layer could answer (2026-10-22): the team holds the question now; `answer` is Jowi's "ekibe ilettim" line. */
     val handedOff: Boolean? = null,
+    /** Where the card's rows go (ledger 54) — on `kind: "need"` and `kind: "match"`. */
+    @Serializable(with = AskDestinationTolerant::class) val destination: AskDestination? = null,
+    /** The firm's own record with the product (ledger 54) — on both cards; null = no history. */
+    @Serializable(with = AskMemoryTolerant::class) val memory: AskMemory? = null,
     /** Which list the picks went to (2026-10-02): true = appended to the open draft named by `listId`, false = a new list. */
     val appended: Boolean? = null,
     // `kind: "need"` (2026-10-03, workis/services/need.py `serialize`): the row on the caller's
@@ -432,7 +530,7 @@ data class AskResponse(
 
     /** The need card this answer carries, when it is one. */
     val need: AskNeed?
-        get() = askNeed(kind, needId, job, problem, recall, components, questionRaw, questionsLeft)
+        get() = askNeed(kind, needId, job, problem, recall, components, questionRaw, questionsLeft, destination, memory)
 }
 
 /** `question` as a match's bare sentence — an object (a need's question) is not one. */
@@ -442,6 +540,7 @@ private fun askQuestionText(e: JsonElement?): String? =
 private fun askNeed(
     kind: String?, needId: String?, job: String?, problem: String?, recall: String?,
     components: List<AskNeedComponent>?, question: JsonElement?, questionsLeft: Int?,
+    destination: AskDestination? = null, memory: AskMemory? = null,
 ): AskNeed? {
     if (kind != "need") return null
     val id = needId?.takeIf { it.isNotEmpty() } ?: return null
@@ -450,6 +549,7 @@ private fun askNeed(
         components = components.orEmpty().filter { !it.name.isNullOrEmpty() },
         question = (question as? JsonObject)?.let { AskNeedQuestion.of(it) },
         questionsLeft = questionsLeft ?: 0,
+        destination = destination, memory = memory,
     )
 }
 
@@ -466,6 +566,9 @@ data class AskNeed(
     val components: List<AskNeedComponent>,
     val question: AskNeedQuestion?,
     val questionsLeft: Int,
+    /** Ledger 54 — only a LIVE answer carries these; a history row's card keeps the session's values. */
+    val destination: AskDestination? = null,
+    val memory: AskMemory? = null,
 )
 
 /** One question of a need (need.py `_clean`): `options` are 2–4 bare strings. */

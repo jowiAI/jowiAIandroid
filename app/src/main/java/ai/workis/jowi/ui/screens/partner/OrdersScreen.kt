@@ -152,7 +152,7 @@ class OrdersViewModel : ViewModel() {
     }
 
     fun lineConfirm(lineId: String, onResult: ((Boolean, String?) -> Unit)? = null) =
-        act(onResult) { simple { Graph.api.lineConfirm(lineId) } }
+        act(onResult) { simple { Graph.api.lineConfirm(lineId).let { ai.workis.jowi.data.SimpleResult(success = it.success, message = it.message, error = it.error) } } }
 
     fun lineObjection(lineId: String, reason: String, onResult: ((Boolean, String?) -> Unit)? = null) =
         act(onResult) { simple { Graph.api.lineObjection(lineId, ai.workis.jowi.data.jsonBody("reason" to reason)) } }

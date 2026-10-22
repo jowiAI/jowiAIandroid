@@ -379,8 +379,21 @@ interface WorkisApi {
     suspend fun lineReturnDecision(@Path("lineId") lineId: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
 
     /** Releases the held payment for the line. */
+    /** → `{success, message, satisfaction}` — the satisfaction ask is rendered right under the confirmation (ledger 54). */
     @POST("workis/orders/lines/{lineId}/confirm/")
-    suspend fun lineConfirm(@Path("lineId") lineId: String): SimpleResult
+    suspend fun lineConfirm(@Path("lineId") lineId: String): LineConfirmResult
+
+    /** The satisfaction tick (ledger 54): `{value, note?, reason?}` → `{success, message}`; 400 unknown value / not yet accepted. */
+    @POST("workis/orders/lines/{lineId}/satisfaction/")
+    suspend fun lineSatisfaction(@Path("lineId") lineId: String, @Body body: SatisfactionBody): SimpleResult
+
+    /** Jowi's nudges due now (buyer seat only, ledger 54) — read-only. */
+    @GET("workis/memory/nudges/")
+    suspend fun memoryNudges(): NudgesPage
+
+    /** The one tap on a nudge: a draft list from the buyer's last order of that product → `{listId, listStage, listUrl}`. */
+    @POST("workis/memory/nudges/{cpid}/list/")
+    suspend fun memoryNudgeList(@Path("cpid") cpid: String): NudgeListResult
 
     @POST("workis/orders/lines/{lineId}/objection/")
     suspend fun lineObjection(@Path("lineId") lineId: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
@@ -793,8 +806,9 @@ interface WorkisApi {
     suspend fun askNeedAnswer(@Path("needId") needId: String, @Body body: AskNeedAnswerBody): AskResponse
 
     /** "Listeyi kur": `{kind: "list", listId, listStage, listTitle, listUrl, answer}`; a second call returns the same list. */
+    /** `{into}` appends to that open draft, `{newTitle}` names a new list, `{}` = the server's default (ledger 54); the reply adds `appended`. */
     @POST("workis/ask/need/{needId}/build/")
-    suspend fun askNeedBuild(@Path("needId") needId: String): AskResponse
+    suspend fun askNeedBuild(@Path("needId") needId: String, @Body body: AskNeedBuildBody = AskNeedBuildBody()): AskResponse
 
     /** The earnings guide as Markdown sections (public). */
     @GET("workis/expert/guide/")

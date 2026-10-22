@@ -113,7 +113,7 @@ class ApprovalsViewModel : ViewModel() {
     fun returnDecision(lineId: String, action: String, note: String, callCargo: Boolean) = act {
         simple { Graph.api.lineReturnDecision(lineId, jsonBody("action" to action, "note" to note.ifBlank { null }, "callCargo" to callCargo)) }
     }
-    fun confirmDelivery(lineId: String) = act { simple { Graph.api.lineConfirm(lineId) } }
+    fun confirmDelivery(lineId: String) = act { simple { Graph.api.lineConfirm(lineId).let { ai.workis.jowi.data.SimpleResult(success = it.success, message = it.message, error = it.error) } } }
     fun objection(lineId: String, reason: String) = act { simple { Graph.api.lineObjection(lineId, jsonBody("reason" to reason)) } }
     fun objectionWithdraw(lineId: String) = act { simple { Graph.api.lineObjectionWithdraw(lineId) } }
     fun objectionResolve(lineId: String, action: String, amount: String, note: String) = act {

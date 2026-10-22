@@ -444,7 +444,8 @@ data class ThreadLine(val text: String? = null, val href: String? = null)
 data class ThreadPostBody(
     val text: String,
     val textOriginal: String? = null,
-    /** "cargo" (order table, buyer / seller) sends the line to the carrier too; null = the parties only. */
+    /** "cargo" (order table, buyer / seller) sends the line to the carrier too; "table" (ledger 54) skips the
+     *  triage and posts the text as typed — the way back from a `kind: "private"` turn; null = the parties only. */
     val audience: String? = null,
 )
 
@@ -652,6 +653,8 @@ data class ApLine(
 @Serializable
 data class ApprovalCounts(
     val total: Int? = null,
+    /** Satisfaction ticks waiting — NOT in `total` (a right, not a task). */
+    val satisfaction: Int? = null,
     val award: Int? = null,
     val outward: Int? = null,
     val fund: Int? = null,
@@ -675,4 +678,86 @@ data class Approvals(
     val inspection: List<ApLine>? = null,
     val objection: List<ApLine>? = null,
     val warranty: List<ApLine>? = null,
+    /** The buyer's lines accepted in the last 14 days with no tick yet, newest first, ≤ 20 (ledger 54). */
+    val satisfaction: List<SatisfactionAsk>? = null,
+)
+
+// ---------- The satisfaction tick (ledger 54, Django 2026-10-09; `reasons` 2026-10-20) ----------
+
+@Serializable
+data class SatisfactionOption(val value: String? = null, val label: String? = null)
+
+@Serializable
+data class SatisfactionReason(val code: String? = null, val label: String? = null)
+
+/**
+ * "Teslimat nasıldı?" — the buyer's one-tap answer, private (the seller never sees it, nothing on
+ * the thread). The SAME shape rides on the confirm reply (`satisfaction`, with `question` and
+ * `private`) and on `GET approvals/ → satisfaction[]` (with `seller`, `confirmedAt`, `daysLeft`,
+ * no `question`/`private` → the app's `satisfactionPrivate` key). Words as sent.
+ */
+@Serializable
+data class SatisfactionAsk(
+    val kind: String? = null,
+    @Serializable(with = FlexString::class) val lineId: String? = null,
+    val name: String? = null,
+    val po: String? = null,
+    val seller: String? = null,
+    val question: String? = null,
+    val private: String? = null,
+    val confirmedAt: String? = null,
+    val daysLeft: Int? = null,
+    val options: List<SatisfactionOption>? = null,
+    /** Toggle chips under the three answers — today one, "Bilseydim başka ürün alırdım"; the chosen `code` goes as `reason`. */
+    val reasons: List<SatisfactionReason>? = null,
+)
+
+/** `POST orders/lines/{id}/confirm/` → the thanks line and the satisfaction ask to render right there. */
+@Serializable
+data class LineConfirmResult(
+    val success: Boolean = false,
+    val message: String? = null,
+    val error: String? = null,
+    val satisfaction: SatisfactionAsk? = null,
+)
+
+/** `POST orders/lines/{id}/satisfaction/` — `value` good|ok|bad, `note` ≤ 400, `reason` = a chip's code. A second tick overwrites. */
+@Serializable
+data class SatisfactionBody(val value: String, val note: String? = null, val reason: String? = null)
+
+// ---------- Jowi speaks first — the memory's nudges (ledger 54, Django 2026-10-09) ----------
+
+@Serializable
+data class NudgeLink(val text: String? = null, val href: String? = null)
+
+/**
+ * One nudge due NOW: `stale` (the last price is six months old or more) or `rhythm` (a bought-on-a-rhythm
+ * product whose interval has passed). `line` is light markdown (the product name in bold) → the markdown
+ * renderer; `link.text` is the button. Read-only — the GET marks nothing.
+ */
+@Serializable
+data class Nudge(
+    val kind: String? = null,
+    @Serializable(with = FlexString::class) val cpid: String? = null,
+    val name: String? = null,
+    val line: String? = null,
+    val link: NudgeLink? = null,
+    val lastAt: String? = null,
+    val daysSince: Int? = null,
+    val months: Int? = null,
+    val cadenceDays: Int? = null,
+)
+
+@Serializable
+data class NudgesPage(val nudges: List<Nudge>? = null, val error: String? = null)
+
+/** `POST memory/nudges/{cpid}/list/` → a draft list from the buyer's LAST order of that product (no prices); a second tap returns the same open draft. */
+@Serializable
+data class NudgeListResult(
+    val success: Boolean = false,
+    @Serializable(with = FlexString::class) val listId: String? = null,
+    val listStage: String? = null,
+    val listUrl: String? = null,
+    val error: String? = null,
+    val message: String? = null,
 )
