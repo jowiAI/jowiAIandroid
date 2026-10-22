@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -211,87 +212,63 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
         }
         Spacer(Modifier.height(14.dp))
 
-        // iOS tile board: big Applications square on the left, Partners +
-        // Conversations capsules stacked on the right
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(180.dp)
-                    .background(colors.surface, RoundedCornerShape(20.dp))
-                    .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-                    .clickable { onOpen(ConsoleDest.Pipeline) }
-                    .padding(16.dp),
-            ) {
-                Icon(
-                    WorkisIcons.Tray, contentDescription = null,
-                    tint = Kiremit500, modifier = Modifier.size(22.dp),
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    s?.newApplications?.toString() ?: "—",
-                    fontFamily = WorkisMono,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 34.sp,
-                    color = colors.ink,
-                )
-                Text(
-                    stringResource(R.string.stat_new_apps),
-                    fontSize = 13.sp,
-                    color = colors.muted,
-                )
-                s?.awaitingApproval?.takeIf { it > 0 }?.let {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "$it " + stringResource(R.string.stat_awaiting).lowercase(),
-                        fontFamily = WorkisMono,
-                        fontSize = 12.sp,
-                        color = colors.accentText,
-                    )
-                }
-            }
-
-            Column(
+        // The web Panel's order, tile for tile (ledger 61): two big tiles (applications,
+        // questions), the count rows (partners, correspondence, experts), the two activity
+        // tiles, the sidebar's doors, then "Jowi yanıtladı" and "/ Soru konuları".
+        // Every tile IS the door to its surface — no duplicated list previews below.
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.height(160.dp)) {
+            // the web hides the "onay bekliyor" line at zero
+            BigTile(
+                icon = WorkisIcons.Tray, number = s?.newApplications, label = stringResource(R.string.stat_new_apps),
+                sub = s?.awaitingApproval?.takeIf { it > 0 }?.let { "$it " + stringResource(R.string.stat_awaiting) },
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                CapsuleTile(
-                    icon = WorkisIcons.Building,
-                    title = stringResource(R.string.partners_title),
-                    count = s?.activePartners,
-                ) { onOpen(ConsoleDest.Partners()) }
-                CapsuleTile(
-                    icon = WorkisIcons.Bubble,
-                    title = stringResource(R.string.conversations_title),
-                    count = openConversations,
-                ) { onOpen(ConsoleDest.Conversations) }
+            ) { onOpen(ConsoleDest.Pipeline) }
+            BigTile(
+                icon = Icons.Filled.Email, number = s?.openQuestions, label = stringResource(R.string.stat_open_q),
+                sub = s?.oldestQuestionDays?.takeIf { it > 0 }?.let { stringResource(R.string.oldest_word) + " $it " + stringResource(R.string.days_word) },
+                modifier = Modifier.weight(1f),
+            ) { onOpen(ConsoleDest.Questions()) }
+        }
+        Spacer(Modifier.height(14.dp))
+
+        // the count rows: Partnerler · Yazışmalar · Uzmanlar (coordinator only, null for a lead — half a row, as on the web)
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            CapsuleTile(WorkisIcons.Building, stringResource(R.string.partners_title), s?.activePartners, Modifier.weight(1f)) { onOpen(ConsoleDest.Partners()) }
+            CapsuleTile(WorkisIcons.Bubble, stringResource(R.string.conversations_title), openConversations, Modifier.weight(1f)) { onOpen(ConsoleDest.Conversations) }
+        }
+        s?.experts?.let { n ->
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                CapsuleTile(WorkisIcons.GraduationCap, stringResource(R.string.tile_experts), n, Modifier.weight(1f)) { onOpen(ConsoleDest.Partners(initialSeat = "expert")) }
+                Spacer(Modifier.weight(1f))
             }
         }
         Spacer(Modifier.height(14.dp))
 
-        // Seat activity (2026-09-13): the web's two pills under the tiles
+        // Seat activity: the web's two tiles — seats over the window, firms with the window's
+        // lists / quotes / orders inside the tile (the free-floating "son 7 gün" line is gone)
         s?.activeSeats?.let { a ->
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ActivityPill("${a.activeSeats ?: 0}/${a.totalSeats ?: 0}", stringResource(R.string.active_seats_pill), Modifier.weight(1f))
-                ActivityPill("${a.activePartners ?: 0}/${a.totalPartners ?: 0}", stringResource(R.string.active_partners_pill), Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.height(IntrinsicSize.Max)) {
+                ActivityTile(
+                    WorkisIcons.People, stringResource(R.string.tile_active_seats),
+                    value = "${a.activeSeats ?: 0} / ${a.totalSeats ?: 0}",
+                    detail = "${a.days ?: 7} " + stringResource(R.string.days_word),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                )
+                ActivityTile(
+                    WorkisIcons.Building, stringResource(R.string.tile_active_firms),
+                    value = "${a.activePartners ?: 0} / ${a.totalPartners ?: 0}",
+                    detail = "${a.lists ?: 0} " + stringResource(R.string.lists_unit) + " · ${a.quotes ?: 0} " + stringResource(R.string.quotes_unit) + " · ${a.orders ?: 0} " + stringResource(R.string.orders_unit),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                )
             }
-            // the experts pill (2026-09-14, coordinator only — null for a lead) opens Ortaklar on the 🎓 segment
-            s.experts?.let { n ->
-                Spacer(Modifier.height(10.dp))
-                ActivityPill("$n", stringResource(R.string.experts_pill), Modifier.fillMaxWidth().clickable { onOpen(ConsoleDest.Partners(initialSeat = "expert")) }, icon = WorkisIcons.GraduationCap)
-            }
-            Text(
-                stringResource(R.string.jowi_answered_last) + " ${a.days ?: 7} " + stringResource(R.string.days_word) +
-                    " · ${a.lists ?: 0} " + stringResource(R.string.lists_unit) + " · ${a.quotes ?: 0} " + stringResource(R.string.quotes_unit) + " · ${a.orders ?: 0} " + stringResource(R.string.orders_unit),
-                fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
-            )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(14.dp))
         }
 
         // Bilgi — the expert knowledge screen on the console door (roles 3|4) and
-        // Ürünler — the seller picker (Phase C, 2026-09-16; a lead sees only the
-        // sellers that opened their catalogue to it)
+        // Ürünler — the seller picker (a lead sees only the sellers that opened their
+        // catalogue to it): the web SIDEBAR's doors, kept because the phone has no sidebar.
+        // No count — the summary never carries `knowledgeUnits`.
         Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             CapsuleDoor(WorkisIcons.Pencil, stringResource(R.string.expert_knowledge_title), Modifier.weight(1f)) { onOpen(ConsoleDest.Knowledge) }
             CapsuleDoor(WorkisIcons.ShippingBox, stringResource(R.string.catalog_title), Modifier.weight(1f)) { onOpen(ConsoleDest.CatalogSellers) }
@@ -304,74 +281,44 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
         }
         Spacer(Modifier.height(14.dp))
 
-        // web order: tiles → Bilgi → Jowi answered → question topics
         s?.jowiAnswered?.takeIf { (it.total ?: 0) > 0 }?.let { ja ->
             JowiAnsweredBlock(ja) { source, topic -> onOpen(ConsoleDest.Questions(openJowi = true, source = source, topic = topic)) }
             Spacer(Modifier.height(14.dp))
         }
 
-        // Sorular widget: envelope + big count + oldest; topic mosaic with counts
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(colors.surface, RoundedCornerShape(20.dp))
-                .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-                .clickable { onOpen(ConsoleDest.Questions()) }
-                .padding(16.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Filled.Email, contentDescription = null,
-                    tint = Kiremit500, modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    s?.openQuestions?.toString() ?: "—",
-                    fontFamily = WorkisMono,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 30.sp,
-                    color = colors.ink,
-                )
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    stringResource(R.string.stat_open_q),
-                    fontSize = 15.sp,
-                    color = colors.ink,
-                )
-                Spacer(Modifier.weight(1f))
-                s?.oldestQuestionDays?.takeIf { it > 0 }?.let {
-                    Text(
-                        stringResource(R.string.oldest_word) + " $it " + stringResource(R.string.days_word),
-                        fontFamily = WorkisMono,
-                        fontSize = 12.sp,
-                        color = colors.accentText,
-                    )
+        // "/ Soru konuları" — the web's own section under "Jowi yanıtladı" (the count and the
+        // age moved up into the big tile). Header → the FULL list; each bento cell → that topic.
+        val topics = s?.questionTopics.orEmpty().filter { !it.topic.isNullOrEmpty() }.sortedByDescending { it.count ?: 0 }
+        if (topics.isNotEmpty()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.surface, RoundedCornerShape(20.dp))
+                    .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().clickable { onOpen(ConsoleDest.Questions()) },
+                ) {
+                    Text("/", fontFamily = WorkisMono, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = colors.accentText)
+                    Text(stringResource(R.string.topics_title), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink, modifier = Modifier.weight(1f))
+                    Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint)
                 }
-            }
-
-            val topics = s?.questionTopics.orEmpty()
-                .filter { it.topic != null }
-                .sortedByDescending { it.count ?: 0 }
-            if (topics.isNotEmpty()) {
-                Spacer(Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    // biggest topic gets the beige hero square
-                    TopicHero(topics[0], Modifier.weight(1f).height(180.dp))
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        topics.getOrNull(1)?.let { TopicCard(it, Modifier.height(84.dp)) }
-                        topics.getOrNull(2)?.let { TopicCard(it, Modifier.height(84.dp)) }
+                // bento: cell SIZE carries the count — hero + two beside it, three small, two smaller (eight at most)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(150.dp)) {
+                    TopicCell(topics[0], BentoStyle.Hero, Modifier.weight(1f).fillMaxHeight()) { onOpen(ConsoleDest.Questions(topic = topics[0].topic)) }
+                    if (topics.size > 1) Column(Modifier.width(136.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        TopicCell(topics[1], BentoStyle.Medium, Modifier.weight(1f)) { onOpen(ConsoleDest.Questions(topic = topics[1].topic)) }
+                        if (topics.size > 2) TopicCell(topics[2], BentoStyle.Medium, Modifier.weight(1f)) { onOpen(ConsoleDest.Questions(topic = topics[2].topic)) }
                     }
                 }
-                topics.drop(3).chunked(3).forEach { rowTopics ->
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        rowTopics.forEach { t ->
-                            TopicCard(t, Modifier.weight(1f).height(72.dp))
-                        }
-                    }
+                if (topics.size > 3) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(68.dp)) {
+                    topics.drop(3).take(3).forEach { t -> TopicCell(t, BentoStyle.Small, Modifier.weight(1f).fillMaxHeight()) { onOpen(ConsoleDest.Questions(topic = t.topic)) } }
+                }
+                if (topics.size > 6) Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(60.dp)) {
+                    topics.drop(6).take(2).forEach { t -> TopicCell(t, BentoStyle.Small, Modifier.weight(1f).fillMaxHeight()) { onOpen(ConsoleDest.Questions(topic = t.topic)) } }
                 }
             }
         }
@@ -409,7 +356,7 @@ private fun JowiAnsweredBlock(ja: JowiAnswered, onFilter: (source: String?, topi
             Spacer(Modifier.width(8.dp))
             Text(
                 stringResource(R.string.jowi_answered_title) + " · " + stringResource(R.string.jowi_answered_last) +
-                    " ${ja.days ?: 30} " + stringResource(R.string.days_word),
+                    " ${ja.days ?: 7} " + stringResource(R.string.days_word),
                 fontSize = 14.sp, lineHeight = 18.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
@@ -422,12 +369,12 @@ private fun JowiAnsweredBlock(ja: JowiAnswered, onFilter: (source: String?, topi
                 if (expertOpen > 0) AwaitingBadge("$expertOpen " + stringResource(R.string.jowi_awaiting_expert))
             }
         }
-        // source cells: up to four, equal width, sorted by count
+        // source cells: ALL sources as on the web (ledger 61), equal width, sorted by count
         val sources = ja.sources.orEmpty().filter { it.source != null && (it.count ?: 0) > 0 }
-            .sortedByDescending { it.count ?: 0 }.take(4)
+            .sortedByDescending { it.count ?: 0 }
         if (sources.isNotEmpty()) {
-            // ≤3 share one row; four lay out 2×2 (a fourth in one row clipped the verdict digits)
-            val rows = if (sources.size == 4) sources.chunked(2) else listOf(sources)
+            // ≤3 share one row; more go two a row (a fourth in one row clipped the verdict digits)
+            val rows = if (sources.size > 3) sources.chunked(2) else listOf(sources)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 rows.forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(96.dp)) {
@@ -454,7 +401,7 @@ private fun JowiAnsweredBlock(ja: JowiAnswered, onFilter: (source: String?, topi
                 }
             }
         }
-        // topics via the bento: hero + two runners-up + three small
+        // topics via the bento: hero + two runners-up + three small + two smaller (eight, ledger 61)
         val topics = ja.topics.orEmpty().filter { !it.topic.isNullOrEmpty() && (it.count ?: 0) > 0 }
             .sortedByDescending { it.count ?: 0 }
         if (topics.isNotEmpty()) {
@@ -470,6 +417,13 @@ private fun JowiAnsweredBlock(ja: JowiAnswered, onFilter: (source: String?, topi
             if (topics.size > 3) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(76.dp)) {
                     topics.drop(3).take(3).forEach { tp ->
+                        LaneCell(tp, BentoStyle.Small, Modifier.weight(1f).fillMaxHeight()) { onFilter(null, tp.topic) }
+                    }
+                }
+            }
+            if (topics.size > 6) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(60.dp)) {
+                    topics.drop(6).take(2).forEach { tp ->
                         LaneCell(tp, BentoStyle.Small, Modifier.weight(1f).fillMaxHeight()) { onFilter(null, tp.topic) }
                     }
                 }
@@ -610,30 +564,55 @@ private fun ConsoleCatalogSellersScreen(onPick: (ai.workis.jowi.data.CatalogSell
     }
 }
 
+/** The web's activity tile: icon + title, the big mono value, a faint mono detail. */
 @Composable
-private fun ActivityPill(value: String, label: String, modifier: Modifier, icon: ImageVector? = null) {
+private fun ActivityTile(icon: ImageVector, title: String, value: String, detail: String, modifier: Modifier) {
     val colors = WorkisTheme.colors
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.background(colors.ink.copy(alpha = 0.06f), CircleShape).padding(horizontal = 14.dp, vertical = 10.dp),
+    Column(
+        modifier = modifier
+            .background(colors.surface, RoundedCornerShape(20.dp))
+            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (icon != null) {
-            Icon(icon, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(icon, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(14.dp))
+            Text(title, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(value, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
-        Spacer(Modifier.width(8.dp))
-        Text(label, fontSize = 12.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(value, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = colors.ink)
+        Text(detail, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp, color = colors.faint, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** A big square tile: icon up, the mono number, its label, an accent sub-line only when there is one. */
+@Composable
+private fun BigTile(icon: ImageVector, number: Int?, label: String, sub: String?, modifier: Modifier, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .background(colors.surface, RoundedCornerShape(20.dp))
+            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.weight(1f))
+        Text(number?.toString() ?: "—", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 34.sp, color = colors.ink)
+        Text(label, fontSize = 13.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        sub?.let {
+            Spacer(Modifier.height(4.dp))
+            Text(it, fontFamily = WorkisMono, fontSize = 12.sp, color = colors.accentText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
 @Composable
-private fun CapsuleTile(icon: ImageVector, title: String, count: Int?, onClick: () -> Unit) {
+private fun CapsuleTile(icon: ImageVector, title: String, count: Int?, modifier: Modifier = Modifier.fillMaxWidth(), onClick: () -> Unit) {
     val colors = WorkisTheme.colors
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .background(colors.surface, RoundedCornerShape(20.dp))
             .border(1.dp, colors.border, RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
@@ -659,47 +638,30 @@ private fun CapsuleTile(icon: ImageVector, title: String, count: Int?, onClick: 
     }
 }
 
+/** A "/ Soru konuları" bento cell — the hero wears the one beige fill, the rest a faint ink wash. */
 @Composable
-private fun TopicHero(topic: QuestionTopic, modifier: Modifier) {
-    Column(
-        modifier = modifier
-            .background(BeigeBg, RoundedCornerShape(14.dp))
-            .padding(14.dp),
-    ) {
-        Text(topic.topic.orEmpty(), fontSize = 15.sp, color = Beige)
-        Spacer(Modifier.weight(1f))
-        Text(
-            (topic.count ?: 0).toString(),
-            fontFamily = WorkisMono,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 40.sp,
-            color = Beige,
-        )
-    }
-}
-
-@Composable
-private fun TopicCard(topic: QuestionTopic, modifier: Modifier) {
+private fun TopicCell(topic: QuestionTopic, style: BentoStyle, modifier: Modifier, onClick: () -> Unit) {
     val colors = WorkisTheme.colors
+    val hero = style == BentoStyle.Hero
     Column(
         modifier = modifier
-            .background(colors.canvas, RoundedCornerShape(14.dp))
-            .border(1.dp, colors.border, RoundedCornerShape(14.dp))
-            .padding(12.dp),
+            .background(if (hero) BeigeBg else colors.ink.copy(alpha = if (style == BentoStyle.Medium) 0.07f else 0.05f), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(if (hero) 14.dp else 10.dp),
     ) {
         Text(
             topic.topic.orEmpty(),
-            fontSize = 13.sp,
-            color = colors.accentText,
-            maxLines = 1,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = when (style) { BentoStyle.Hero -> 15.sp; BentoStyle.Medium -> 13.sp; BentoStyle.Small -> 12.sp },
+            color = if (hero) Beige else colors.accentText,
+            maxLines = if (hero) 2 else 1, overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.weight(1f))
         Text(
             (topic.count ?: 0).toString(),
-            fontFamily = WorkisMono,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 18.sp,
-            color = colors.ink,
+            fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold,
+            fontSize = when (style) { BentoStyle.Hero -> 34.sp; BentoStyle.Medium -> 18.sp; BentoStyle.Small -> 15.sp },
+            color = if (hero) Beige else colors.ink,
         )
     }
 }

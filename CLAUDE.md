@@ -57,6 +57,11 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   the stale one) until the re-read. The app NEVER derives a switch: after "Buna geç" the server says `fits` + `switched {from,to}` and
   the stage draws "Bu ürüne geçildi · <to>" where the alternative stood. Ledger 68: an empty variant price reads `priceWorkisAsks`;
   `priceOnRequest` is only the seller's own price-field placeholder.
+- Console Panel (ledger 61, `ConsoleRoot.kt` `ConsoleHome`): the web's order tile for tile — two big tiles (Yeni başvurular with
+  "N onay bekliyor" only above zero · Bekleyen soru with "en eski N gün"), count rows (Partnerler · Yazışmalar · Uzmanlar half-row,
+  coordinator only), two activity tiles (Aktif koltuklar · Aktif firmalar carrying "N liste · N teklif · N sipariş"), the sidebar's
+  doors (Bilgi · Ürünler · Gruplar), "Jowi yanıtladı" with ALL sources (>3 → two a row) and up to eight topics, then "/ Soru
+  konuları" as its own section. Yazışmalar counts OPEN threads (`openConversations`, else open rows of the list), never the raw size.
 - Tab sets: role 3/4 and 5 → Panel · Hesap · Jowi; others → Pazar|Başvuru · Hesap · Jowi. Talepler (`cases/`) is retired.
 - Gruplar (ledger 62, roles 3|4): `ui/screens/console/GroupsScreen.kt` + `data/GroupsModels.kt`. ONE page: `GET console/groups/?sector=`
   is the whole screen and every POST answers the page re-read with `message` spread at the top level — the state IS the last
