@@ -6,6 +6,12 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Push (ledger 45): the google-services plugin reads app/google-services.json — the owner's
+// Firebase project with the Android app `ai.workis.jowi`. Without the file the plugin would
+// fail the build, so it is applied only once the file is there; without the plugin FirebaseApp
+// never initialises and PushService has no carrier (the Hesap switch says so). Nothing else changes.
+if (file("google-services.json").exists()) apply(plugin = libs.plugins.google.services.get().pluginId)
+
 // Release signing: keystore.properties (gitignored) → storeFile / storePassword /
 // keyAlias / keyPassword. Without it the release build stays unsigned.
 val keystoreProps = Properties().apply {
@@ -68,6 +74,9 @@ dependencies {
     implementation(libs.androidx.credentials.play.services)
     // the carrier's label scan: Google's code scanner UI — no camera permission in this app
     implementation(libs.play.services.code.scanner)
+    // push (ledger 45): the FCM carrier — a token for push/register/, messages → the watching screens
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
     implementation(libs.retrofit)
     implementation(libs.retrofit.kotlinx.serialization)
     implementation(libs.okhttp)

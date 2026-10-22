@@ -15,6 +15,7 @@ import androidx.core.os.LocaleListCompat
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import ai.workis.jowi.data.PushService
 import ai.workis.jowi.ui.JowiRoot
 import ai.workis.jowi.ui.theme.JowiTheme
 
@@ -27,6 +28,9 @@ class MainActivity : AppCompatActivity() {
                 LocaleListCompat.forLanguageTags(Graph.language.value)
             )
         }
+        // a tapped push (ledger 45): the launcher intent carries the message's data; only
+        // on a fresh launch here — a rotation re-creates the activity with the same intent
+        if (savedInstanceState == null) PushService.tapped(intent?.extras)
         enableEdgeToEdge()
         setContent {
             val appearance by Graph.appearance.collectAsState()
@@ -44,5 +48,12 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /** singleTop: a tap while the app is alive lands here instead of re-creating the activity. */
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        PushService.tapped(intent.extras)
     }
 }

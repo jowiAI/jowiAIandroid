@@ -40,17 +40,21 @@ data class PushReply(
  * there, never at launch. `register/` goes out on every sign-in (and launch with a session)
  * while the switch is on; `unregister/` when it goes off and on sign-out, with the outgoing key.
  *
- * THE SEAM. There is no Firebase in this build, so [tokenSource] is null and nothing is ever
- * registered: Django knows only `apns` and `web` today and files any other platform as an APNs
- * token, so a register without a real FCM token must never leave the device. When the carrier
- * lands (Django's FCM sender + `google-services.json` + the firebase-messaging dependency):
- *  - at start-up set `PushService.tokenSource = { FirebaseMessaging.getInstance().token.await() }`;
- *  - a `FirebaseMessagingService` calls [tokenArrived] from `onNewToken` and [messageArrived]
- *    with `message.data` from `onMessageReceived` (foreground: no banner, the screen re-reads);
- *  - a tapped notification's intent extras go to [messageArrived] the same way.
+ * THE CARRIER (Django's FCM sender, 2026-10-22; API_CONTRACT "FCM — the Android carrier"):
+ * [tokenSource] is set by [ai.workis.jowi.JowiApp] from `FirebaseMessaging` — only when Firebase
+ * initialised, which takes the owner's `app/google-services.json` (the build is dormant without
+ * it: null source, nothing registered, the Hesap footer says so). [WorkisMessagingService] feeds
+ * [tokenArrived] from `onNewToken` and [messageArrived] from `onMessageReceived` (the app in the
+ * FOREGROUND: no banner, the watching screen re-reads — the change is on screen); in the
+ * background the system draws the banner on the "workis" channel and a tap opens
+ * [ai.workis.jowi.MainActivity] with the message's `data` as extras → [tapped]: the first
+ * scope's screen opens ([openScope], consumed by `MarketRoot`) and re-reads. Never without a
+ * real token: Django stores the string as it comes.
  */
 object PushService {
     const val PLATFORM = "fcm"
+    /** The notification channel Django names in every message (`channel_id: "workis"`). */
+    const val CHANNEL = "workis"
     private const val ENABLED = "workis_push_enabled"
     private const val TOKEN = "workis_push_token"
     /** The server's last `ready`: 1 = carrier on, 0 = stored but not switched on, -1 = unknown. */
@@ -61,6 +65,13 @@ object PushService {
     var tokenSource: (suspend () -> String?)? = null
 
     val hasCarrier: Boolean get() = tokenSource != null
+
+    /**
+     * A tapped notification's first scope — the screen to open: `orders` · `quotes` · `cargo` ·
+     * `lists` (`MainScreen` picks the Pazar tab, `MarketRoot` the page and clears it). The
+     * test push names no scope (`thread-id: "workis"`) and only brings the app forward.
+     */
+    val openScope = MutableStateFlow<String?>(null)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val prefs get() = Graph.prefs
@@ -96,13 +107,34 @@ object PushService {
      * comma list — reach the watchers; `thread-id` / `scope` stand in when `scopes` is missing.
      */
     fun messageArrived(data: Map<String, String>) {
+        val scopes = scopesOf(data)
+        if (scopes.isNotEmpty()) scope.launch { ChangeStamps.pushed(scopes) }
+    }
+
+    /**
+     * A tap on the system's banner: the launcher intent carries the message's `data` as extras
+     * (FCM adds its own `google.*` keys). Not a push → nothing. Otherwise the first scope's
+     * screen opens and the watchers re-read, as on a foreground arrival.
+     */
+    fun tapped(extras: android.os.Bundle?) {
+        val b = extras ?: return
+        val data = b.keySet().mapNotNull { k -> b.getString(k)?.let { k to it } }.toMap()
+        if ("google.message_id" !in data && "scopes" !in data && "thread-id" !in data) return
+        val scopes = scopesOf(data)
+        openScope.value = scopes.firstOrNull { it in OPENABLE }
+        if (scopes.isNotEmpty()) scope.launch { ChangeStamps.pushed(scopes) }
+    }
+
+    private val OPENABLE = setOf("orders", "quotes", "cargo", "lists")
+
+    /** `scopes` as a JSON array string (Django's shape) or a comma list; `thread-id` / `scope` stand in. */
+    private fun scopesOf(data: Map<String, String>): List<String> {
         val raw = data["scopes"].orEmpty().trim()
         val parsed = runCatching { WorkisJson.parseToJsonElement(raw) as? JsonArray }.getOrNull()
             ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
             ?: raw.trim('[', ']').split(',').map { it.trim().trim('"') }
-        val scopes = parsed.filter { it.isNotEmpty() }
+        return parsed.filter { it.isNotEmpty() }
             .ifEmpty { listOfNotNull((data["thread-id"] ?: data["scope"])?.takeIf { it.isNotBlank() }) }
-        scope.launch { ChangeStamps.pushed(scopes) }
     }
 
     /** Sign-out: unregister with the OUTGOING key before the session is ended (8 s at most). */

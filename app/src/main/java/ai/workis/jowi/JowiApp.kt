@@ -15,6 +15,7 @@ import ai.workis.jowi.data.PublicHomeStore
 import ai.workis.jowi.data.WorkspacesStore
 import ai.workis.jowi.data.TokenStore
 import ai.workis.jowi.data.WorkisApi
+import ai.workis.jowi.data.awaitResult
 import ai.workis.jowi.data.buildApi
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -132,6 +133,30 @@ class JowiApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Graph.init(this)
+        pushCarrier()
         ai.workis.jowi.data.PushService.start() // register/ on every session while Bildirimler is on
+    }
+
+    /**
+     * Push (ledger 45): the "workis" channel Django's messages name (`android.notification.
+     * channel_id`; without it Android 8+ shows nothing) and the FCM token as the carrier.
+     * Firebase initialises itself from the resources the google-services plugin writes out of
+     * the owner's `google-services.json` — no file, no FirebaseApp, no carrier: the Hesap
+     * switch's footer reads `notificationsBuildOff` and nothing is ever registered.
+     */
+    private fun pushCarrier() {
+        val nm = getSystemService(android.app.NotificationManager::class.java)
+        nm.createNotificationChannel(
+            android.app.NotificationChannel(
+                ai.workis.jowi.data.PushService.CHANNEL,
+                getString(R.string.push_channel_name),
+                android.app.NotificationManager.IMPORTANCE_HIGH,
+            )
+        )
+        if (com.google.firebase.FirebaseApp.getApps(this).isNotEmpty()) {
+            ai.workis.jowi.data.PushService.tokenSource = {
+                com.google.firebase.messaging.FirebaseMessaging.getInstance().token.awaitResult()
+            }
+        }
     }
 }

@@ -14,4 +14,6 @@
     <string name="bio_subtitle">Unlock the session open on this device</string>
     <string name="age_minutes">%d min</string>
     <string name="age_hours">%d h</string>
+    <!-- the notification channel's name in the system settings (push, ledger 45) -->
+    <string name="push_channel_name">Workis notifications</string>
 </resources>

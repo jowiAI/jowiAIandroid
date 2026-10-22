@@ -22,7 +22,16 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   per-app locale via AppCompat, prefs in SharedPreferences (`workis_lang`, `workis_appearance`).
 - Chrome Custom Tabs via `openInApp()` (ui/components/Markdown.kt) — every `workis.ai` link
   in consent texts opens in-app; catalog markdown (`**bold**`, `[label](url)`) renders
-  through `MarkdownText`. Still planned: push seam (FCM not implemented server-side).
+  through `MarkdownText`.
+- Push (ledger 45, `data/PushService.kt` + `WorkisMessagingService`): the FCM carrier — Django's `push/register|unregister/`
+  with `platform: "fcm"` (explicit; token as it comes, never hex), `{success, ready}` (`ready: false` = stored, carrier not
+  switched on → `notificationsServerOff`). The build is DORMANT without the owner's `app/google-services.json` (gitignored):
+  the google-services plugin is applied only when the file exists, FirebaseApp never initialises, `tokenSource` stays null and
+  the Hesap footer reads `notificationsBuildOff`. Messages carry `data.scopes` as a JSON-array STRING (comma list also read;
+  `thread-id` the fallback) — foreground = no banner, the `ChangesWatch` screens re-read; a tap on the system banner (channel
+  "workis", the slash glyph, kiremit) lands in `MainActivity` (singleTop) → `PushService.tapped` → `openScope` picks the
+  Pazar tab and `MarketRoot` opens the first scope's page. The push never carries the record. Hesap › Bildirimler is the
+  person's choice, off by default; POST_NOTIFICATIONS asked only there.
 - Agreement paper (`ui/components/AgreementPaper.kt`) is shared by wizard step 04 and the
   expert screen; its text comes from `GET /workis/agreement/?role=|key=` and the PDF renders
   natively (android.graphics.pdf.PdfRenderer, `PdfPages`). Never hard-code a PDF path.

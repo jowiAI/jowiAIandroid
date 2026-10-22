@@ -15,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import ai.workis.jowi.ui.theme.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import ai.workis.jowi.data.PushService
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -102,6 +103,19 @@ fun MarketRoot(onAskJowi: () -> Unit = {}) {
     val calendarVm: CalendarViewModel = viewModel()
     val cargoVm: CargoViewModel = viewModel()
     val deskVm: PanelDeskViewModel = viewModel()
+    // a tapped push (ledger 45): the first scope's screen, which re-reads on appear
+    val openScope by PushService.openScope.collectAsState()
+    LaunchedEffect(openScope) {
+        val s = openScope ?: return@LaunchedEffect
+        when (s) {
+            "orders" -> MarketDest.Orders
+            "quotes" -> MarketDest.Quotes
+            "cargo" -> MarketDest.Cargo
+            "lists" -> MarketDest.Lists
+            else -> null
+        }?.let { dest = it }
+        PushService.openScope.value = null
+    }
     BackHandler(enabled = dest != MarketDest.Home) {
         dest = when (val d = dest) {
             is MarketDest.ListDetail -> d.back

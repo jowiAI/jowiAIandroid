@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.PartnerSeatState
+import ai.workis.jowi.data.PushService
 import ai.workis.jowi.ui.screens.expert.ExpertDepartureScreen
 import ai.workis.jowi.ui.screens.expert.ExpertRoot
 import ai.workis.jowi.ui.screens.decisions.DecisionsScreen
@@ -105,6 +106,14 @@ fun MainScreen() {
     var userPicked by rememberSaveable { mutableStateOf(false) }
     // until the user taps a tab, land on the first door (it appears once the seat verdict arrives)
     val current = if (userPicked) tabs.firstOrNull { it.name == selected } ?: tabs.first() else tabs.first()
+    // a tapped push (ledger 45) names a trade scope: the Pazar tab, where MarketRoot opens the
+    // page and clears it; a bar without Pazar (the verdict still pending, or no seat) lets it go
+    val openScope by PushService.openScope.collectAsState()
+    LaunchedEffect(openScope, partnerTab) {
+        if (openScope == null) return@LaunchedEffect
+        if (partnerTab == MainTab.Market) { selected = MainTab.Market.name; userPicked = true }
+        else if (seat !is PartnerSeatState.Unknown) PushService.openScope.value = null
+    }
 
     // §10.2 — the paper opens once per launch when pending; Hesap keeps the reminder row
     val pending by Graph.auth.agreementPending.collectAsState()

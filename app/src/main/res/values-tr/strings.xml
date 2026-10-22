@@ -8,4 +8,5 @@
     <string name="bio_subtitle">Bu cihazda açık olan oturumun kilidini aç</string>
     <string name="age_minutes">%d dk</string>
     <string name="age_hours">%d sa</string>
+    <string name="push_channel_name">Workis bildirimleri</string>
 </resources>

@@ -11,3 +11,6 @@ build/
 # release signing — keystore + passwords stay local (back them up outside git)
 /keystore/
 /keystore.properties
+
+# Firebase (push, ledger 45) — the owner's project file goes into app/; the build is dormant without it
+/app/google-services.json
