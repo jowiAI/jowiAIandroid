@@ -381,6 +381,9 @@ suspend fun <T> decisionCall(lang: String, call: suspend () -> T): Pair<T?, Deci
         null to DecisionRefusal(e.code(), code, sentence ?: statusMessage(e.code(), lang), asks)
     } catch (e: java.io.IOException) {
         null to DecisionRefusal(0, "network", statusMessage(null, lang))
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        // a caller's withTimeoutOrNull cancels us: let it, so the timeout reads as null, never as a refusal
+        throw e
     } catch (e: Exception) {
         null to DecisionRefusal(0, null, statusMessage(-1, lang))
     }

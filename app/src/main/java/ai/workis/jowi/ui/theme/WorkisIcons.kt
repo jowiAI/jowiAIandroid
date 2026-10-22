@@ -644,4 +644,41 @@ object WorkisIcons {
             moveTo(15.5f, 15.5f); lineTo(20.5f, 20.5f)
         }
     }
+
+    /** SF "bed.double" — a reservation on a Kararlar chip. */
+    val Bed: ImageVector = stroked("Bed") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(3f, 19f); lineTo(3f, 6f)
+            moveTo(3f, 15f); lineTo(21f, 15f); lineTo(21f, 19f)
+            moveTo(3f, 12f); lineTo(21f, 12f); lineTo(21f, 15f)
+            moveTo(21f, 12f); curveTo(21f, 10f, 19.5f, 9f, 17.5f, 9f); lineTo(11f, 9f); lineTo(11f, 12f)
+            moveTo(5f, 10.5f); arcToRelative(1.5f, 1.5f, 0f, true, false, 3f, 0f); arcToRelative(1.5f, 1.5f, 0f, true, false, -3f, 0f)
+        }
+    }
+
+    /** SF "percent" — a discount on a Kararlar chip (the text never repeats the sign). */
+    val Percent: ImageVector = stroked("Percent") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(18.5f, 5.5f); lineTo(5.5f, 18.5f)
+            moveTo(5f, 7.5f); arcToRelative(2.5f, 2.5f, 0f, true, false, 5f, 0f); arcToRelative(2.5f, 2.5f, 0f, true, false, -5f, 0f)
+            moveTo(14f, 16.5f); arcToRelative(2.5f, 2.5f, 0f, true, false, 5f, 0f); arcToRelative(2.5f, 2.5f, 0f, true, false, -5f, 0f)
+        }
+    }
+
+    /** SF "doc.on.doc" — Kopyala. */
+    val Copy: ImageVector = stroked("Copy") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(8f, 7f); lineTo(19f, 7f); lineTo(19f, 21f); lineTo(8f, 21f); close()
+            moveTo(5f, 17f); lineTo(5f, 3f); lineTo(15f, 3f)
+        }
+    }
+
+    /** SF "arrowshape.turn.up.left" — Yanıtla. */
+    val Reply: ImageVector = stroked("Reply") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(10f, 4.5f); lineTo(3f, 11f); lineTo(10f, 17.5f); lineTo(10f, 14f)
+            curveTo(15f, 14f, 18.5f, 15.5f, 21f, 19.5f)
+            curveTo(20.5f, 13f, 17f, 8.5f, 10f, 8f); close()
+        }
+    }
 }

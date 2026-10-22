@@ -71,6 +71,19 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   (the line above the reading; chips tick rows LOCALLY by `partnerId`, never sent) — `JowiCardMemory.kt`; history rows carry neither,
   the session keeps its values (`destPicks`/`keptMatch`/`KeptNeed`).
 - Tab sets: role 3/4 and 5 → Panel · Hesap · Jowi; others → Pazar|Başvuru · Hesap · Jowi. Talepler (`cases/`) is retired.
+  `GET auth/workspaces/` (`Graph.workspaces`, read once per session) adds Kararlar when a HOSPITALITY room exists, takes Başvuru
+  off, and takes the Jowi tab off when the account is Jowi-only (a room and `workis.hasSeat != true`).
+- Kararlar (ledgers 20–33, `ui/screens/decisions/`, `data/DecisionModels.kt`): the Jowi HOSPITALITY surface — a hotel manager's
+  own decisions and whether the staff were told; NOT behind the seat wall. ONE door: `POST jowi/entry/` says instruction |
+  question | unsure — the app never classifies; `kind` may only ever be `"question"`. No confirmation step (the Jowi tab's send
+  rule); a MATERIAL rewrite is the one two-reading card. `restated` IS the record's sentence; `subject` is never drawn. The
+  questions card draws no `restated` until the re-preview with `answers{}` comes back without questions (`settled`); a follow-up
+  question JOINS the card; changing an answer drops the ones after it; `duplicate` = two plain buttons, "" closes without a POST.
+  Delivery is three states with icon + words (`deliveredAt` / `deliveryError` verbatim / still going). The record is whole: no
+  delete, no edit; "Geri çek" only on `canRetract`, the row stays with its trace. The live turn is two bubbles (hers = the
+  yazışma's "mine" style); answered turns stay as an in-memory conversation (`history`, last 6, record items too, the quoted turn
+  LAST), long-press = Kopyala · Yanıtla (`replyTo` on every door of that sentence), `trail` = "Dayanak". A refusal sentence is
+  shown only when the server sent a `code`. Nothing is stored on the device.
   Başvuru (ledger 55, `SeatlessScreen`): on `seat:"none"` with `application: null`, `emailConflict: false` and the invitations
   answer in and EMPTY, the native wizard opens itself ONCE per tab life (`applyAutoOpened` in `MainScreen`, never a flag on the
   screen — it leaves the composition while the wizard is up); back from the intro = the plain page. `emailConflict: true` appends
