@@ -37,6 +37,31 @@ interface WorkisApi {
     @POST("auth/validate-token/")
     suspend fun validateToken(): AuthResponse
 
+    // --- Jowi · hospitality (ledgers 20–33, data/DecisionModels.kt) — NOT behind the seat wall ---
+    /** What this account can walk into: a Jowi room, a Workis seat, or both. */
+    @GET("auth/workspaces/")
+    suspend fun workspaces(): JowiWorkspaces
+
+    /** The ONE door: the server says whether the line was an instruction, a question or `unsure`. Callers wrap in withTimeoutOrNull(30 s). */
+    @POST("jowi/entry/")
+    suspend fun jowiEntry(@Body body: DecisionRequest): DecisionEntry
+
+    /** Jowi's reading before anything is written; `answers{}` makes it say the sentence again. 6 s first / 20 s re-preview, by the caller. */
+    @POST("jowi/decisions/preview/")
+    suspend fun decisionPreview(@Body body: DecisionRequest): DecisionPreview
+
+    /** Her own decisions, oldest → newest as the server sends them, + `canWrite`. */
+    @GET("jowi/decisions/")
+    suspend fun decisions(): DecisionList
+
+    /** Write the record → 201 `{decision}`; 409 `unanswered` carries `questions`. */
+    @POST("jowi/decisions/")
+    suspend fun decisionCreate(@Body body: DecisionRequest): DecisionWritten
+
+    /** Only while unseen; the row stays with `retractedAt`. 409 `seen` = the server's sentence. */
+    @POST("jowi/decisions/{id}/retract/")
+    suspend fun decisionRetract(@Path("id") id: String): DecisionWritten
+
     // --- passkeys (API_CONTRACT §2): the system holds the key, the app carries JSON ---
     @POST("auth/passkey/register/options/")
     suspend fun passkeyRegisterOptions(): PasskeyOptions

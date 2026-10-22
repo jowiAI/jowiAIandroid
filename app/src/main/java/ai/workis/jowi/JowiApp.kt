@@ -12,6 +12,7 @@ import ai.workis.jowi.data.AuthRepository
 import ai.workis.jowi.data.PartnerStore
 import ai.workis.jowi.data.PasskeyService
 import ai.workis.jowi.data.PublicHomeStore
+import ai.workis.jowi.data.WorkspacesStore
 import ai.workis.jowi.data.TokenStore
 import ai.workis.jowi.data.WorkisApi
 import ai.workis.jowi.data.buildApi
@@ -26,6 +27,7 @@ object Graph {
     lateinit var partner: PartnerStore
     lateinit var passkeys: PasskeyService
     lateinit var publicHome: PublicHomeStore
+    lateinit var workspaces: WorkspacesStore
 
     // "system" | "light" | "dark" (iOS @AppStorage("workis_appearance"))
     val appearance = MutableStateFlow("system")
@@ -55,6 +57,7 @@ object Graph {
         partner = PartnerStore(api)
         passkeys = PasskeyService(api) { language.value }
         publicHome = PublicHomeStore(api, prefs)
+        workspaces = WorkspacesStore(api)
     }
 
     /**

@@ -31,6 +31,7 @@ import ai.workis.jowi.R
 import ai.workis.jowi.data.PartnerSeatState
 import ai.workis.jowi.ui.screens.expert.ExpertDepartureScreen
 import ai.workis.jowi.ui.screens.expert.ExpertRoot
+import ai.workis.jowi.ui.screens.decisions.DecisionsScreen
 import ai.workis.jowi.ui.screens.partner.MarketRoot
 import ai.workis.jowi.ui.screens.partner.SeatlessScreen
 import ai.workis.jowi.ui.theme.Kiremit500
@@ -50,6 +51,7 @@ private enum class MainTab(val labelRes: Int) {
     Panel(R.string.console_tab),
     Market(R.string.market_tab),
     Seatless(R.string.seatless_title),
+    Decisions(R.string.decisions_tab),
     Account(R.string.tab_account),
     Jowi(R.string.jowi_tab),
 }
@@ -67,24 +69,35 @@ fun MainScreen() {
     val isExpert = remember { Graph.auth.isExpert() }
     val seat by Graph.partner.seat.collectAsState()
     LaunchedEffect(Unit) { if (!isCoordinator && !isExpert) Graph.partner.refresh() }
+    // What this account can walk into (`auth/workspaces/`, ledger 20): a HOSPITALITY room
+    // puts Kararlar on the bar and takes the seatless Başvuru door OFF it — a hotel manager
+    // has no Workis seat and never will. A room and no seat = Jowi is this account's whole
+    // app, so the Jowi tab goes too: she writes questions and instructions into ONE field.
+    val workspaces by Graph.workspaces.value.collectAsState()
+    LaunchedEffect(Unit) { if (workspaces == null) Graph.workspaces.refresh() }
+    val jowiWorkspace = workspaces?.hasHospitality == true
+    val jowiOnly = jowiWorkspace && workspaces?.workis?.hasSeat != true
 
     // Until company/ answers, the partner Panel tab stays (with its spinner) — never the
     // Başvuru tab, which is only for a 403 `seat:"none"` (2026-09-14: a stale verdict flashed it).
     val partnerTab: MainTab? = when {
         isCoordinator || isExpert -> null
-        seat is PartnerSeatState.None -> MainTab.Seatless
+        seat is PartnerSeatState.None -> if (jowiWorkspace) null else MainTab.Seatless
         seat is PartnerSeatState.Operator -> null
         else -> MainTab.Market // Seat, or Unknown while the verdict is pending
     }
     val tabs = buildList {
         if (isCoordinator || isExpert) add(MainTab.Panel)
         partnerTab?.let { add(it) }
-        add(MainTab.Account); add(MainTab.Jowi)
+        if (jowiWorkspace) add(MainTab.Decisions)
+        add(MainTab.Account)
+        if (!jowiOnly) add(MainTab.Jowi)
     }
     fun icon(tab: MainTab): ImageVector = when (tab) {
         MainTab.Panel -> if (isExpert) WorkisIcons.GraduationCap else WorkisIcons.Grid
         MainTab.Market -> Icons.Filled.ShoppingCart
         MainTab.Seatless -> Icons.Filled.Person
+        MainTab.Decisions -> WorkisIcons.Checklist
         MainTab.Account -> Icons.Filled.AccountCircle
         MainTab.Jowi -> WorkisIcons.Sparkle
     }
@@ -160,6 +173,7 @@ fun MainScreen() {
                     autoOpened = applyAutoOpened,
                     onAutoOpen = { applyAutoOpened = true },
                 )
+                MainTab.Decisions -> DecisionsScreen(workspace = workspaces?.hospitality)
                 MainTab.Account -> AccountScreen(onReaccept = { showReaccept = true }, onDeparture = { showDeparture = true })
                 MainTab.Jowi -> JowiScreen()
             }

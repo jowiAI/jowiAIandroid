@@ -315,6 +315,7 @@ class AuthRepository(
         _user.value = null
         _agreementPending.value = null
         runCatching { ai.workis.jowi.Graph.partner.clear() }
+        runCatching { ai.workis.jowi.Graph.workspaces.clear() }
         ScreenContext.clear() // no screen of the previous seat rides into the next session
         ChangeStamps.reset() // the next account's first reading is a baseline, not a change
         _isAuthenticated.value = false
