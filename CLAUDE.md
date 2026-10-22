@@ -49,8 +49,12 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
 - Jowi's stage on a draft list (ledger 66): `ui/screens/partner/JowiStage.kt`, a SECTION above the rows (never a sheet), one row
   at a time (tapped badge → first `askUse` → first `better` not yet bound). A chip only fills the line; `POST lists/items/{id}/use/
   {use}|{skip:true}` → `{card|null}`; "Buna geç" = bind `{cpid, sellerId}`; "+ Ekle" = add door with `fromItem` (the stage stays on
-  the source row). Add replies carry `askUse` (and `ask_use`) → the stage opens on the new row. No price on the stage; its buttons
-  are bordered — "Teklif iste" stays the page's one fill. `use` on a row decodes tolerantly (`PLUseTolerant`).
+  the source row). Add replies carry `askUse` (camelCase only — `ask_use` is the web door's) → the stage opens on the new row. No price
+  on the stage; its buttons are bordered — "Teklif iste" stays the page's one fill. `use` on a row decodes tolerantly (`PLUseTolerant`).
+  Ledger 67: `bind/` answers `card | null` — the row's card after the bind; it stands for the row at once (`stageCards`, a null drops
+  the stale one) until the re-read. The app NEVER derives a switch: after "Buna geç" the server says `fits` + `switched {from,to}` and
+  the stage draws "Bu ürüne geçildi · <to>" where the alternative stood. Ledger 68: an empty variant price reads `priceWorkisAsks`;
+  `priceOnRequest` is only the seller's own price-field placeholder.
 - Tab sets: role 3/4 and 5 → Panel · Hesap · Jowi; others → Pazar|Başvuru · Hesap · Jowi. Talepler (`cases/`) is retired.
 - Gruplar (ledger 62, roles 3|4): `ui/screens/console/GroupsScreen.kt` + `data/GroupsModels.kt`. ONE page: `GET console/groups/?sector=`
   is the whole screen and every POST answers the page re-read with `message` spread at the top level — the state IS the last

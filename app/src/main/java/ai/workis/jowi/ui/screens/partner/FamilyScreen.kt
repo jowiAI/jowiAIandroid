@@ -290,7 +290,7 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
         add(vis(stringResource(R.string.photo_replace), VisStyle.SECONDARY)); add(vis(stringResource(R.string.description_field)))
         add(vis(stringResource(R.string.variants_title))); add(vis(stringResource(R.string.add_row), VisStyle.SECONDARY))
         add(vis(stringResource(R.string.edit_row), VisStyle.SECONDARY)); add(vis(stringResource(R.string.delete_row), VisStyle.DESTRUCTIVE))
-        add(vis(stringResource(R.string.price_on_request))); add(vis(stringResource(R.string.specs_title)))
+        add(vis(stringResource(R.string.price_on_request))); add(vis(stringResource(R.string.price_workis_asks))); add(vis(stringResource(R.string.specs_title)))
         add(vis(stringResource(R.string.web_title))); add(vis(stringResource(R.string.web_url_field)))
         add(vis(stringResource(R.string.web_resolve), VisStyle.SECONDARY)); add(vis(stringResource(R.string.media_title)))
         add(vis(stringResource(R.string.knowledge_title))); add(vis(stringResource(R.string.teach_title)))
@@ -402,7 +402,8 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
                                     }
                                     Spacer(Modifier.width(8.dp))
                                     Text(
-                                        if (v.priceOnRequest == true || v.price == null) stringResource(R.string.price_on_request) else WorkisMoney.text(v.price, v.currency),
+                                        // an empty price reads as the web's "Workis fiyatı ister" (ledger 68); `priceOnRequest` stays the seller's own field placeholder
+                                        if (v.priceOnRequest == true || v.price == null) stringResource(R.string.price_workis_asks) else WorkisMoney.text(v.price, v.currency),
                                         fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink,
                                     )
                                 }

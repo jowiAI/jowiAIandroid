@@ -591,7 +591,7 @@ interface WorkisApi {
     suspend fun listAddItem(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): ListItemAdded
 
     @POST("workis/lists/items/{id}/bind/")
-    suspend fun listItemBind(@Path("id") id: String, @Body body: BindBody): SimpleResult
+    suspend fun listItemBind(@Path("id") id: String, @Body body: BindBody): BindReply
 
     /** Jowi's stage (2026-10-20): the row's answer to "Ne için kullanacaksınız?" `{use}` | `{skip: true}` → `{success, card | null}`. */
     @POST("workis/lists/items/{id}/use/")

@@ -75,12 +75,6 @@ import androidx.compose.ui.unit.sp
 // only, one row at a time. Its buttons are bordered: the toolbar's "Teklif iste" stays the page's
 // one tinted fill. No price anywhere on it — the first number a buyer sees is a quote.
 
-/** The row has bound the alternative Jowi named — the card's button becomes a tick, the badge "Uygun". */
-fun useSwitched(item: PLItem, card: PLUseCard?): Boolean {
-    val alt = card?.alternative?.cpid?.takeIf { it.isNotEmpty() } ?: return false
-    return item.boundCpid == alt || item.selectedCpid == alt
-}
-
 /**
  * The stage (`item` = the row on it, see `ListDetailViewModel.stageItem`), or — shut, or with no
  * row to talk about — the list's `jowiSummary.line` alone as a tap that reopens it. Scrolls the
@@ -182,7 +176,8 @@ private fun StageHeader(item: PLItem, reading: Boolean, onClose: () -> Unit) {
 private fun QuestionState(item: PLItem, draft: String, onDraft: (String) -> Unit, onTell: () -> Unit, onSkip: () -> Unit) {
     val colors = WorkisTheme.colors
     Text(stringResource(R.string.use_question), fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold, color = colors.ink)
-    Text(stringResource(R.string.use_intro), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted)
+    // the web's set sentence first (ledger 68) — the satisfaction tick's `wrong_product` chip, word for word — then why Jowi asks
+    Text(stringResource(R.string.use_why_ask) + " " + stringResource(R.string.use_intro), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted)
     val chips = item.useChips.orEmpty().filter { it.isNotBlank() }
     if (chips.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         chips.forEach { chip ->
@@ -233,6 +228,16 @@ private fun CardState(
     use?.let { Text(stringResource(R.string.use_label) + ": " + it, fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, color = colors.ink) }
     card.reason?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink) }
 
+    // the server's word after "Buna geç" (ledger 67): the alternative is gone from the card,
+    // `switched {from, to}` names the move — a tick line where the alternative stood, never a second button
+    card.switched?.let { sw ->
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.padding(top = 4.dp)) {
+            Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(14.dp))
+            Text(stringResource(R.string.use_switched), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = SuccessGreen)
+            sw.to?.takeIf { it.isNotBlank() }?.let { Text("· $it", fontSize = 13.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        }
+    }
+
     card.alternative?.takeIf { !it.cpid.isNullOrEmpty() || !it.name.isNullOrEmpty() }?.let { alt ->
         StageEyebrow(stringResource(R.string.use_better_title))
         Column(
@@ -245,12 +250,10 @@ private fun CardState(
             Text(alt.name.orEmpty(), fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, color = colors.ink)
             alt.seller?.takeIf { it.isNotBlank() }?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint) }
             alt.why?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted) }
+            // the web's set sentence under the why (ledger 68)
+            Text(stringResource(R.string.use_why_tell), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)
             Spacer(Modifier.height(4.dp))
-            if (useSwitched(item, card)) {
-                Done(stringResource(R.string.use_switched))
-            } else if (!alt.cpid.isNullOrEmpty()) {
-                StageButton(stringResource(R.string.use_switch), Kiremit500, enabled = !busy) { onSwitch(alt) }
-            }
+            if (!alt.cpid.isNullOrEmpty()) StageButton(stringResource(R.string.use_switch), Kiremit500, enabled = !busy) { onSwitch(alt) }
         }
     }
 
@@ -318,9 +321,8 @@ fun JowiRowLine(item: PLItem, card: PLUseCard?, draft: Boolean, onBadge: () -> U
     val use = item.use?.text?.trim().orEmpty()
     val kind = when {
         draft && item.askUse == true && card == null -> JowiBadge.Asking
-        card?.verdict == "better" -> if (draft && !useSwitched(item, card)) JowiBadge.Better else JowiBadge.Fits
+        card?.verdict == "better" -> if (draft) JowiBadge.Better else JowiBadge.Fits
         card?.verdict == "fits" -> JowiBadge.Fits
-        useSwitched(item, card) -> JowiBadge.Fits
         else -> null
     }
     val added = item.jowiAdded == true

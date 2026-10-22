@@ -235,7 +235,9 @@ data class PLJowiSummary(
 /** A row's answer to "Ne için kullanacaksınız?" and Jowi's card for it (`items[].use`, 2026-10-20). */
 data class PLUse(val text: String?, val card: PLUseCard?)
 
-/** `use_card` (row_use.py): verdict fits | better | unsure; NO price anywhere on it. */
+/** `use_card` (row_use.py): verdict fits | better | unsure; NO price anywhere on it. `switched`
+ *  (2026-10-21, `row_use.rebind`): the row took the card's alternative — the server then says
+ *  `verdict: fits`, `alternative: null` and names the move; the app never derives a switch. */
 @Serializable
 data class PLUseCard(
     val kind: String? = null,
@@ -246,7 +248,11 @@ data class PLUseCard(
     val reason: String? = null,
     val alternative: PLUseAlternative? = null,
     val complements: List<PLUseComplement>? = null,
+    val switched: PLUseSwitched? = null,
 )
+
+@Serializable
+data class PLUseSwitched(val from: String? = null, val to: String? = null)
 
 @Serializable
 data class PLUseAlternative(
@@ -638,15 +644,23 @@ data class ListItemAdded(
     val matched: Int? = null,
     @SerialName("item_id") @Serializable(with = FlexString::class) val itemId: String? = null,
     @SerialName("needs_variant") val needsVariant: Boolean? = null,
-    /** The new row asks what it is for (2026-10-20) — camelCase since Django's view renamed it; */
+    /** The new row asks what it is for (2026-10-20) — `askUse` alone; `ask_use` is the web door's key (ledger 67). */
     val askUse: Boolean? = null,
-    /** … `ask_use` as `lists_seat.add_item` first answered. Read both. */
-    @SerialName("ask_use") val askUseSnake: Boolean? = null,
     val message: String? = null,
     val error: String? = null,
-) {
-    val asksUse get() = askUse ?: askUseSnake ?: false
-}
+)
+
+/** `POST lists/items/{id}/bind/` answer (2026-10-21): `card` = the row's use card AFTER the bind —
+ *  "Buna geç" to the card's alternative makes it `fits` + `switched`; another product makes Jowi
+ *  read the use again (a new card, or null when it has none). Decoded like the `use/` reply's. */
+@Serializable
+data class BindReply(
+    val success: Boolean = false,
+    val matchState: String? = null,
+    val card: PLUseCard? = null,
+    val error: String? = null,
+    val message: String? = null,
+)
 
 /** `POST lists/items/{id}/use/` — `{use}` answers, `{skip: true}` closes the question for good. */
 @Serializable

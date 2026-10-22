@@ -259,7 +259,7 @@ class ListDetailViewModel : ViewModel() {
             busy = false
             if (r?.success != true) { note = r?.error ?: r?.message ?: err; load(); return@launch }
             onAdded()
-            if (fromItem == null && r.asksUse) r.itemId?.let { showStage(it) }
+            if (fromItem == null && r.askUse == true) r.itemId?.let { showStage(it) }
             val fresh = reload()
             if (r.needsVariant == true) fresh?.items?.firstOrNull { it.id == r.itemId }?.let { onNeedsVariant(it, cpid) }
         }
@@ -273,7 +273,7 @@ class ListDetailViewModel : ViewModel() {
             onDone(ok, r?.message ?: r?.error ?: err)
             if (ok) {
                 // a manual row never asks today (it binds nothing) — honoured all the same
-                if (fromItem == null && r.asksUse) r.itemId?.let { showStage(it) }
+                if (fromItem == null && r.askUse == true) r.itemId?.let { showStage(it) }
                 load()
             }
         }
@@ -292,8 +292,9 @@ class ListDetailViewModel : ViewModel() {
     /** `use/` is out — the stage's slash breathes. */
     var useReading by mutableStateOf(false)
         private set
-    /** Cards that landed from a `use/` reply before the re-read carries them on the row (by item id). */
-    var stageCards by mutableStateOf<Map<String, PLUseCard>>(emptyMap())
+    /** Cards that landed from a `use/` or `bind/` reply before the re-read carries them on the row
+     *  (by item id; an explicit null = the reply dropped the row's card, so the stale one goes too). */
+    var stageCards by mutableStateOf<Map<String, PLUseCard?>>(emptyMap())
         private set
     /** "sourceItemId|complementKey" added from a card this session → "Eklendi". */
     var addedFromStage by mutableStateOf<Set<String>>(emptySet())
@@ -301,15 +302,21 @@ class ListDetailViewModel : ViewModel() {
     /** The page scrolls to the stage once it is drawn (the stage clears it). */
     var stageScrollPending by mutableStateOf(false)
 
-    fun cardOf(item: PLItem): PLUseCard? = item.use?.card ?: item.id?.let { stageCards[it] }
+    fun cardOf(item: PLItem): PLUseCard? {
+        val id = item.id
+        return if (id != null && stageCards.containsKey(id)) stageCards[id] else item.use?.card
+    }
+    /** A reply's `card` (present or null) stands for the row until the next re-read carries it. */
+    private fun freshCard(itemId: String, card: PLUseCard?) { stageCards = stageCards + (itemId to card) }
 
-    /** The stage's row: the explicit one, else the first that asks, else the first `better` card not taken. Drafts only. */
+    /** The stage's row: the explicit one, else the first that asks, else the first `better` card. Drafts only
+     *  (no bound check — after "Buna geç" the server itself says `fits` + `switched`, ledger 67). */
     fun stageItem(d: PurchaseListDetail): PLItem? {
         if (!d.isDraft || stageClosed) return null
         val items = d.items.orEmpty()
         stageItemId?.let { sid -> items.firstOrNull { it.id == sid }?.let { return it } }
         return items.firstOrNull { it.askUse == true }
-            ?: items.firstOrNull { val c = cardOf(it); c?.verdict == "better" && !useSwitched(it, c) }
+            ?: items.firstOrNull { cardOf(it)?.verdict == "better" }
     }
 
     fun complementKey(itemId: String, c: PLUseComplement) = "$itemId|${c.key}"
@@ -340,15 +347,16 @@ class ListDetailViewModel : ViewModel() {
             when {
                 t.isEmpty() -> closeStage()
                 card == null -> { note = nothing; closeStage() }
-                else -> { stageCards = stageCards + (itemId to card); stageItemId = itemId }
+                else -> { freshCard(itemId, card); stageItemId = itemId }
             }
             useDraft = ""
             load()
         }
     }
 
-    /** "Buna geç": the bind door with the alternative's `cpid` + `sellerId`, re-read, then the
-     *  variant rule as on any bind (the variant list opens when one must still be chosen). */
+    /** "Buna geç": the bind door with the alternative's `cpid` + `sellerId`; the reply's `card`
+     *  (`fits` + `switched`) is on the stage at once, then the re-read, then the variant rule as
+     *  on any bind (the variant list opens when one must still be chosen). */
     fun switchTo(itemId: String, alt: PLUseAlternative, onNeedsVariant: (PLItem, String) -> Unit) {
         val cpid = alt.cpid?.takeIf { it.isNotEmpty() } ?: return
         if (busy) return
@@ -357,6 +365,7 @@ class ListDetailViewModel : ViewModel() {
             val (ok, msg) = bindItem(itemId, cpid, sellerId = alt.sellerId)
             busy = false
             if (!ok) { note = msg; return@launch }
+            stageItemId = itemId
             val row = reload()?.items?.firstOrNull { it.id == itemId } ?: return@launch
             val c = row.candidates?.firstOrNull { it.cpid == cpid }
             if (c != null && c.canChooseVariant == true && c.resolved != true) onNeedsVariant(row, cpid)
@@ -378,11 +387,14 @@ class ListDetailViewModel : ViewModel() {
             addItem(name, null, "", fromItem = fromItemId) { ok, msg -> if (ok) addedFromStage = addedFromStage + key else note = msg }
         }
     }
-    /** `{cpid}` selects, `{cpid: ""}` unselects, `+ sku` chooses the variant, a search pick adds `sellerId` + `q`. → (ok, the server's sentence) */
+    /** `{cpid}` selects, `{cpid: ""}` unselects, `+ sku` chooses the variant, a search pick adds `sellerId` + `q`. → (ok, the server's sentence).
+     *  The reply's `card` (2026-10-21) is the row's use card after the bind — it takes the stage's
+     *  place for the row at once (null drops a stale card) until the re-read carries it. */
     suspend fun bindItem(itemId: String, cpid: String?, sku: String? = null, sellerId: String? = null, q: String? = null): Pair<Boolean, String?> {
         val (r, err) = partnerCall(lang) {
             Graph.api.listItemBind(itemId, BindBody(cpid.orEmpty(), sku?.takeIf { it.isNotEmpty() }, sellerId?.takeIf { it.isNotEmpty() }, q?.takeIf { it.isNotEmpty() }))
         }
+        if (r?.success == true) freshCard(itemId, r.card)
         return (r?.success == true) to (r?.error ?: r?.message ?: err)
     }
     suspend fun search(itemId: String, q: String): List<PLSearchResult> =

@@ -851,6 +851,7 @@
     <string name="preview_hint">Fiyatlandırılmış satırlar teklif PDF\'ine eklenir; boş satırlar atlanır.</string>
     <string name="preview_pdf">PDF önizleme</string>
     <string name="price_on_request">fiyat sorunuz</string>
+    <string name="price_workis_asks">Workis fiyatı ister</string>
     <string name="prices_tab">Fiyatlar</string>
     <string name="prior_questions_section">BAŞVURU ÖNCESİ SORULAR</string>
     <string name="privacy">Gizlilik Politikası</string>
@@ -1215,6 +1216,8 @@
     <string name="use_switch">Buna geç</string>
     <string name="use_switched">Bu ürüne geçildi</string>
     <string name="use_tell">Jowi\'ye söyle</string>
+    <string name="use_why_ask">Teslimden sonra \'bilseydim başka ürün alırdım\' denmesin diye soruyorum.</string>
+    <string name="use_why_tell">Teslimden sonra \'bilseydim bunu alırdım\' denmesin diye söylüyorum.</string>
     <string name="vade_advance">Avans / escrow</string>
     <string name="vade_days_word">gün</string>
     <string name="vade_field">Ödeme vadesi</string>

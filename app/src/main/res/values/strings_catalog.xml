@@ -851,6 +851,7 @@
     <string name="preview_hint">Priced rows go into the quotation PDF; empty rows are skipped.</string>
     <string name="preview_pdf">PDF preview</string>
     <string name="price_on_request">on request</string>
+    <string name="price_workis_asks">Workis asks the price</string>
     <string name="prices_tab">Prices</string>
     <string name="prior_questions_section">PRE-APPLICATION QUESTIONS</string>
     <string name="privacy">Privacy Policy</string>
@@ -1215,6 +1216,8 @@
     <string name="use_switch">Switch to this</string>
     <string name="use_switched">Switched to this one</string>
     <string name="use_tell">Tell Jowi</string>
+    <string name="use_why_ask">I ask so that after delivery nobody says: had I known, I would have bought another product.</string>
+    <string name="use_why_tell">I say it so that after delivery nobody says: had I known, I would have bought this one.</string>
     <string name="vade_advance">Advance / escrow</string>
     <string name="vade_days_word">days</string>
     <string name="vade_field">Payment term</string>
