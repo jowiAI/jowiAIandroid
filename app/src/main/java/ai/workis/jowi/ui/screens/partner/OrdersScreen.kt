@@ -151,8 +151,16 @@ class OrdersViewModel : ViewModel() {
         return (r?.success == true) to (r?.error ?: r?.message ?: err)
     }
 
-    fun lineConfirm(lineId: String, onResult: ((Boolean, String?) -> Unit)? = null) =
-        act(onResult) { simple { Graph.api.lineConfirm(lineId).let { ai.workis.jowi.data.SimpleResult(success = it.success, message = it.message, error = it.error) } } }
+    /** `onAsk` gets the confirm reply's satisfaction ask (ledger 54) — the caller draws it right under the confirmation. */
+    fun lineConfirm(
+        lineId: String,
+        onAsk: ((ai.workis.jowi.data.SatisfactionAsk) -> Unit)? = null,
+        onResult: ((Boolean, String?) -> Unit)? = null,
+    ) = act(onResult) {
+        val (r, err) = partnerCall(lang) { Graph.api.lineConfirm(lineId) }
+        if (r?.success == true) r.satisfaction?.takeIf { !it.lineId.isNullOrEmpty() }?.let { onAsk?.invoke(it) }
+        (r?.success == true) to (r?.error ?: r?.message ?: err)
+    }
 
     fun lineObjection(lineId: String, reason: String, onResult: ((Boolean, String?) -> Unit)? = null) =
         act(onResult) { simple { Graph.api.lineObjection(lineId, ai.workis.jowi.data.jsonBody("reason" to reason)) } }

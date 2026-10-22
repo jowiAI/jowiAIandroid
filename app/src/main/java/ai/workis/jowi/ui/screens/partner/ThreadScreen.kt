@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -156,6 +157,13 @@ class ThreadViewModel : ViewModel() {
     /** A MATERIAL rewrite waits for the writer's choice (typed, reading). */
     var clarify by mutableStateOf<Pair<String, String>?>(null)
         private set
+    /**
+     * The way back (2026-10-10): a `private` answer at the ORDER table keeps the
+     * exact words sent (text, typed original) so one tap posts them to the table
+     * with `audience: "table"` — triage skipped. Cleared on any new post or reload.
+     */
+    var tableRetry by mutableStateOf<Pair<String, String?>?>(null)
+        private set
     /** The Kargo switch (2026-10-03): off by default, back off after each send. */
     var toCargo by mutableStateOf(false)
 
@@ -178,6 +186,7 @@ class ThreadViewModel : ViewModel() {
 
     fun load() {
         val d = door ?: return
+        tableRetry = null
         viewModelScope.launch {
             val (r, err) = partnerCall(lang) {
                 if (d is ThreadDoor.Order) Graph.api.orderThread(d.id) else Graph.api.invitationThread(d.id)
@@ -273,7 +282,7 @@ class ThreadViewModel : ViewModel() {
         val d = door ?: return
         val t = text.trim()
         if (t.isEmpty()) return
-        busy = true; note = null; localLines.clear(); privateNote = false
+        busy = true; note = null; localLines.clear(); privateNote = false; tableRetry = null
         viewModelScope.launch {
             val (r, err) = partnerCall(lang) {
                 // `audience: "cargo"` only when the switch is on — the line reaches the carrier too
@@ -290,7 +299,33 @@ class ThreadViewModel : ViewModel() {
                     privateNote = r.kind == "private"
                     localLines.addAll(r.lines.orEmpty().mapNotNull { it.text }.ifEmpty { listOfNotNull(r.line) })
                     load()
+                    // after load() (which clears it): the order door alone takes `audience: "table"`
+                    if (r.kind == "private" && d is ThreadDoor.Order) tableRetry = t to original?.takeIf { it != t }
                 }
+            }
+        }
+    }
+
+    /**
+     * "Tabloya ilet": the SAME words the private answer came back for, posted to
+     * the table as typed (`audience: "table"` — no Jowi, no courier). Order door only.
+     */
+    fun sendToTable() {
+        val d = door as? ThreadDoor.Order ?: return
+        val (t, original) = tableRetry ?: return
+        if (busy) return
+        busy = true; note = null
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) {
+                Graph.api.orderThreadPost(d.id, ThreadPostBody(t, original, audience = "table"))
+            }
+            busy = false
+            if (r == null) {
+                note = err      // the server's sentence; the chip stays for another try
+            } else {
+                // `kind: "posted"` — the turn lands in the table
+                draft = ""; localLines.clear(); privateNote = false; tableRetry = null
+                load()
             }
         }
     }
@@ -469,6 +504,9 @@ fun ThreadScreen(door: ThreadDoor, onBack: () -> Unit, onContract: (String, Stri
                     }
                     if (vm.localLines.isNotEmpty()) {
                         item { PrivateCard(vm.localLines.toList(), vm.privateNote) }
+                        if (vm.tableRetry != null) {
+                            item { SendToTableChip(enabled = !vm.busy) { vm.sendToTable() } }
+                        }
                     }
                     item { Spacer(Modifier.height(8.dp)) }
                 }
@@ -906,6 +944,29 @@ private fun PrivateCard(lines: List<String>, private: Boolean) {
                 }
             }
         }
+    }
+}
+
+/**
+ * The way back from a private answer: a bordered capsule under the card (aligned
+ * with the card, past the slash) — never a fill; the send button stays the one.
+ */
+@Composable
+private fun SendToTableChip(enabled: Boolean, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .padding(start = 22.dp)
+            .alpha(if (enabled) 1f else 0.5f)
+            .border(1.dp, colors.border, CircleShape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp)
+            .height(32.dp),
+    ) {
+        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(stringResource(R.string.thread_send_to_table), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.muted)
     }
 }
 

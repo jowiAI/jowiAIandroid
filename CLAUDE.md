@@ -62,6 +62,14 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   coordinator only), two activity tiles (Aktif koltuklar · Aktif firmalar carrying "N liste · N teklif · N sipariş"), the sidebar's
   doors (Bilgi · Ürünler · Gruplar), "Jowi yanıtladı" with ALL sources (>3 → two a row) and up to eight topics, then "/ Soru
   konuları" as its own section. Yazışmalar counts OPEN threads (`openConversations`, else open rows of the list), never the raw size.
+- Alım hafızası (ledger 54): the order thread's `kind: "private"` reply keeps the sent words → "Tabloya ilet" re-posts them with
+  `audience: "table"` (ORDER door only). The satisfaction tick (`SatisfactionCard.kt`, `SatisfactionTicks`) is drawn from the confirm
+  reply's `satisfaction` right under the confirmation (Onaylar + the order stage) and as Onaylar's last section — words as sent,
+  `counts.satisfaction` never in total, `reasons[]` chips → `reason`. Buyer Panel: `GET memory/nudges/` rows between "Sizde" and the
+  doors (`NudgeRows`), the button = `link.text`, a failed read draws nothing. The need/match cards carry `destination` (the "→ …" line
+  above the button, "değiştir" sheet, `needsChoice` chips; build sends `{into}`|`{newTitle}`, collect `listId`|`title`) and `memory`
+  (the line above the reading; chips tick rows LOCALLY by `partnerId`, never sent) — `JowiCardMemory.kt`; history rows carry neither,
+  the session keeps its values (`destPicks`/`keptMatch`/`KeptNeed`).
 - Tab sets: role 3/4 and 5 → Panel · Hesap · Jowi; others → Pazar|Başvuru · Hesap · Jowi. Talepler (`cases/`) is retired.
 - Gruplar (ledger 62, roles 3|4): `ui/screens/console/GroupsScreen.kt` + `data/GroupsModels.kt`. ONE page: `GET console/groups/?sector=`
   is the whole screen and every POST answers the page re-read with `message` spread at the top level — the state IS the last

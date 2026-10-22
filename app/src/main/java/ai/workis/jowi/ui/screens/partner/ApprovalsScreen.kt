@@ -44,6 +44,7 @@ import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.ApLine
 import ai.workis.jowi.data.Approvals
+import ai.workis.jowi.data.SatisfactionAsk
 import ai.workis.jowi.data.WorkisMoney
 import ai.workis.jowi.data.jsonBody
 import ai.workis.jowi.data.partnerCall
@@ -113,7 +114,19 @@ class ApprovalsViewModel : ViewModel() {
     fun returnDecision(lineId: String, action: String, note: String, callCargo: Boolean) = act {
         simple { Graph.api.lineReturnDecision(lineId, jsonBody("action" to action, "note" to note.ifBlank { null }, "callCargo" to callCargo)) }
     }
-    fun confirmDelivery(lineId: String) = act { simple { Graph.api.lineConfirm(lineId).let { ai.workis.jowi.data.SimpleResult(success = it.success, message = it.message, error = it.error) } } }
+    /** The live satisfaction ask the last confirmation carried — drawn first, above the inbox. */
+    var ask by mutableStateOf<SatisfactionAsk?>(null)
+        private set
+    /** Per-line busy / chosen / thanks of the satisfaction tick (the live ask and the section's rows). */
+    val ticks = SatisfactionTicks()
+
+    fun confirmDelivery(lineId: String) = act {
+        val (r, err) = partnerCall(lang) { Graph.api.lineConfirm(lineId) }
+        if (r?.success == true) r.satisfaction?.takeIf { !it.lineId.isNullOrEmpty() }?.let { ask = it }
+        (r?.success == true) to (r?.error ?: r?.message ?: err)
+    }
+    fun satisfaction(lineId: String, value: String, note: String, reason: String?) =
+        ticks.post(viewModelScope, lineId, value, note, reason)
     fun objection(lineId: String, reason: String) = act { simple { Graph.api.lineObjection(lineId, jsonBody("reason" to reason)) } }
     fun objectionWithdraw(lineId: String) = act { simple { Graph.api.lineObjectionWithdraw(lineId) } }
     fun objectionResolve(lineId: String, action: String, amount: String, note: String) = act {
@@ -169,7 +182,22 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
             }
             else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 NoteBand(vm.note)
-                val empty = (d.counts?.total ?: 0) == 0 && d.returnOffer.orEmpty().isEmpty()
+                val privateLine = stringResource(R.string.satisfaction_private)
+                val tick: @Composable (SatisfactionAsk, Boolean) -> Unit = { a, showQuestion ->
+                    val id = a.lineId.orEmpty()
+                    SatisfactionCard(
+                        a, privateLine,
+                        busy = vm.ticks.busy[id] == true,
+                        chosen = vm.ticks.chosen[id],
+                        thanks = vm.ticks.thanks[id],
+                        error = vm.ticks.error[id],
+                        showQuestion = showQuestion,
+                    ) { value, note, reason -> vm.satisfaction(id, value, note, reason) }
+                }
+                // the ask the confirmation just carried — right here, first
+                vm.ask?.let { tick(it, true) }
+                val satisfaction = d.satisfaction.orEmpty().filter { !it.lineId.isNullOrEmpty() && it.lineId != vm.ask?.lineId }
+                val empty = (d.counts?.total ?: 0) == 0 && d.returnOffer.orEmpty().isEmpty() && satisfaction.isEmpty() && vm.ask == null
                 if (empty) Text(stringResource(R.string.approvals_empty), fontSize = 14.sp, color = colors.muted, modifier = Modifier.padding(4.dp))
 
                 // 1 · quotes ready to award — a link to the list the app already has
@@ -292,6 +320,11 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
                             Action(returnTitle) { l.lineId?.let { form = ApForm(returnTitle, it, "returnRequest") } }
                         }
                     }
+                }
+                // 10 · the satisfaction tick — a right, not a task (not in counts.total); the line
+                // just confirmed is already asked above, not twice. The section title asks.
+                Section(stringResource(R.string.satisfaction_title), satisfaction.size) {
+                    satisfaction.forEach { tick(it, false) }
                 }
                 Spacer(Modifier.height(30.dp))
             }

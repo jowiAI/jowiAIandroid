@@ -88,6 +88,10 @@ import ai.workis.jowi.data.AskNeedAnswerBody
 import ai.workis.jowi.data.AskNeedComponent
 import ai.workis.jowi.data.AskNeedQuestion
 import ai.workis.jowi.data.AskResponse
+import ai.workis.jowi.data.AskDestination
+import ai.workis.jowi.data.AskMemory
+import ai.workis.jowi.data.AskMemoryChip
+import ai.workis.jowi.data.AskNeedBuildBody
 import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.OnKiremitFill
 import androidx.compose.foundation.text.KeyboardActions
@@ -157,6 +161,10 @@ data class AskMatch(
     /** One clarifying question with its chips (bare strings → `AskOption.label`). */
     val question: String? = null,
     val options: List<AskOption> = emptyList(),
+    /** Where the picks go (ledger 54) — only a LIVE answer carries it; the session keeps it across reloads. */
+    val destination: AskDestination? = null,
+    /** The firm's own record with the product (ledger 54) — live answers only, like `destination`. */
+    val memory: AskMemory? = null,
 ) {
     /** "100 metre · yeşil emici spiral hortum" — `item` no longer carries the quantity. */
     val title: String
@@ -368,8 +376,10 @@ class JowiViewModel : ViewModel() {
                 }
                 // the match's product rows are not in the history either: this
                 // session's pick list stays on the card it came with
-                if (match != null && match.products.isEmpty()) keptMatch[key]?.let { (m, picked) ->
-                    line = line.copy(match = m, optionPicked = picked)
+                if (match != null) keptMatch[key]?.let { (m, picked) ->
+                    line = if (match.products.isEmpty()) line.copy(match = m, optionPicked = picked)
+                    // a live answer's destination / memory are not in the history row
+                    else line.copy(match = match.copy(destination = match.destination ?: m.destination, memory = match.memory ?: m.memory))
                 }
                 // a need row: the card the row carries (nested `need`, jowi_history.py `row`)
                 // and its list (`listId` / `builtListId`); this session's card fills only what
@@ -380,8 +390,10 @@ class JowiViewModel : ViewModel() {
                         listId = line.listId ?: l.builtListId?.takeIf { it.isNotEmpty() },
                     )
                     keptNeeds[l.needId ?: l.id.orEmpty()]?.let { k ->
+                        // destination / memory ride only on live answers: the session's stay on the card
+                        val card = line.need?.let { n -> n.copy(destination = n.destination ?: k.need.destination, memory = n.memory ?: k.need.memory) }
                         line = line.copy(
-                            need = line.need ?: k.need, needAnswers = k.answers,
+                            need = card ?: k.need, needAnswers = k.answers,
                             listId = line.listId ?: k.listId,
                             text = k.text?.takeIf { it.isNotEmpty() } ?: line.text,
                             canHide = if (k.listId != null) false else line.canHide,
@@ -406,7 +418,7 @@ class JowiViewModel : ViewModel() {
                     // repeats, so the key carries the question it answers too.
                     val kept = lines.filter { it.who != "user" && it.options != null }
                         .associate { cardKey(it) to (it.options!! to it.optionPicked) }
-                    val keptMatch = lines.filter { it.who != "user" && it.match?.products?.isNotEmpty() == true }
+                    val keptMatch = lines.filter { l -> l.who != "user" && l.match?.let { it.products.isNotEmpty() || it.destination != null || it.memory != null } == true }
                         .associate { cardKey(it) to (it.match!! to it.optionPicked) }
                     lines.clear()
                     nextBefore = null; noOlder = false
@@ -577,6 +589,19 @@ class JowiViewModel : ViewModel() {
         // created the web way at once (stage ready); nothing ticked, nothing to ask for
         val picks = line.match?.takeIf { it.products.isNotEmpty() }?.let { tickedPicks(line, it) }
         if (picks != null && picks.isEmpty()) return
+        // the card says where its rows go (ledger 54): the chosen draft travels as `listId`,
+        // a new list's name as `title`; without `destination` the open draft scope as before
+        var into = if (picks != null) draftScope() else null
+        var title: String? = null
+        val d = line.match?.destination
+        if (picks != null && d != null) {
+            val key = matchKey(line)
+            when (val p = destPick(key, d)) {
+                is DestPick.Into -> into = p.id
+                DestPick.New -> { into = null; title = destName(key, d).takeIf { it.isNotEmpty() } }
+                null -> return // needsChoice: no draft tapped yet
+            }
+        }
         lines[idx] = lines[idx].copy(collecting = true)
         viewModelScope.launch {
             val ctx = ScreenContext.current
@@ -586,7 +611,7 @@ class JowiViewModel : ViewModel() {
                         q = q, page = askPage(ctx), ctxList = ctxList(),
                         createList = true, screen = ctx?.screen, state = ctx?.state,
                         visible = ctx?.visible?.takeIf { it.isNotEmpty() }, seller = ctx?.seller,
-                        picks = picks, listId = if (picks != null) draftScope() else null,
+                        picks = picks, listId = into, title = title,
                     ),
                 )
             }.getOrNull()
@@ -639,6 +664,45 @@ class JowiViewModel : ViewModel() {
                 name = p.name.orEmpty(),
             )
         }
+    }
+
+    // ---- where a card's rows go / the firm's own record (ledger 54) ----
+
+    /** The reader's destination per card ("need:<id>" / "match:<cardKey>") — session state, survives reloads. */
+    val destPicks = mutableStateMapOf<String, DestPick>()
+    /** A new list's name per card; no entry = `destination.default.title`. */
+    val destNames = mutableStateMapOf<String, String>()
+    /** The memory chip last tapped per match card (card key → chip id) — its frame marks it. */
+    val memoryChipOn = mutableStateMapOf<String, String>()
+
+    fun needKey(n: AskNeed) = "need:" + n.needId
+    fun matchKey(line: JowiLine) = "match:" + cardKey(line)
+
+    /** The reader's choice, else the server's default; null = `mode: "ask"` with nothing tapped. */
+    fun destPick(key: String, d: AskDestination): DestPick? = destPicks[key] ?: when (d.default?.mode) {
+        "into" -> d.default?.listId?.takeIf { it.isNotEmpty() }?.let { DestPick.Into(it) }
+        "new" -> DestPick.New
+        else -> null
+    }
+
+    fun destName(key: String, d: AskDestination): String = (destNames[key] ?: d.default?.title.orEmpty()).trim()
+
+    /** True while the card's button must wait for a draft to be tapped. */
+    fun destWaiting(key: String, d: AskDestination?) = d != null && destPick(key, d) == null
+
+    /** `seller` → only that seller's rows · `all` → every row · `except` → every row but that seller's. Nothing is sent. */
+    fun applyChip(c: AskMemoryChip, m: AskMatch, line: JowiLine) {
+        val pid = c.action?.partnerId?.takeIf { it.isNotEmpty() } ?: c.partnerId
+        m.products.forEach { s ->
+            val sid = s.partnerId
+            val tick = when (c.action?.select) {
+                "seller" -> sid != null && sid == pid
+                "except" -> sid == null || sid != pid
+                else -> true
+            }
+            s.products.orEmpty().forEach { p -> pickTicks[rowKey(line, s, p)] = tick }
+        }
+        memoryChipOn[matchKey(line)] = chipId(c)
     }
 
     /**
@@ -699,6 +763,7 @@ class JowiViewModel : ViewModel() {
                 val match = if (r.kind == "match") AskMatch(
                     r.item.orEmpty(), r.qty, r.unit, r.nProducts, r.approximate == true, r.listStage, r.sellers.orEmpty(),
                     products = r.products.orEmpty(), question = r.question, options = r.options.orEmpty(),
+                    destination = r.destination, memory = r.memory,
                 ) else null
                 val guidance = if (r.answer == null) {
                     r.message?.takeIf { it.isNotEmpty() }
@@ -729,9 +794,13 @@ class JowiViewModel : ViewModel() {
                     }
                     // a fresh card starts bare; a known one keeps its answers and its job line
                     val prev = keptNeeds[n.needId]
+                    if (prev != null && (n.destination == null || n.memory == null)) {
+                        val keep = n.copy(destination = n.destination ?: prev.need.destination, memory = n.memory ?: prev.need.memory)
+                        if (here >= 0) lines[here] = lines[here].copy(need = keep)
+                    }
                     if (moved || prev != null) {
                         if (here >= 0) lines[here] = lines[here].copy(needAmend = true)
-                        keptNeeds[n.needId] = KeptNeed(n, needAnswersOf(n.needId), prev?.listId, prev?.text)
+                        keptNeeds[n.needId] = KeptNeed(if (here >= 0) lines[here].need ?: n else n, needAnswersOf(n.needId), prev?.listId, prev?.text)
                     } else {
                         keptNeeds[n.needId] = KeptNeed(n, emptyList(), null)
                     }
@@ -788,7 +857,9 @@ class JowiViewModel : ViewModel() {
             val res = r.first
             if (res == null) { lines[j] = lines[j].copy(needBusy = false, needError = r.second); return@launch }
             lines[j] = lines[j].copy(needBusy = false, needAnswers = lines[j].needAnswers + shown)
-            val fresh = res.need
+            // the answer door's card may come without destination / memory — the card keeps its own
+            val old = lines[j].need
+            val fresh = res.need?.let { f -> f.copy(destination = f.destination ?: old?.destination, memory = f.memory ?: old?.memory) }
             val lid = res.listId?.takeIf { it.isNotEmpty() }
             when {
                 // the job line rides beside the card (api views.py `need_answer` → `answer`)
@@ -810,9 +881,19 @@ class JowiViewModel : ViewModel() {
         val idx = lines.indexOfFirst { it.id == line.id }
         if (idx < 0 || hasPending) return
         val n = lines[idx].need ?: return
+        // where the rows go (ledger 54): the chosen draft (`into`) or the new list's name; an
+        // empty name is not sent (the server's default then)
+        val body = n.destination?.let { d ->
+            val key = needKey(n)
+            when (val p = destPick(key, d)) {
+                is DestPick.Into -> AskNeedBuildBody(into = p.id)
+                DestPick.New -> destName(key, d).takeIf { it.isNotEmpty() }?.let { AskNeedBuildBody(newTitle = it) } ?: AskNeedBuildBody()
+                null -> return // needsChoice: no draft tapped yet
+            }
+        } ?: AskNeedBuildBody()
         lines[idx] = lines[idx].copy(needBusy = true, needError = null)
         viewModelScope.launch {
-            val r = needCall { Graph.api.askNeedBuild(n.needId) }
+            val r = needCall { Graph.api.askNeedBuild(n.needId, body) }
             val j = lines.indexOfFirst { it.id == line.id }
             if (j < 0) return@launch
             val lid = r.first?.takeIf { it.kind == "list" }?.listId?.takeIf { it.isNotEmpty() }
@@ -1518,6 +1599,8 @@ private fun NeedCard(n: AskNeed, line: JowiLine, vm: JowiViewModel) {
         if (n.recall.isNotEmpty()) {
             Text(stringResource(R.string.need_recall) + ": " + n.recall, fontSize = 13.sp, lineHeight = 18.sp, fontStyle = FontStyle.Italic, color = colors.faint)
         }
+        // the firm's own record of the core item (ledger 54) — under the recollection
+        NeedMemoryLine(n.memory)
         if (open) n.question?.let { NeedQuestion(it, n, line, vm) }
         if (shown.isNotEmpty() || hidden.isNotEmpty()) {
             Column {
@@ -1536,6 +1619,8 @@ private fun NeedCard(n: AskNeed, line: JowiLine, vm: JowiViewModel) {
             if (line.needBusy) {
                 CircularProgressIndicator(Modifier.size(16.dp).padding(vertical = 2.dp), strokeWidth = 2.dp, color = Kiremit500)
             } else {
+                // where the rows go (ledger 54) — one line above the button
+                n.destination?.let { DestinationLine(it, vm.needKey(n), prefill = "", vm = vm) }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     NeedBuildButton(n, line, vm)
                     if (n.questionsLeft > 1) {
@@ -1634,7 +1719,8 @@ private fun NeedQuestion(q: AskNeedQuestion, n: AskNeed, line: JowiLine, vm: Jow
 @Composable
 private fun NeedBuildButton(n: AskNeed, line: JowiLine, vm: JowiViewModel) {
     val colors = WorkisTheme.colors
-    val live = !vm.busy
+    // needsChoice: the button waits until a draft is tapped
+    val live = !vm.busy && !vm.destWaiting(vm.needKey(n), n.destination)
     val label = stringResource(if (n.question == null) R.string.need_build else R.string.need_build_now)
     if (n.question == null && vm.isLastReply(line)) {
         Button(
@@ -1668,6 +1754,8 @@ private fun NeedBuildButton(n: AskNeed, line: JowiLine, vm: JowiViewModel) {
 private fun MatchCard(m: AskMatch, line: JowiLine, vm: JowiViewModel) {
     val colors = WorkisTheme.colors
     Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // the firm's own record (ledger 54) above the card's reading; its chips tick the rows
+        m.memory?.let { MatchMemoryBlock(it, m, line, vm) }
         // no exact match is said in words, in the beige idiom — never "N matches"
         if (m.approximate) {
             Text(
@@ -1737,8 +1825,12 @@ private fun MatchCard(m: AskMatch, line: JowiLine, vm: JowiViewModel) {
                 Text(stringResource(R.string.collect_quotes), fontSize = 13.sp, color = colors.faint)
             }
             else -> {
-                // a pick list with nothing ticked has nothing to ask for
-                val live = vm.lines.none { it.pending } && (m.products.isEmpty() || vm.tickedCount(line, m) > 0)
+                // where the picks go (ledger 54) — one line above the door
+                val dest = m.destination?.takeIf { m.products.isNotEmpty() }
+                dest?.let { DestinationLine(it, vm.matchKey(line), prefill = "", vm = vm) }
+                // a pick list with nothing ticked has nothing to ask for; needsChoice waits for a draft
+                val live = vm.lines.none { it.pending } && (m.products.isEmpty() || vm.tickedCount(line, m) > 0) &&
+                    !vm.destWaiting(vm.matchKey(line), dest)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable(enabled = live) { vm.collectQuotesOnCard(line) }.padding(vertical = 4.dp),

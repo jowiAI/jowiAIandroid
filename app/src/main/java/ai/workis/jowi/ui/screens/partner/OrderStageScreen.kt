@@ -96,6 +96,12 @@ class OrderStageViewModel : ViewModel() {
     var loadError by mutableStateOf<String?>(null)
         private set
     var note by mutableStateOf<String?>(null)
+    /** The satisfaction ask a line confirmation carried — drawn right under the confirmation (ledger 54). */
+    var ask by mutableStateOf<ai.workis.jowi.data.SatisfactionAsk?>(null)
+    val ticks = SatisfactionTicks()
+
+    fun satisfaction(lineId: String, value: String, note: String, reason: String?) =
+        ticks.post(viewModelScope, lineId, value, note, reason)
 
     fun load(id: String) {
         viewModelScope.launch {
@@ -140,6 +146,16 @@ fun OrderStageScreen(
                 // the other party moved an order (`changes/`, 2026-10-03)
                 ChangesWatch(scope = "orders") { vm.load(orderId) }
                 NoteBand(vm.note)
+                vm.ask?.let { a ->
+                    val id = a.lineId.orEmpty()
+                    SatisfactionCard(
+                        a, stringResource(R.string.satisfaction_private),
+                        busy = vm.ticks.busy[id] == true,
+                        chosen = vm.ticks.chosen[id],
+                        thanks = vm.ticks.thanks[id],
+                        error = vm.ticks.error[id],
+                    ) { value, note, reason -> vm.satisfaction(id, value, note, reason) }
+                }
                 StageHead(o)
                 val steps = o.steps.orEmpty()
                 val job = o.job
@@ -205,7 +221,7 @@ fun OrderStageScreen(
             stringResource(if (l.openAccount == true) R.string.ap_confirm_delivery_open_account else R.string.ap_confirm_delivery_confirm),
             destructive = false,
             onDismiss = { lineConfirm = null },
-        ) { l.id?.let { doors.lineConfirm(it, after) } }
+        ) { l.id?.let { doors.lineConfirm(it, onAsk = { a -> vm.ask = a }, onResult = after) } }
     }
     lineMark?.let { l ->
         // the seller's hand-over mark: the server's `message` (or its refusal) becomes the note

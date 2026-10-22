@@ -202,6 +202,8 @@ private fun MarketHome(
         ordersVm.load(); approvalsVm.load()
         // Jowi's line + the empty day's last move: the Jowi thread itself
         scope.launch { deskVm.loadHistory(); onHistory() }
+        // Jowi speaks first (ledger 54): the buyer's due-now nudges — a failed read draws nothing
+        scope.launch { deskVm.loadNudges(company.isBuyer) }
     }
     LaunchedEffect(c?.isBuyer, c?.isSeller, c?.isCarrier) { if (c != null) load(c) }
     PullToRefreshBox(
@@ -265,6 +267,13 @@ private fun MarketHome(
                     is MineRow.Order -> row.o.id?.let { onOpen(MarketDest.Stage(it, MarketDest.Home)) }
                     is MineRow.Quoting -> row.q.listId?.let { onOpen(MarketDest.ListDetail(it, back = MarketDest.Home)) }
                     is MineRow.Invite -> onOpen(MarketDest.Quotes)
+                }
+            }
+
+            // Jowi speaks first: quiet rows between "Sizde" and the doors (buyer seat, hidden when empty)
+            if (c.isBuyer) {
+                NudgeRows(deskVm.nudges, deskVm.nudgeBusy, deskVm.nudgeError) { n ->
+                    scope.launch { deskVm.openNudge(n) { id -> onOpen(MarketDest.ListDetail(id, back = MarketDest.Home)) } }
                 }
             }
 

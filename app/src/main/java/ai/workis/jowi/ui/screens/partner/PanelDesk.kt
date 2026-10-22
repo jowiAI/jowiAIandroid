@@ -24,7 +24,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
 import ai.workis.jowi.ui.theme.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,6 +57,9 @@ import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.ApiResult
 import ai.workis.jowi.data.AskLine
+import ai.workis.jowi.data.Nudge
+import ai.workis.jowi.data.partnerCall
+import ai.workis.jowi.data.statusMessage
 import ai.workis.jowi.data.OrderQuoting
 import ai.workis.jowi.data.PartnerOrder
 import ai.workis.jowi.data.SellerInvitation
@@ -97,6 +106,35 @@ class PanelDeskViewModel : ViewModel() {
 
     /** The newest movement that is not the user's own — the empty day's "Son hareket". */
     val lastMove: AskLine? get() = shown.lastOrNull { it.who != "user" }
+
+    // Jowi speaks first (ledger 54, slice 4): due-now nudges from the buyer's own record.
+    var nudges by mutableStateOf<List<Nudge>>(emptyList())
+        private set
+    /** The cpid whose list is being built — one tap at a time. */
+    var nudgeBusy by mutableStateOf<String?>(null)
+        private set
+    /** The refusal sentence, under the row that asked. */
+    var nudgeError by mutableStateOf<Pair<String, String>?>(null)
+        private set
+
+    /** `GET memory/nudges/` — buyer seat only; a failed read = no rows, never a banner. */
+    suspend fun loadNudges(isBuyer: Boolean) {
+        if (!isBuyer) { nudges = emptyList(); return }
+        val (r, _) = partnerCall(Graph.language.value) { Graph.api.memoryNudges() }
+        nudges = r?.nudges.orEmpty().filter { !it.cpid.isNullOrBlank() }
+    }
+
+    /** `POST memory/nudges/{cpid}/list/` → the draft list's id, or the server's sentence under the row. */
+    suspend fun openNudge(n: Nudge, onList: (String) -> Unit) {
+        val cpid = n.cpid ?: return
+        if (nudgeBusy != null) return
+        nudgeBusy = cpid; nudgeError = null
+        val lang = Graph.language.value
+        val (r, err) = try { partnerCall(lang) { Graph.api.memoryNudgeList(cpid) } } finally { nudgeBusy = null }
+        val listId = r?.listId?.takeIf { it.isNotBlank() }
+        if (listId != null) onList(listId)
+        else nudgeError = cpid to (err ?: r?.error ?: r?.message ?: statusMessage(-1, lang))
+    }
 }
 
 private val appLocale: Locale get() = if (Graph.language.value == "en") Locale.UK else Locale("tr", "TR")
@@ -379,6 +417,56 @@ fun DoorRow(doors: List<DeskDoor>, onOpen: (MarketDest) -> Unit) {
                 d.count?.let { Text("$it", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink) }
                 // a count is never colour alone — the circle in words
                 d.badge?.let { Text("· $it", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.muted, maxLines = 1) }
+            }
+        }
+    }
+}
+
+// ---------- Jowi speaks first — the memory's nudges
+
+/**
+ * Each nudge a quiet row between "Sizde" and the doors (ledger 54): the kiremit slash,
+ * the server's sentence as sent (md_lite), and its one tap — a SECONDARY bordered
+ * button with `link.text` → the draft list. Nothing when there are no nudges.
+ */
+@Composable
+fun NudgeRows(nudges: List<Nudge>, busy: String?, error: Pair<String, String>?, onOpen: (Nudge) -> Unit) {
+    if (nudges.isEmpty()) return
+    val colors = WorkisTheme.colors
+    Column(
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        nudges.forEach { n ->
+            Row(verticalAlignment = Alignment.Top) {
+                Text("/", fontFamily = WorkisMono, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Kiremit500, modifier = Modifier.padding(top = 1.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AnswerText(n.line ?: n.name ?: "", fontSize = 14.sp, lineHeight = 20.sp)
+                    val label = n.link?.text?.takeIf { it.isNotBlank() } ?: n.name?.takeIf { it.isNotBlank() }
+                    if (label != null) {
+                        OutlinedButton(
+                            onClick = { onOpen(n) },
+                            enabled = busy == null,
+                            border = BorderStroke(1.dp, colors.border),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.ink, disabledContentColor = colors.faint),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(34.dp),
+                        ) {
+                            if (busy == n.cpid) {
+                                CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = colors.muted)
+                                Spacer(Modifier.width(6.dp))
+                            }
+                            Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    if (error != null && error.first == n.cpid) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Icon(Icons.Filled.Warning, contentDescription = null, tint = colors.danger, modifier = Modifier.size(13.dp))
+                            Text(error.second, fontSize = 12.sp, color = colors.danger)
+                        }
+                    }
+                }
             }
         }
     }
