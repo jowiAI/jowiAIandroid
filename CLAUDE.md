@@ -17,6 +17,13 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
 - Gradle 9.7.1 wrapper; build from CLI with:
   `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew assembleDebug`
 - Package / applicationId: `ai.workis.jowi`. minSdk 26, compileSdk 37, targetSdk 36.
+- Tester builds go through **Firebase App Distribution** (project `workis-app`, group `ekip`):
+  `JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew assembleRelease appDistributionUploadRelease`
+  signs with `keystore/jowi-release.jks` (keystore.properties, both gitignored), uploads the APK and mails the group.
+  Before every upload: bump `versionCode` (the same code is refused as a duplicate) and rewrite `app/release-notes.txt`.
+  Auth = the Firebase CLI login on this Mac (`firebase login`, interactive — the owner runs it). Testers / groups:
+  `firebase appdistribution:testers:add --group-alias ekip a@b.c --project workis-app`, groups `appdistribution:group:create`.
+  The Play Console (internal testing, AAB) is the store road later; nothing here depends on it.
 - In place: Retrofit + OkHttp + kotlinx.serialization, EncryptedSharedPreferences (token),
   BiometricPrompt gate on launch (ui/BiometricGate.kt — skips when no lock/biometric enrolled),
   per-app locale via AppCompat, prefs in SharedPreferences (`workis_lang`, `workis_appearance`).

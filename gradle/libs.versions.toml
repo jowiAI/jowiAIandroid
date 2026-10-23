@@ -17,6 +17,7 @@ credentials = "1.6.0"
 codeScanner = "16.1.0"
 googleServices = "4.5.0"
 firebaseBom = "35.1.0"
+firebaseAppDistribution = "5.3.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -51,3 +52,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlinCompose" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlinCompose" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+firebase-appdistribution = { id = "com.google.firebase.appdistribution", version.ref = "firebaseAppDistribution" }

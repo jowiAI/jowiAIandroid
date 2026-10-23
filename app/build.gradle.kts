@@ -12,6 +12,18 @@ plugins {
 // never initialises and PushService has no carrier (the Hesap switch says so). Nothing else changes.
 if (file("google-services.json").exists()) apply(plugin = libs.plugins.google.services.get().pluginId)
 
+// Tester distribution: Firebase App Distribution on the same project. The plugin is applied with
+// the other two (it is harmless without google-services.json; the upload task is what needs the
+// file). `./gradlew assembleRelease appDistributionUploadRelease` signs with the release key,
+// uploads the APK and tells the "ekip" group; auth = the Firebase CLI login on this Mac.
+// Bump versionCode before every upload — the same code is refused as a duplicate.
+apply(plugin = libs.plugins.firebase.appdistribution.get().pluginId)
+configure<com.google.firebase.appdistribution.gradle.AppDistributionExtension> {
+    artifactType = "APK"
+    groups = "ekip"
+    releaseNotesFile = file("release-notes.txt").path
+}
+
 // Release signing: keystore.properties (gitignored) → storeFile / storePassword /
 // keyAlias / keyPassword. Without it the release build stays unsigned.
 val keystoreProps = Properties().apply {
@@ -27,7 +39,7 @@ android {
         applicationId = "ai.workis.jowi"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
+        versionCode = 15
         versionName = "0.8.2"
     }
 

@@ -1,0 +1,1 @@
+0.8.2 (15) — ilk App Distribution sürümü: push (FCM) taşıyıcısı, Kararlar ekranı, Jowi sahnesi.
