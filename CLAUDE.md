@@ -44,8 +44,8 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   natively (android.graphics.pdf.PdfRenderer, `PdfPages`). Never hard-code a PDF path.
 - Jowi tab (`ui/screens/JowiScreen.kt`) is the SERVER's thread (`GET ask/history/`, shared with the
   web drawer; no device storage): `ask/preview/` before every send (10 s, fallback = typed text),
-  policy-B stamp + 👍/👎 via `ask/like/`, match card, "Aç" links in-app. OkHttp read timeout is 90 s
-  because answers are model calls. `handedOff` (ledger 70) on the live reply and on history rows (`source == "handoff"` reads
+  policy-B stamp + 👍/👎 via `ask/like/`, match card, "Aç" links in-app. OkHttp read timeout is 60 s
+  (deliberate: raised to 90 s on 2026-09-09, back to 60 s on 2026-09-11 — the same as iOS's URLSession default on `/workis/ask/`). `handedOff` (ledger 70) on the live reply and on history rows (`source == "handoff"` reads
   the same) draws `WorkisIcons.People` + "Ekibe iletildi" in the stamp's slot — icon + words, never colour alone. Answers are
   md_lite blocks through `AnswerText`, never plain text.
 - Server Markdown (expert guide) renders through `MarkdownDocument` (ui/components/) — the dialect in
