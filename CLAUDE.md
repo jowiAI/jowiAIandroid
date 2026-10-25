@@ -125,7 +125,7 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   (Hesap sections for role 5 + departure/rejoin). Money stays decimal-as-string end to end.
 - Every "it's done" state is `OutcomeView` (glyph + mono title + one paragraph + one kiremit action).
 - Cell-exit autosave rows: `FormRow` (ui/components/FormRows.kt) — `onCommit` fires when
-  focus leaves; expert form saves a prefs draft, application detail POSTs one field per call.
+  focus leaves; expert form saves a prefs draft, application detail POSTs one field per call. The FIRST mail a tester gets is Workis's own, not Firebase's template: the Django System page (`/workis/console/sistem/` › Test app invitation) or `python manage.py send_tester_invite --platform android --link <invite link> mail…` sends the branded HTML mail with the group's invite link (Firebase console › Testers & Groups › Invite links); Firebase then mails only the 'new build' notices.
 
 ## API rules (from API_CONTRACT.md — the mobile side never edits Django serializers)
 
