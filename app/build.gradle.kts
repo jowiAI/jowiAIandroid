@@ -17,8 +17,10 @@ if (file("google-services.json").exists()) apply(plugin = libs.plugins.google.se
 // file). `./gradlew assembleRelease appDistributionUploadRelease` signs with the release key,
 // uploads the APK and tells the "ekip" group; auth = the Firebase CLI login on this Mac.
 // Bump versionCode before every upload — the same code is refused as a duplicate.
+// The block is the project default (`firebaseAppDistributionDefault`); plugin 5.3 deprecates the plain
+// `firebaseAppDistribution` extension for root projects.
 apply(plugin = libs.plugins.firebase.appdistribution.get().pluginId)
-configure<com.google.firebase.appdistribution.gradle.AppDistributionExtension> {
+configure<com.google.firebase.appdistribution.gradle.AppDistributionExtension.ProjectDefaultAppDistributionExtension> {
     artifactType = "APK"
     groups = "ekip"
     releaseNotesFile = file("release-notes.txt").path
