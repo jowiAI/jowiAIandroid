@@ -314,7 +314,14 @@ data class SellerOrderLine(
 )
 
 @Serializable
-data class OrderFundResult(val success: Boolean = false, val message: String? = null, val error: String? = null, val order: PartnerOrder? = null)
+data class OrderFundResult(
+    val success: Boolean = false,
+    val message: String? = null,
+    val error: String? = null,
+    val order: PartnerOrder? = null,
+    /** Ledger 71: the PSP's hosted card page — present = the money is NOT held yet (`PaymentWebView`). */
+    val paymentUrl: String? = null,
+)
 
 @Serializable
 data class ReviewBody(val rating: Int, val comment: String? = null)

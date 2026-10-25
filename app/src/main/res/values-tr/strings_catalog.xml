@@ -828,6 +828,7 @@
     <string name="passkeys_section">Geçiş anahtarları</string>
     <string name="pay_days_term">gün vade (teslimden itibaren)</string>
     <string name="pay_open_account">Açık hesap</string>
+    <string name="pay_page_title">Ödeme sayfası</string>
     <string name="payout_missing">EKSİK — PAYLAR BİRİKİR AMA ÖDENEMEZ</string>
     <string name="payout_note">Yalnızca platform kayıtlarında tutulur; stopaj oranı gider pusulası ödemelerine uygulanır. Ödeme, ödeme altyapısı devreye girince başlar (sözleşme §6).</string>
     <string name="payout_ready_tag">TAMAM</string>

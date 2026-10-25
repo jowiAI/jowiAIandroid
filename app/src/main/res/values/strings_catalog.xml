@@ -828,6 +828,7 @@
     <string name="passkeys_section">Passkeys</string>
     <string name="pay_days_term">days after delivery</string>
     <string name="pay_open_account">Open account</string>
+    <string name="pay_page_title">Payment page</string>
     <string name="payout_missing">MISSING — SHARES ACCRUE BUT CANNOT BE PAID</string>
     <string name="payout_note">Kept only in platform records; the withholding rate applies to expense-voucher payments. Payment starts when the payout rails go live (agreement §6).</string>
     <string name="payout_ready_tag">READY</string>

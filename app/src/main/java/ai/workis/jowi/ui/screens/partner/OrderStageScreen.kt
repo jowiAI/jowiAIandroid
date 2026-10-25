@@ -67,6 +67,7 @@ import ai.workis.jowi.data.shortDate
 import ai.workis.jowi.ui.components.ChangesWatch
 import ai.workis.jowi.ui.components.FormRow
 import ai.workis.jowi.ui.components.FormSection
+import ai.workis.jowi.ui.components.PaymentWebView
 import ai.workis.jowi.ui.screens.console.ConsoleSub
 import ai.workis.jowi.ui.screens.expert.NoteBand
 import ai.workis.jowi.ui.theme.Beige
@@ -124,6 +125,8 @@ fun OrderStageScreen(
     val vm: OrderStageViewModel = viewModel(key = "stage-$orderId")
     val colors = WorkisTheme.colors
     var confirmFund by remember { mutableStateOf(false) }
+    // ledger 71: the PSP's card page the fund door answered — closing it re-reads
+    var payPage by remember { mutableStateOf<String?>(null) }
     var readyOpen by remember { mutableStateOf(false) }
     var lineConfirm by remember { mutableStateOf<OrderJobLine?>(null) }
     // the line whose "Teslim ettim" waits for the confirmation (2026-10-05)
@@ -211,9 +214,10 @@ fun OrderStageScreen(
     }
     if (confirmFund) {
         ConfirmDialog(stringResource(R.string.order_fund), stringResource(R.string.order_fund_confirm), destructive = false, onDismiss = { confirmFund = false }) {
-            doors.fund(orderId, after)
+            doors.fund(orderId, onPayPage = { u -> payPage = u }, onResult = after)
         }
     }
+    payPage?.let { u -> PaymentWebView(u) { payPage = null; doors.load(); vm.load(orderId) } }
     lineConfirm?.let { l ->
         // on open account nothing is released — the invoice simply runs
         ConfirmDialog(

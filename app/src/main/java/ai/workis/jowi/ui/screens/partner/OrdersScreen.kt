@@ -70,6 +70,7 @@ import ai.workis.jowi.data.shortDate
 import ai.workis.jowi.ui.components.ChangesWatch
 import ai.workis.jowi.ui.components.FormRow
 import ai.workis.jowi.ui.components.FormSection
+import ai.workis.jowi.ui.components.PaymentWebView
 import ai.workis.jowi.ui.components.PdfViewerDialog
 import ai.workis.jowi.ui.screens.console.ConsoleSub
 import ai.workis.jowi.ui.screens.expert.NoteBand
@@ -134,9 +135,29 @@ class OrdersViewModel : ViewModel() {
         }
     }
 
-    fun fund(id: String, onResult: ((Boolean, String?) -> Unit)? = null) = act(onResult) {
-        val (r, err) = partnerCall(lang) { Graph.api.orderFund(id) }
-        (r?.success == true) to (r?.error ?: r?.message ?: err)
+    /**
+     * Ledger 71: a `paymentUrl` beside `success` = the money is NOT held yet — the
+     * sentence lands as before, `onPayPage` opens the PSP's page, and the re-read
+     * waits for that page to close (the caller re-reads then). Absent = today's door.
+     */
+    fun fund(id: String, onPayPage: (String) -> Unit, onResult: ((Boolean, String?) -> Unit)? = null) {
+        if (busy) return
+        busy = true
+        if (onResult == null) note = null
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.orderFund(id) }
+            val ok = r?.success == true
+            val msg = r?.error ?: r?.message ?: err
+            val page = r?.paymentUrl?.takeIf { ok && it.isNotBlank() }
+            busy = false
+            if (page != null) {
+                if (onResult == null) note = msg else onResult(false, msg) // false: the caller's re-read waits for the page
+                onPayPage(page)
+            } else {
+                if (onResult == null) note = msg else onResult(ok, msg)
+                if (ok) load()
+            }
+        }
     }
 
     fun lineReceived(lineId: String) = act {
@@ -232,6 +253,8 @@ fun OrdersScreen(
     val colors = WorkisTheme.colors
     var reviewFor by remember { mutableStateOf<PartnerOrder?>(null) }
     var confirmFund by remember { mutableStateOf<PartnerOrder?>(null) }
+    // ledger 71: the PSP's card page the fund door answered — closing it re-reads
+    var payPage by remember { mutableStateOf<String?>(null) }
     var readyFor by remember { mutableStateOf<PartnerOrder?>(null) }
     var cargoFor by remember { mutableStateOf<PartnerOrder?>(null) }
     /** A token-walled PDF door: (title, url, file name). */
@@ -300,13 +323,14 @@ fun OrdersScreen(
     }
     confirmFund?.let { o ->
         ConfirmDialog(stringResource(R.string.order_fund), stringResource(R.string.order_fund_confirm), destructive = false, onDismiss = { confirmFund = null }) {
-            o.id?.let { vm.fund(it) }
+            o.id?.let { vm.fund(it, onPayPage = { u -> payPage = u }) }
         }
     }
     reviewFor?.let { o -> ReviewSheet(o, vm) { reviewFor = null } }
     readyFor?.let { o -> ReadySheet(o, vm.busy, onReady = { day, done -> o.id?.let { vm.ready(it, day, done) } }) { readyFor = null } }
     cargoFor?.let { o -> CargoLevelSheet(o, vm) { cargoFor = null } }
     pdfDoor?.let { (title, url, file) -> PdfViewerDialog(title, url = url, fileName = file) { pdfDoor = null } }
+    payPage?.let { u -> PaymentWebView(u) { payPage = null; vm.load() } }
 }
 
 /**

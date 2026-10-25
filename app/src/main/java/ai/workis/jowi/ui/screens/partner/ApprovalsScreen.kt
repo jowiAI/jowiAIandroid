@@ -50,6 +50,7 @@ import ai.workis.jowi.data.jsonBody
 import ai.workis.jowi.data.partnerCall
 import ai.workis.jowi.ui.components.FormRow
 import ai.workis.jowi.ui.components.FormSection
+import ai.workis.jowi.ui.components.PaymentWebView
 import ai.workis.jowi.ui.screens.console.ConsoleSub
 import ai.workis.jowi.ui.screens.expert.NoteBand
 import ai.workis.jowi.ui.theme.Beige
@@ -101,9 +102,21 @@ class ApprovalsViewModel : ViewModel() {
     }
 
     fun outward(mid: String, action: String) = act { simple { Graph.api.approvalOutward(mid, jsonBody("action" to action)) } }
-    fun fund(orderId: String) = act {
-        val (r, err) = partnerCall(lang) { Graph.api.orderFund(orderId) }
-        (r?.success == true) to (r?.error ?: r?.message ?: err)
+    /**
+     * Ledger 71: the PSP's hosted card page the fund door may answer — present =
+     * the money is NOT held yet; the screen opens it and re-reads when it closes.
+     */
+    var payPage by mutableStateOf<String?>(null)
+    fun fund(orderId: String) {
+        busy = true; note = null
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.orderFund(orderId) }
+            val ok = r?.success == true
+            busy = false
+            note = r?.error ?: r?.message ?: err
+            val page = r?.paymentUrl?.takeIf { ok && it.isNotBlank() }
+            if (page != null) payPage = page else if (ok) load()
+        }
     }
     fun acceptNewDate(orderId: String) = act {
         val (r, err) = partnerCall(lang) { Graph.api.orderTerm(orderId, "delivery_date", jsonBody("action" to "confirm")) }
@@ -334,6 +347,7 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
         ConfirmDialog(c.title, c.body, c.destructive, onDismiss = { confirm = null }) { c.run() }
     }
     form?.let { f -> ApFormSheet(f, vm) { form = null } }
+    vm.payPage?.let { u -> PaymentWebView(u) { vm.payPage = null; vm.load() } }
 }
 
 @Composable
