@@ -1,1 +1,1 @@
-0.8.3 (16) — bakım sürümü: kod değişikliği yok, dağıtım yolunun ikinci provası.
+0.8.4 (17) — Sipariş ödemesi: fund/ bir ödeme sayfası döndürürse uygulama içinde açılır, dönüş yakalanır ve kart yeniden okunur (ledger 71). Uygulama simgesi artık PNG olarak da pakette (Firebase testçi e-postasındaki yer tutucu düzelir).
