@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and below: the encrypted session file and its keyset never leave the device —
+     restored without the Keystore key they only crash the app at launch (TokenStore). -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="workis_secure.xml" />
+    <exclude domain="sharedpref" path="__androidx_security_crypto_encrypted_prefs__.xml" />
+</full-backup-content>

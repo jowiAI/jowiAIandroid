@@ -11,6 +11,9 @@ plugins {
 // fail the build, so it is applied only once the file is there; without the plugin FirebaseApp
 // never initialises and PushService has no carrier (the Hesap switch says so). Nothing else changes.
 if (file("google-services.json").exists()) apply(plugin = libs.plugins.google.services.get().pluginId)
+// Crash reports (2026-10-27): Crashlytics rides on the same file — a tester's phone crashed at
+// launch with no way to read its log (adb needs the device in hand). Dormant without the file.
+if (file("google-services.json").exists()) apply(plugin = libs.plugins.firebase.crashlytics.get().pluginId)
 
 // Tester distribution: Firebase App Distribution on the same project. The plugin is applied with
 // the other two (it is harmless without google-services.json; the upload task is what needs the
@@ -41,8 +44,8 @@ android {
         applicationId = "ai.workis.jowi"
         minSdk = 26
         targetSdk = 36
-        versionCode = 17
-        versionName = "0.8.4"
+        versionCode = 18
+        versionName = "0.8.5"
     }
 
     signingConfigs {
@@ -91,6 +94,7 @@ dependencies {
     // push (ledger 45): the FCM carrier — a token for push/register/, messages → the watching screens
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    implementation(libs.firebase.crashlytics)
     implementation(libs.retrofit)
     implementation(libs.retrofit.kotlinx.serialization)
     implementation(libs.okhttp)
