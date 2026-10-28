@@ -143,6 +143,7 @@
     <string name="badge_handoff">HANDOFF</string>
     <string name="badge_new_word">new</string>
     <string name="badge_unmatched">UNMATCHED</string>
+    <string name="bands_loading">Loading the catalogue</string>
     <string name="bind_action">Select</string>
     <string name="bio_field">Bio</string>
     <string name="bio_placeholder">Your background, the standards you work with, the topics you can help with.</string>
@@ -497,6 +498,7 @@
     <string name="face_id">Unlock with Face ID</string>
     <string name="face_idcancel">Use another account</string>
     <string name="face_idreason">Sign in to your Workis account</string>
+    <string name="families_word">families</string>
     <string name="family_live">Live</string>
     <string name="family_proposed">Awaiting review</string>
     <string name="filter_document">Document</string>
@@ -859,6 +861,7 @@
     <string name="privacy">Privacy Policy</string>
     <string name="processing">Processing…</string>
     <string name="product_name">Product name</string>
+    <string name="products_word">products</string>
     <string name="profile_hidden">HIDDEN — turn on name visibility to publish</string>
     <string name="profile_note">Shown with your sectors, the verification badge and the contribution indicators; your affiliation declaration is never shown. You are responsible for its accuracy.</string>
     <string name="project_hint">purchases are filed under this project — deliveries go to its address</string>
@@ -947,6 +950,9 @@
     <string name="satisfaction_note">A short note (optional)</string>
     <string name="satisfaction_private">Only you see this</string>
     <string name="satisfaction_title">How was the delivery?</string>
+    <string name="search_more">The list was cut here; narrow the search</string>
+    <string name="search_near">No exact match — the nearest products</string>
+    <string name="search_no_results">No products match.</string>
     <string name="search_products">Search other products…</string>
     <string name="seat_buyer">Buyer</string>
     <string name="seat_carrier">Carrier</string>

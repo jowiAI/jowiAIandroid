@@ -30,6 +30,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
@@ -73,6 +75,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -88,7 +91,9 @@ import ai.workis.jowi.R
 import ai.workis.jowi.data.CatalogFamilyRow
 import ai.workis.jowi.data.CatalogAttr
 import ai.workis.jowi.data.CatalogIngestion
+import ai.workis.jowi.data.CatalogBand
 import ai.workis.jowi.data.CatalogLiveRow
+import ai.workis.jowi.data.CatalogSearchPage
 import ai.workis.jowi.data.CatalogPage
 import ai.workis.jowi.data.CatalogPlanSection
 import ai.workis.jowi.data.CatalogWeb
@@ -112,6 +117,7 @@ import ai.workis.jowi.data.jsonBody
 import ai.workis.jowi.data.jsonError
 import ai.workis.jowi.data.partnerCall
 import ai.workis.jowi.ui.components.AuthImage
+import ai.workis.jowi.ui.components.ChangesWatch
 import ai.workis.jowi.ui.components.FormRow
 import ai.workis.jowi.ui.components.FormSection
 import ai.workis.jowi.ui.screens.console.ConsoleSub
@@ -125,6 +131,7 @@ import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
@@ -165,13 +172,13 @@ class CatalogViewModel : ViewModel() {
         }
     }
 
-    private fun act(block: suspend () -> Pair<Boolean, String?>) {
+    private fun act(after: () -> Unit = {}, block: suspend () -> Pair<Boolean, String?>) {
         busy = true; note = null
         viewModelScope.launch {
             val (ok, msg) = block()
             busy = false
             note = msg
-            if (ok) load()
+            if (ok) { load(); after() }
         }
     }
 
@@ -180,9 +187,133 @@ class CatalogViewModel : ViewModel() {
         (r?.success == true) to (r?.error ?: r?.message ?: err)
     }
 
-    fun withdraw(familyId: String) = act {
+    /** A withdrawal changes the bands themselves: they are read again (and the search, when one is shown). */
+    fun withdraw(familyId: String) = act(after = { reloadBands(); researchIfAny() }) {
         val (r, err) = partnerCall(lang) { Graph.api.catalogFamilyWithdraw(familyId, seller) }
         (r?.success == true) to (r?.error ?: r?.message ?: err)
+    }
+
+    // MARK: the live catalogue, read on demand (ledger 73; iOS WorkisCatalogBandsModel)
+
+    /** The bands in TREE ORDER: every slice appended to the end, never re-sorted. */
+    var bands by mutableStateOf<List<CatalogBand>>(emptyList())
+        private set
+    var bandsLoading by mutableStateOf(false)
+        private set
+    var bandsDone by mutableStateOf(0)
+        private set
+    var bandsTotal by mutableStateOf(0)
+        private set
+    var bandsError by mutableStateOf<String?>(null)
+        private set
+    /** Open bands, keyed by `CatalogBand.key`. */
+    var openBands by mutableStateOf<Set<String>>(emptySet())
+        private set
+    /** An open band's rows (kept while it is open; a closed band's are dropped by `refreshOpen`). */
+    val bandRows = mutableStateMapOf<String, List<CatalogLiveRow>>()
+    var rowsBusy by mutableStateOf<Set<String>>(emptySet())
+        private set
+    private var bandsGen = 0
+    private var bandsStarted = false
+
+    /** The first read, once per screen life; later reads go through `reloadBands()`. */
+    fun startBands() { if (!bandsStarted) { bandsStarted = true; reloadBands() } }
+
+    /**
+     * `bands/?cursor=0&step=150`, then `cursor = next` until `next` is null. The first slice
+     * replaces what was drawn (no blank flash on a reload); open bands stay open and their rows
+     * are read again once the last slice is in. A failed slice stops with the sentence and keeps
+     * what arrived.
+     */
+    fun reloadBands() {
+        if (!bandsStarted) return
+        val gen = ++bandsGen
+        bandsError = null; bandsLoading = true; bandsDone = 0; bandsTotal = 0
+        viewModelScope.launch {
+            var cursor = 0
+            var first = true
+            while (true) {
+                val (p, err) = partnerCall(lang) { Graph.api.catalogBands(cursor, 150, seller) }
+                if (gen != bandsGen) return@launch
+                if (p == null) { bandsError = err; break }
+                val slice = p.bands.orEmpty()
+                bands = if (first) slice else bands + slice
+                first = false
+                bandsDone = p.done ?: bands.size
+                bandsTotal = maxOf(p.total ?: 0, bandsDone)
+                val next = p.next
+                if (next == null || next <= cursor) break
+                cursor = next
+            }
+            bandsLoading = false
+            val present = bands.mapTo(HashSet()) { it.key }
+            openBands = openBands.filterTo(HashSet()) { it in present }
+            refreshOpen()
+        }
+    }
+
+    /** First tap opens and reads (unless rows are already held); second tap closes. */
+    fun toggleBand(band: CatalogBand) {
+        val k = band.key
+        if (k in openBands) { openBands = openBands - k; return }
+        openBands = openBands + k
+        if (bandRows[k] == null) readBand(band)
+    }
+
+    /** Every OPEN band's rows again (after a cell edit, a stamp); a closed band's held rows are dropped so a reopen reads fresh. */
+    fun refreshOpen() {
+        bandRows.keys.filter { it !in openBands }.forEach { bandRows.remove(it) }
+        bands.filter { it.key in openBands }.forEach { readBand(it) }
+    }
+
+    private fun readBand(band: CatalogBand) {
+        val k = band.key
+        if (k in rowsBusy) return
+        rowsBusy = rowsBusy + k
+        viewModelScope.launch {
+            val (r, _) = partnerCall(lang) { Graph.api.catalogRows(band.srcQuery, seller) }
+            rowsBusy = rowsBusy - k
+            if (r != null) bandRows[k] = r.rows.orEmpty()
+        }
+    }
+
+    /** After a cell edit: the open bands and the shown search re-read. */
+    fun refreshAfterEdit() { refreshOpen(); researchIfAny() }
+
+    /** A `catalog` change stamp: the counts, the bands (open ones re-read at the end), the search. */
+    fun catalogMoved() { load(); reloadBands(); researchIfAny() }
+
+    // the one search box (rows, never bands)
+    var query by mutableStateOf("")
+        private set
+    var searchResult by mutableStateOf<CatalogSearchPage?>(null)
+        private set
+    var searchError by mutableStateOf<String?>(null)
+        private set
+    var searching by mutableStateOf(false)
+        private set
+    private var searchJob: Job? = null
+    private var searchGen = 0
+
+    /** Typing: a search after a 350 ms pause; an empty box returns to the bands (nothing re-read). */
+    fun typeQuery(q: String) { query = q; scheduleSearch(350) }
+    fun submitQuery() = scheduleSearch(0)
+    private fun researchIfAny() { if (query.isNotBlank()) scheduleSearch(0) }
+
+    private fun scheduleSearch(delayMs: Long) {
+        searchJob?.cancel()
+        val gen = ++searchGen
+        val q = query.trim()
+        if (q.isEmpty()) { searchResult = null; searchError = null; searching = false; return }
+        searchJob = viewModelScope.launch {
+            delay(delayMs)
+            searching = true
+            val (p, err) = partnerCall(lang) { Graph.api.catalogSearch(q, seller) }
+            if (gen != searchGen) return@launch
+            searching = false
+            searchError = if (p == null) err else null
+            searchResult = p ?: CatalogSearchPage(rows = emptyList())
+        }
     }
 
     fun webFetch(ingestionId: String, resume: Boolean) = act {
@@ -486,6 +617,8 @@ fun CatalogScreen(vm: CatalogViewModel, onBack: () -> Unit, onOpenFamily: (Strin
                 CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Kiremit500)
             }
             else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                // the catalogue moved on the server (a `catalog` stamp): counts, bands, open rows, search (ledger 73)
+                ChangesWatch("catalog") { vm.catalogMoved() }
                 // min 78dp, the three share the tallest — a two-line caption no longer cuts (ledger 57)
                 Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     CountTile(page.counts?.proposed ?: 0, stringResource(R.string.catalog_proposed), Modifier.weight(1f))
@@ -508,7 +641,7 @@ fun CatalogScreen(vm: CatalogViewModel, onBack: () -> Unit, onOpenFamily: (Strin
                 Spacer(Modifier.height(14.dp))
                 when (segment) {
                     0 -> ReviewSections(page, vm, onOpenFamily)
-                    1 -> LiveSections(page, vm)
+                    1 -> LiveSections(vm)
                     else -> UploadSections(page, vm)
                 }
                 Spacer(Modifier.height(30.dp))
@@ -539,6 +672,7 @@ private fun PublishCatalogContext(vm: CatalogViewModel, segment: Int) {
                 }
             }
             1 -> {
+                add(vis(stringResource(R.string.search_products)))
                 add(vis(stringResource(R.string.edit_row), VisStyle.SECONDARY)); add(vis(stringResource(R.string.withdraw_family), VisStyle.SECONDARY))
                 add(vis(stringResource(R.string.unit_price_field))); add(vis(stringResource(R.string.lead_time_field)))
                 add(vis(stringResource(R.string.stock_label))); add(vis(stringResource(R.string.published_label)))
@@ -785,52 +919,63 @@ fun ConfirmDialog(title: String, message: String, destructive: Boolean, onDismis
 
 // MARK: - Canlı katalog
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * The live catalogue read on demand (ledger 73): one search box over everything, then the
+ * band headings in slices (tree order, appended), a band's rows when it is opened. A search
+ * replaces the bands with a flat row list; an empty box returns to them.
+ */
 @Composable
-private fun LiveSections(page: CatalogPage, vm: CatalogViewModel) {
+private fun LiveSections(vm: CatalogViewModel) {
     val colors = WorkisTheme.colors
     var editTarget by remember { mutableStateOf<CatalogLiveRow?>(null) }
     var withdrawTarget by remember { mutableStateOf<CatalogLiveRow?>(null) }
-    val groups = page.live.orEmpty().groupBy { (it.group ?: it.mainGroup)?.takeIf { g -> g.isNotEmpty() } ?: "—" }
+    LaunchedEffect(Unit) { vm.startBands() }
     Text(stringResource(R.string.live_sub), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
     Spacer(Modifier.height(6.dp))
-    if (groups.isEmpty()) Text(stringResource(R.string.live_empty), fontSize = 13.sp, color = colors.faint, modifier = Modifier.padding(4.dp))
-    groups.forEach { (g, rows) ->
-        val main = rows.firstOrNull()?.mainGroup?.takeIf { it.isNotEmpty() && it != g }
-        SectionHeader("${g.uppercase()} · ${rows.size}" + (main?.let { " · $it" } ?: ""))
-        SurfaceCard {
-            rows.forEachIndexed { i, r ->
-                val row: @Composable () -> Unit = {
-                    Row(
-                        verticalAlignment = Alignment.Top,
-                        modifier = Modifier.fillMaxWidth().background(colors.surface).clickable { editTarget = r }.padding(vertical = 8.dp),
-                    ) {
-                        AuthImage(catalogImageUrl(r.img, "thumb", vm.seller), Modifier.size(40.dp))
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(verticalAlignment = Alignment.Top) {
-                                Text(r.name ?: r.sku ?: "—", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (r.published == false) colors.faint else colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                                Spacer(Modifier.width(6.dp))
-                                Text(WorkisMoney.text(r.price, r.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
-                            }
-                            Text(
-                                listOfNotNull(
-                                    r.sku,
-                                    r.leadTimeDays?.let { "· $it " + stringResource(R.string.vade_days_word) + " " + stringResource(R.string.lead_time_short) },
-                                    r.stock?.takeIf { it.isNotEmpty() && it != "0" }?.let { "· " + stringResource(R.string.stock_label) + " $it" },
-                                    if (r.published == false) "· " + stringResource(R.string.published_label).lowercase() + ": ✗" else null,
-                                ).joinToString(" "),
-                                fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            )
-                            r.attrs?.rows?.takeIf { it.isNotEmpty() }?.let { AttrLines(it) }
-                        }
-                    }
-                }
-                if (r.familyId != null) SwipeRow(stringResource(R.string.withdraw_family), Beige, { withdrawTarget = r }) { row() } else row()
-                if (i < rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+    OutlinedTextField(
+        value = vm.query, onValueChange = { vm.typeQuery(it) }, singleLine = true,
+        placeholder = { Text(stringResource(R.string.search_products), color = colors.faint, fontSize = 14.sp) },
+        leadingIcon = { Icon(WorkisIcons.Search, contentDescription = null, tint = colors.faint, modifier = Modifier.size(18.dp)) },
+        trailingIcon = {
+            if (vm.searching) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = colors.faint)
+            else if (vm.query.isNotEmpty()) Icon(
+                Icons.Filled.Close, contentDescription = stringResource(R.string.cancel), tint = colors.faint,
+                modifier = Modifier.size(18.dp).clickable { vm.typeQuery("") },
+            )
+        },
+        shape = RoundedCornerShape(30.dp),
+        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue),
+        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { vm.submitQuery() }),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Spacer(Modifier.height(10.dp))
+    val onEdit: (CatalogLiveRow) -> Unit = { editTarget = it }
+    val onWithdraw: (CatalogLiveRow) -> Unit = { withdrawTarget = it }
+    if (vm.query.isNotBlank()) {
+        val res = vm.searchResult
+        if (res != null) {
+            val rows = res.rows.orEmpty()
+            if (res.near == true) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
+                Icon(WorkisIcons.Search, contentDescription = null, tint = Beige, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.search_near), fontSize = 12.sp, color = Beige)
             }
+            vm.searchError?.let { Text(it, fontSize = 13.sp, color = colors.danger, modifier = Modifier.padding(4.dp)) }
+            if (rows.isEmpty() && vm.searchError == null) Text(stringResource(R.string.search_no_results), fontSize = 13.sp, color = colors.faint, modifier = Modifier.padding(4.dp))
+            if (rows.isNotEmpty()) SurfaceCard {
+                rows.forEachIndexed { i, r ->
+                    LiveOfferRow(r, vm, onEdit, onWithdraw)
+                    if (i < rows.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+                }
+            }
+            if (res.more == true) Text(
+                stringResource(R.string.search_more) + " · " + (res.limit ?: rows.size),
+                fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+            )
         }
-        Spacer(Modifier.height(10.dp))
+    } else {
+        BandSections(vm, onEdit, onWithdraw)
     }
     withdrawTarget?.let { r ->
         ConfirmDialog(stringResource(R.string.withdraw_family), stringResource(R.string.withdraw_confirm), destructive = true, onDismiss = { withdrawTarget = null }) {
@@ -840,6 +985,140 @@ private fun LiveSections(page: CatalogPage, vm: CatalogViewModel) {
     editTarget?.let { r ->
         OfferEditSheet(r, vm) { editTarget = null }
     }
+}
+
+/** Consecutive bands of one group share ONE heading `GROUP · Σn` (the web groups by `group`). */
+@Composable
+private fun BandSections(vm: CatalogViewModel, onEdit: (CatalogLiveRow) -> Unit, onWithdraw: (CatalogLiveRow) -> Unit) {
+    val colors = WorkisTheme.colors
+    val bands = vm.bands
+    val groups = remember(bands) {
+        val out = mutableListOf<Pair<String, MutableList<CatalogBand>>>()
+        for (b in bands) {
+            val k = firstNonEmpty(b.group, b.mainGroup).ifEmpty { "—" }
+            if (out.lastOrNull()?.first == k) out.last().second.add(b) else out.add(k to mutableListOf(b))
+        }
+        out
+    }
+    if (bands.isEmpty()) {
+        val err = vm.bandsError
+        if (err != null) Text(err, fontSize = 13.sp, color = colors.danger, modifier = Modifier.padding(4.dp))
+        else if (!vm.bandsLoading) Text(stringResource(R.string.live_empty), fontSize = 13.sp, color = colors.faint, modifier = Modifier.padding(4.dp))
+    }
+    groups.forEach { (g, list) ->
+        val main = list.firstOrNull()?.mainGroup?.takeIf { it.isNotEmpty() && it != g }
+        SectionHeader("${g.uppercase()} · ${list.sumOf { it.n ?: 0 }}" + (main?.let { " · $it" } ?: ""))
+        SurfaceCard {
+            list.forEachIndexed { i, b ->
+                val open = b.key in vm.openBands
+                BandRow(b, open, vm.seller) { vm.toggleBand(b) }
+                if (open) {
+                    val rows = vm.bandRows[b.key]
+                    Column(Modifier.padding(start = 50.dp)) {
+                        when {
+                            rows == null && b.key in vm.rowsBusy -> Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = colors.faint)
+                            }
+                            rows != null && rows.isEmpty() -> Text(stringResource(R.string.live_empty), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(vertical = 6.dp))
+                            rows != null -> rows.forEach { r ->
+                                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+                                LiveOfferRow(r, vm, onEdit, onWithdraw)
+                            }
+                        }
+                    }
+                }
+                if (i < list.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+    }
+    if (bands.isNotEmpty()) vm.bandsError?.let { Text(it, fontSize = 13.sp, color = colors.danger, modifier = Modifier.padding(4.dp)) }
+    if (vm.bandsLoading) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)) {
+        CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = colors.faint)
+        Spacer(Modifier.width(8.dp))
+        Text(stringResource(R.string.bands_loading), fontSize = 12.sp, color = colors.faint)
+        if (vm.bandsTotal > 0) {
+            Spacer(Modifier.width(8.dp))
+            Text("${vm.bandsDone}/${vm.bandsTotal}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+        }
+    }
+}
+
+/** One band: thumb, family name, brand · n products · n families; tap opens / closes. */
+@Composable
+private fun BandRow(b: CatalogBand, open: Boolean, seller: String?, onTap: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onTap).padding(vertical = 8.dp)
+            .semantics { if (open) selected = true },
+    ) {
+        AuthImage(catalogImageUrl(b.img, "thumb", seller), Modifier.size(40.dp))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(firstNonEmpty(b.family, b.group).ifEmpty { "—" }, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(
+                listOfNotNull(
+                    b.brand?.takeIf { it.isNotEmpty() },
+                    "${b.n ?: 0} " + stringResource(R.string.products_word),
+                    b.nFamilies?.takeIf { it > 1 }?.let { "· $it " + stringResource(R.string.families_word) },
+                ).joinToString(" "),
+                fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(6.dp))
+        Icon(
+            if (open) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowRight,
+            contentDescription = null, tint = colors.faint,
+        )
+    }
+}
+
+/**
+ * One live offer row — a band's row and a search hit alike. Tap = the edit sheet; swipe =
+ * withdraw when the row has a family. A `placeholder` row prints its note sentence where the
+ * name and price go, no stock/lead line, and opens nothing — withdrawing is its one action.
+ */
+@Composable
+private fun LiveOfferRow(r: CatalogLiveRow, vm: CatalogViewModel, onEdit: (CatalogLiveRow) -> Unit, onWithdraw: (CatalogLiveRow) -> Unit) {
+    val colors = WorkisTheme.colors
+    val placeholder = r.placeholder == true
+    val row: @Composable () -> Unit = {
+        Row(
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier.fillMaxWidth().background(colors.surface)
+                .then(if (placeholder) Modifier else Modifier.clickable { onEdit(r) })
+                .padding(vertical = 8.dp),
+        ) {
+            AuthImage(catalogImageUrl(r.img, "thumb", vm.seller), Modifier.size(40.dp))
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (placeholder) {
+                    Text(r.name.orEmpty(), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted)
+                    r.sku?.takeIf { it.isNotEmpty() }?.let {
+                        Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(r.name ?: r.sku ?: "—", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (r.published == false) colors.faint else colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Spacer(Modifier.width(6.dp))
+                        Text(WorkisMoney.text(r.price, r.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
+                    }
+                    Text(
+                        listOfNotNull(
+                            r.sku,
+                            r.leadTimeDays?.let { "· $it " + stringResource(R.string.vade_days_word) + " " + stringResource(R.string.lead_time_short) },
+                            r.stock?.takeIf { it.isNotEmpty() && it != "0" }?.let { "· " + stringResource(R.string.stock_label) + " $it" },
+                            if (r.published == false) "· " + stringResource(R.string.published_label).lowercase() + ": ✗" else null,
+                        ).joinToString(" "),
+                        fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    r.attrs?.rows?.takeIf { it.isNotEmpty() }?.let { AttrLines(it) }
+                }
+            }
+        }
+    }
+    if (r.familyId != null) SwipeRow(stringResource(R.string.withdraw_family), Beige, { onWithdraw(r) }) { row() } else row()
 }
 
 /** Live offer cells: price · discount % · currency · name · lead time · stock · visible — currency/toggle at once, text cells on Done. */
@@ -860,10 +1139,12 @@ private fun OfferEditSheet(row: CatalogLiveRow, vm: CatalogViewModel, onClose: (
     var busy by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
     val id = row.offerId.orEmpty()
+    // a cell saved at once (currency, visible) re-reads the open bands when the sheet is swiped away
+    var savedAtOnce by remember { mutableStateOf(false) }
     fun saveNow(field: String, value: Any) {
-        scope.launch { busy = true; errorText = vm.offerCell(id, field, value); busy = false }
+        scope.launch { busy = true; errorText = vm.offerCell(id, field, value); busy = false; if (errorText == null) savedAtOnce = true }
     }
-    ModalBottomSheet(onDismissRequest = onClose, containerColor = colors.surface) {
+    ModalBottomSheet(onDismissRequest = { if (savedAtOnce) vm.refreshAfterEdit(); onClose() }, containerColor = colors.surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.edit_row), fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = colors.ink, modifier = Modifier.weight(1f))
@@ -881,7 +1162,7 @@ private fun OfferEditSheet(row: CatalogLiveRow, vm: CatalogViewModel, onClose: (
                         var first: String? = null
                         for ((f, v) in pending) { val e = vm.offerCell(id, f, v); if (e != null && first == null) first = e }
                         busy = false
-                        if (first != null) errorText = first else { vm.load(); onClose() }
+                        if (first != null) errorText = first else { vm.load(); vm.refreshAfterEdit(); onClose() }
                     }
                 }) { Text(stringResource(R.string.done), color = colors.accentText, fontWeight = FontWeight.SemiBold) }
             }

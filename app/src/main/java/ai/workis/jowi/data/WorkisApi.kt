@@ -497,8 +497,22 @@ interface WorkisApi {
     @POST("workis/console/groups/{id}/aliases/remove/")
     suspend fun consoleGroupsAliasRemove(@Path("id") id: String, @Body body: GroupsAliasRemoveBody): GroupsPage
 
-    @GET("workis/seller/catalog/")
+    /** Always `?live=0` (ledger 73): counts, uploads, the review tab — `live` arrives empty. The live
+     *  rows come band by band (below); the parameterless read stalled the whole box. */
+    @GET("workis/seller/catalog/?live=0")
     suspend fun catalog(@Query("seller") seller: String? = null): CatalogPage
+
+    /** One slice of the live bands in tree order; keep reading `cursor = next` until `next` is null. */
+    @GET("workis/seller/catalog/bands/")
+    suspend fun catalogBands(@Query("cursor") cursor: Int, @Query("step") step: Int = 150, @Query("seller") seller: String? = null): CatalogBandsPage
+
+    /** The rows of one opened band: `src` = `productId:familyId` pairs comma-joined (familyId may be empty, ≤ 60 pairs). */
+    @GET("workis/seller/catalog/rows/")
+    suspend fun catalogRows(@Query("src") src: String, @Query("seller") seller: String? = null): CatalogRowsPage
+
+    /** The one search box over the whole catalogue — rows, never bands. */
+    @GET("workis/seller/catalog/search/")
+    suspend fun catalogSearch(@Query("q") q: String, @Query("seller") seller: String? = null): CatalogSearchPage
 
     @Multipart
     @POST("workis/seller/catalog/upload/")

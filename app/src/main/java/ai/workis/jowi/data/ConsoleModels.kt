@@ -8,6 +8,8 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
 
 // Console payloads — every field nullable (optional-decode discipline:
@@ -25,6 +27,49 @@ object FlexString : KSerializer<String> {
     }
 
     override fun serialize(encoder: Encoder, value: String) = encoder.encodeString(value)
+}
+
+/** An int that may arrive as 12, 12.0 or "12"; any other shape (object, array, words) reads null — the field blanks, never the page. */
+object FlexInt : KSerializer<Int?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexInt", PrimitiveKind.INT)
+    override fun deserialize(decoder: Decoder): Int? {
+        val json = decoder as? JsonDecoder ?: return decoder.decodeInt()
+        return flexInt(json.decodeJsonElement())
+    }
+    override fun serialize(encoder: Encoder, value: Int?) {
+        if (value == null) encoder.encodeNull() else encoder.encodeInt(value)
+    }
+}
+
+/** A bool that may arrive as true, 1 or "true"; any other shape reads null. */
+object FlexBool : KSerializer<Boolean?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexBool", PrimitiveKind.BOOLEAN)
+    override fun deserialize(decoder: Decoder): Boolean? {
+        val json = decoder as? JsonDecoder ?: return decoder.decodeBoolean()
+        return flexBool(json.decodeJsonElement())
+    }
+    override fun serialize(encoder: Encoder, value: Boolean?) {
+        if (value == null) encoder.encodeNull() else encoder.encodeBoolean(value)
+    }
+}
+
+internal fun flexInt(el: JsonElement?): Int? {
+    val p = el as? JsonPrimitive ?: return null
+    if (p is JsonNull) return null
+    return p.content.trim().let { it.toIntOrNull() ?: it.toDoubleOrNull()?.toInt() }
+}
+
+internal fun flexBool(el: JsonElement?): Boolean? {
+    val p = el as? JsonPrimitive ?: return null
+    if (p is JsonNull) return null
+    return when (p.content.trim().lowercase()) { "true", "1" -> true; "false", "0", "" -> false; else -> null }
+}
+
+/** A string or a number as text; an object / array / null reads null. */
+internal fun flexText(el: JsonElement?): String? {
+    val p = el as? JsonPrimitive ?: return null
+    if (p is JsonNull) return null
+    return p.content
 }
 
 @Serializable

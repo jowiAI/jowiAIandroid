@@ -258,6 +258,90 @@ data class CatalogLiveRow(
     val web: CatalogWeb? = null,
     val webPasted: Boolean? = null,
     val attrs: CatalogAttrs? = null, // every attribute of the variant, ready rows (2026-09-27)
+    /** A family with no code of its own whose codes are live under another family (2026-10-28):
+     *  `name` is a NOTE SENTENCE, no price or stock — the note where the price goes, "Geri çek" the one action. */
+    @Serializable(with = FlexBool::class) val placeholder: Boolean? = null,
+)
+
+/**
+ * One band of the live catalogue (Django 2026-10-28, `serialize_band`): a family (or a handful
+ * folded into one) with its count, picture and brand. Bands arrive in TREE ORDER in slices; the
+ * rows behind a band are read only when it is opened (`rows/?src=`). Every field is lenient
+ * (ledger 72): a drifted type blanks the field, never the slice — hence the hand decoder.
+ */
+@Serializable(with = CatalogBandSerializer::class)
+data class CatalogBand(
+    val group: String? = null,
+    val family: String? = null,
+    val n: Int? = null,
+    val nFamilies: Int? = null,
+    val brand: String? = null,
+    val productId: String? = null,
+    val familyId: String? = null,
+    val img: String? = null,
+    val imgQuality: String? = null,
+    val imgSrc: String? = null,
+    val tier: String? = null,
+    val groupHint: String? = null,
+    val mainGroup: String? = null,
+    val mainGroupId: String? = null,
+    val mainSector: String? = null,
+    val mainParent: String? = null,
+    val web: String? = null,
+    val webPasted: Boolean? = null,
+    val webImages: Int? = null,
+    val src: List<CatalogSrcPair> = emptyList(),
+) {
+    /** The `rows/?src=` argument: `productId:familyId` pairs, comma-joined (familyId may be empty). */
+    val srcQuery: String get() = src.joinToString(",") { "${it.productId.orEmpty()}:${it.familyId.orEmpty()}" }
+    /** The band's key while slices arrive and after a reload (tree order may shift, the ids do not). */
+    val key: String get() = "${productId.orEmpty()}|${familyId.orEmpty()}|${srcQuery}"
+}
+
+data class CatalogSrcPair(val productId: String? = null, val familyId: String? = null)
+
+object CatalogBandSerializer : KSerializer<CatalogBand> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("CatalogBand", PrimitiveKind.STRING)
+    override fun deserialize(decoder: Decoder): CatalogBand {
+        val json = decoder as? JsonDecoder ?: return CatalogBand()
+        val o = json.decodeJsonElement() as? JsonObject ?: return CatalogBand()
+        fun t(k: String) = flexText(o[k])
+        return CatalogBand(
+            group = t("group"), family = t("family"),
+            n = flexInt(o["n"]), nFamilies = flexInt(o["nFamilies"]),
+            brand = t("brand"), productId = t("productId"), familyId = t("familyId"),
+            img = t("img"), imgQuality = t("imgQuality"), imgSrc = t("imgSrc"),
+            tier = t("tier"), groupHint = t("groupHint"),
+            mainGroup = t("mainGroup"), mainGroupId = t("mainGroupId"), mainSector = t("mainSector"), mainParent = t("mainParent"),
+            web = t("web"), webPasted = flexBool(o["webPasted"]), webImages = flexInt(o["webImages"]),
+            src = (o["src"] as? JsonArray).orEmpty().mapNotNull { e ->
+                (e as? JsonObject)?.let { CatalogSrcPair(flexText(it["productId"]), flexText(it["familyId"])) }
+            },
+        )
+    }
+    override fun serialize(encoder: Encoder, value: CatalogBand) = encoder.encodeString(value.key)
+}
+
+/** `GET seller/catalog/bands/?cursor&step` → one slice; `next` null = the last one. */
+@Serializable
+data class CatalogBandsPage(
+    val bands: List<CatalogBand>? = null,
+    @Serializable(with = FlexInt::class) val next: Int? = null,
+    @Serializable(with = FlexInt::class) val done: Int? = null,
+    @Serializable(with = FlexInt::class) val total: Int? = null,
+)
+
+/** `GET seller/catalog/rows/?src=` → the rows of one opened band. */
+@Serializable
+data class CatalogRowsPage(val rows: List<CatalogLiveRow>? = null)
+
+/** `GET seller/catalog/search/?q=` → rows, never bands; `near` = no exact match, the nearest; `more` = cut at `limit`. */
+@Serializable
+data class CatalogSearchPage(
+    val rows: List<CatalogLiveRow>? = null,
+    @Serializable(with = FlexBool::class) val more: Boolean? = null,
+    @Serializable(with = FlexBool::class) val near: Boolean? = null,
+    @Serializable(with = FlexInt::class) val limit: Int? = null,
 )
 
 @Serializable

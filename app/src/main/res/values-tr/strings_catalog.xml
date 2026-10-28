@@ -143,6 +143,7 @@
     <string name="badge_handoff">DEVİR</string>
     <string name="badge_new_word">yeni</string>
     <string name="badge_unmatched">EŞLEŞMEDİ</string>
+    <string name="bands_loading">Katalog yükleniyor</string>
     <string name="bind_action">Seç</string>
     <string name="bio_field">Özgeçmiş</string>
     <string name="bio_placeholder">Geçmişiniz, çalıştığınız standartlar, yardımcı olabileceğiniz konular.</string>
@@ -497,6 +498,7 @@
     <string name="face_id">Face ID ile kilidi aç</string>
     <string name="face_idcancel">Başka hesapla gir</string>
     <string name="face_idreason">Workis hesabınıza giriş</string>
+    <string name="families_word">aile</string>
     <string name="family_live">Yayında</string>
     <string name="family_proposed">İnceleme bekliyor</string>
     <string name="filter_document">Belge</string>
@@ -859,6 +861,7 @@
     <string name="privacy">Gizlilik Politikası</string>
     <string name="processing">İşleniyor…</string>
     <string name="product_name">Ürün adı</string>
+    <string name="products_word">ürün</string>
     <string name="profile_hidden">GİZLİ — yayımlamak için ad görünürlüğünü açın</string>
     <string name="profile_note">Sektörleriniz, doğrulama rozeti ve katkı göstergeleriyle gösterilir; bağlantı beyanınız asla gösterilmez. Doğruluğundan siz sorumlusunuz.</string>
     <string name="project_hint">satın almalar bu projeye kaydedilir — teslimatlar projenin adresine gider</string>
@@ -947,6 +950,9 @@
     <string name="satisfaction_note">Kısa bir not (isteğe bağlı)</string>
     <string name="satisfaction_private">Yalnız siz görürsünüz</string>
     <string name="satisfaction_title">Teslimat nasıldı?</string>
+    <string name="search_more">Liste burada kesildi; aramayı daraltın</string>
+    <string name="search_near">Tam eşleşme yok — en yakın ürünler</string>
+    <string name="search_no_results">Eşleşen ürün yok.</string>
     <string name="search_products">Başka ürün ara…</string>
     <string name="seat_buyer">Alıcı</string>
     <string name="seat_carrier">Taşıyıcı</string>
