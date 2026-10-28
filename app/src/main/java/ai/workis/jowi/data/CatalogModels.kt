@@ -25,15 +25,13 @@ import kotlinx.serialization.json.jsonPrimitive
  * `families/{id}/` comes wrapped in `{success, family:{…}}`.
  */
 
-/** A number that may arrive as a JSON string ("12.5") — never Double-typed blindly. */
+/** A number that may arrive as a JSON number, a decimal-as-string ("1250.50"), a locale string
+ *  ("1.250,50" / "100,5"), null, or garbage → the value or null, never a decode failure (ledger 72). */
 object FlexDouble : KSerializer<Double?> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("FlexDouble", PrimitiveKind.DOUBLE)
     override fun deserialize(decoder: Decoder): Double? {
         val json = decoder as? JsonDecoder ?: return decoder.decodeDouble()
-        val el = json.decodeJsonElement()
-        val p = el as? JsonPrimitive ?: return null
-        if (p is JsonNull) return null
-        return p.content.replace(',', '.').toDoubleOrNull()
+        return flexDouble(json.decodeJsonElement())
     }
     override fun serialize(encoder: Encoder, value: Double?) {
         if (value == null) encoder.encodeNull() else encoder.encodeDouble(value)

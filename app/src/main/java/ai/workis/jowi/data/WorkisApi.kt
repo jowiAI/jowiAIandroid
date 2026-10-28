@@ -682,7 +682,11 @@ interface WorkisApi {
     @POST("workis/lists/{id}/award/")
     suspend fun listAwardSelections(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): AwardResult
 
-    @GET("workis/seller/invitations/")
+    /** Always `?offers=0` (ledger 74): the parameterless door carried the seller's whole live catalogue
+     *  (`offers`, the web form's product picker) at every sign-in — 233 KB / 3–4.6 s on GELİŞİM with no
+     *  invitation at all. The app's quote form prices the invitation's own lines and has no picker;
+     *  the product list, if ever needed, is `GET seller/offers/` read when a form opens, never here. */
+    @GET("workis/seller/invitations/?offers=0")
     suspend fun sellerInvitations(): SellerInvitations
 
     @POST("workis/seller/invitations/{id}/quote/")

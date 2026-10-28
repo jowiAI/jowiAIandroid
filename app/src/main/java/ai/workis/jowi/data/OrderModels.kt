@@ -304,7 +304,7 @@ data class SellerOrderLine(
     @Serializable(with = FlexString::class) val id: String? = null,
     val stageLabel: String? = null,
     @Serializable(with = FlexString::class) val quantity: String? = null,
-    val amount: Double? = null,
+    @Serializable(with = FlexDouble::class) val amount: Double? = null,
     val escrowState: String? = null,
     val escrowStateLabel: String? = null,
     val plannedDeliveryDate: String? = null,

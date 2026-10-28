@@ -53,10 +53,31 @@ object FlexBool : KSerializer<Boolean?> {
     }
 }
 
+/** 7, 7.0, "7", "7,0" → 7; anything else null (ledger 72: an int field accepts an integral float and a digit string). */
 internal fun flexInt(el: JsonElement?): Int? {
     val p = el as? JsonPrimitive ?: return null
     if (p is JsonNull) return null
-    return p.content.trim().let { it.toIntOrNull() ?: it.toDoubleOrNull()?.toInt() }
+    return p.content.trim().toIntOrNull() ?: flexDouble(el)?.toInt()
+}
+
+/**
+ * A number in any of the shapes the doors emit (ledger 72): a JSON number, "1250.50", "1.250,50",
+ * "100,5", " 12 ", null, a missing key, an object, words → the value or null. With both marks the
+ * LAST one is the decimal mark and the other a thousands separator; a lone comma is a decimal mark.
+ */
+internal fun flexDouble(el: JsonElement?): Double? {
+    val p = el as? JsonPrimitive ?: return null
+    if (p is JsonNull) return null
+    var s = p.content.trim().replace(" ", "")
+    if (s.isEmpty()) return null
+    val lastDot = s.lastIndexOf('.')
+    val lastComma = s.lastIndexOf(',')
+    s = when {
+        lastDot >= 0 && lastComma >= 0 ->
+            if (lastComma > lastDot) s.replace(".", "").replace(',', '.') else s.replace(",", "")
+        else -> s.replace(',', '.')
+    }
+    return s.toDoubleOrNull()
 }
 
 internal fun flexBool(el: JsonElement?): Boolean? {

@@ -697,7 +697,7 @@ data class InvBuyer(val short: String? = null, val city: String? = null, val hov
  * `discountPct` (2026-10-01) = the seller's usual rate on it, a percentage (12 = 12 %).
  */
 @Serializable
-data class SellerProduct(val sku: String? = null, val name: String? = null, val listPrice: Double? = null, val discountPct: Double? = null)
+data class SellerProduct(val sku: String? = null, val name: String? = null, @Serializable(with = FlexDouble::class) val listPrice: Double? = null, @Serializable(with = FlexDouble::class) val discountPct: Double? = null)
 
 /**
  * The terms born with the quote (2026-09-30), frozen at award for both seats.
@@ -727,7 +727,7 @@ data class QuoteTerms(
 @Serializable
 data class InvListItem(
     val itemName: String? = null,
-    val qty: Double? = null,
+    @Serializable(with = FlexDouble::class) val qty: Double? = null,
     val unit: String? = null,
     val alts: List<SellerProduct>? = null,
     val requirements: List<String>? = null,
@@ -740,11 +740,11 @@ data class InvListItem(
 data class QuoteLine(
     val sku: String? = null,
     val name: String? = null,
-    val qty: Double? = null,
-    val unitPrice: Double? = null,
-    val amount: Double? = null,
-    val listPrice: Double? = null,
-    val discountPct: Double? = null,
+    @Serializable(with = FlexDouble::class) val qty: Double? = null,
+    @Serializable(with = FlexDouble::class) val unitPrice: Double? = null,
+    @Serializable(with = FlexDouble::class) val amount: Double? = null,
+    @Serializable(with = FlexDouble::class) val listPrice: Double? = null,
+    @Serializable(with = FlexDouble::class) val discountPct: Double? = null,
 )
 
 @Serializable
@@ -754,16 +754,16 @@ data class SellerQuote(
     val createdAt: String? = null,
     val offerSku: String? = null,
     val offerName: String? = null,
-    val price: Double? = null,
+    @Serializable(with = FlexDouble::class) val price: Double? = null,
     val currency: String? = null,
-    val leadTimeDays: Int? = null,
+    @Serializable(with = FlexInt::class) val leadTimeDays: Int? = null,
     val validUntil: String? = null,
-    val vadeDays: Int? = null,
+    @Serializable(with = FlexInt::class) val vadeDays: Int? = null,
     val deliveryMode: String? = null,
     val note: String? = null,
     val letter: String? = null,
     val lines: List<QuoteLine>? = null,
-    val total: Double? = null,
+    @Serializable(with = FlexDouble::class) val total: Double? = null,
     val pdfUrl: String? = null,
     val terms: QuoteTerms? = null, // echoes what was sent (2026-09-30)
 )
@@ -773,7 +773,7 @@ data class InvShipment(@Serializable(with = FlexString::class) val id: String? =
 
 /** The payment term in force — "vade" runs on open account, nothing is ever blocked. */
 @Serializable
-data class SellerPayment(val mode: String? = null, val days: Int? = null) // "vade" | "escrow" | ""
+data class SellerPayment(val mode: String? = null, @Serializable(with = FlexInt::class) val days: Int? = null) // "vade" | "escrow" | ""
 
 @Serializable
 data class SellerOrder(
@@ -781,7 +781,7 @@ data class SellerOrder(
     val payment: SellerPayment? = null,
     val poNumber: String? = null,
     val poPdfUrl: String? = null,
-    val total: Double? = null,
+    @Serializable(with = FlexDouble::class) val total: Double? = null,
     val currency: String? = null,
     val escrowState: String? = null,
     val escrowStateLabel: String? = null,
@@ -804,7 +804,7 @@ data class SellerInvitation(
     val caseTitle: String? = null,
     val request: String? = null,
     val buyer: InvBuyer? = null,
-    val qty: Double? = null,
+    @Serializable(with = FlexDouble::class) val qty: Double? = null,
     val interpreted: String? = null,
     val imageUrl: String? = null,
     val isListRfq: Boolean? = null,
