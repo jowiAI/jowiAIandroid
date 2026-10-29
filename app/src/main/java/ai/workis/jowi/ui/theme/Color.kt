@@ -61,6 +61,12 @@ data class WorkisColors(
     val border: Color,
     val accentText: Color,
     val danger: Color,
+    /**
+     * Blue means "sıra sizde" — the reader's own move is pending — and nothing else (ledger 75,
+     * iOS `WorkisTheme.blue`): one place per screen at most, always beside a word, never a
+     * link, a title or a second accent. Document rows are muted ink; kiremit stays the one
+     * action colour.
+     */
     val blue: Color,
     /** The note idiom: informational ink and the band it sits on. */
     val beige: Color,

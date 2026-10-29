@@ -136,6 +136,7 @@
     <string name="autonomy_sub">Jowi\'nin sormadan yapabilecekleri. Burada kapsanan konular Onaylar\'a düşmez.</string>
     <string name="autonomy_title">Otonomi</string>
     <string name="awaiting_quote">teklif bekleniyor</string>
+    <string name="awaiting_your_quote">teklifinizi bekliyor</string>
     <string name="award_action">Onayla ve sipariş ver</string>
     <string name="award_confirm">Kazanan her satıcı için bir sipariş oluşturulacak. Devam edilsin mi?</string>
     <string name="awarded_title">Verilen sipariş</string>
@@ -749,6 +750,7 @@
     <string name="order_contract_after_terms">koşullar kesinleşince hazırlanır</string>
     <string name="order_contract_draft">Sözleşme taslağı</string>
     <string name="order_delivery_code">Teslim kodu</string>
+    <string name="order_doc">Sipariş yazısı (PDF)</string>
     <string name="order_done_empty">Henüz tamamlanan sipariş yok.</string>
     <string name="order_fund">Ödemeyi blokla</string>
     <string name="order_fund_confirm">Sipariş tutarı emanete alınır ve teslimden sonra satıcıya serbest bırakılır.</string>
@@ -881,6 +883,7 @@
     <string name="qty_field">Miktar</string>
     <string name="question_unit">soru</string>
     <string name="questions_title">Sorular</string>
+    <string name="quote_doc">Teklif (PDF)</string>
     <string name="quote_draft_saved">kaydedildi</string>
     <string name="quote_list_word">liste</string>
     <string name="quote_number_label">Teklif no.</string>
@@ -927,6 +930,7 @@
     <string name="retry">Tekrar dene</string>
     <string name="review_empty">İnceleme bekleyen ürün yok.</string>
     <string name="review_sub">Bir aileyi açın, satırları kaynak sayfayla karşılaştırın, sonra onaylayıp yayınlayın. Yanlış okunan aileler reddedilebilir.</string>
+    <string name="rfq_doc">Teklif isteği (PDF)</string>
     <string name="rfq_doc_title">Teklif isteği belgesi</string>
     <string name="rfq_pdf">Talep formu (PDF)</string>
     <string name="role_both">Her ikisi</string>
@@ -1056,6 +1060,10 @@
     <string name="stage_invoice">Fatura</string>
     <string name="stage_job_contract">Sözleşmeyi okuyun ve imzalayın</string>
     <string name="stage_job_terms">Koşul kartlarını açın</string>
+    <string name="stage_lost">Kaybedildi</string>
+    <string name="stage_order">Sipariş</string>
+    <string name="stage_quote">Teklif</string>
+    <string name="stage_request">Talep</string>
     <string name="start_conv_hint">Partner bunu Jowi ekranında ve akışında görür.</string>
     <string name="start_conversation">Yazışma başlat</string>
     <string name="stat_active">Aktif partner</string>

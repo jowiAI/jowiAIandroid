@@ -1,6 +1,36 @@
 package ai.workis.jowi.ui.screens.partner
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
+import ai.workis.jowi.ui.components.WorkisTitleCase
+import ai.workis.jowi.ui.theme.WorkisSans
+import ai.workis.jowi.ui.theme.readingSize
+import kotlin.math.abs
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -109,12 +139,15 @@ class QuotesViewModel : ViewModel() {
     var error by mutableStateOf<String?>(null)
         private set
     var note by mutableStateOf<String?>(null)
+    /** Counts the answered reads — a card's chosen stage is forgotten on every reload (ledger 75), so it opens on its current one. */
+    var loadGen by mutableIntStateOf(0)
+        private set
     private val lang get() = Graph.language.value
 
     fun load() {
         viewModelScope.launch {
             val (r, err) = partnerCall(lang) { Graph.api.sellerInvitations() }
-            if (r != null) { invitations = r.invitations.orEmpty(); error = null } else error = err
+            if (r != null) { invitations = r.invitations.orEmpty(); error = null; loadGen++ } else error = err
         }
     }
 
@@ -163,7 +196,7 @@ class QuotesViewModel : ViewModel() {
     private fun statusText() = ai.workis.jowi.data.statusMessage(-1, lang)
 }
 
-/** Teklifler — one card per invitation; ONE of: send quote / the sent quote / the won order. */
+/** Teklifler — one card per invitation, ONE stage at a time (request · quote · order). */
 @Composable
 fun QuotesScreen(vm: QuotesViewModel, onCompose: (String) -> Unit, onThread: (String) -> Unit = {}) {
     val colors = WorkisTheme.colors
@@ -181,6 +214,7 @@ fun QuotesScreen(vm: QuotesViewModel, onCompose: (String) -> Unit, onThread: (St
                 items(rows, key = { it.id ?: it.hashCode() }) { inv ->
                     InvitationCard(
                         inv,
+                        loadGen = vm.loadGen,
                         onCompose = { inv.id?.let(onCompose) },
                         onPdf = { url, title -> pdf = url to title },
                         onRevise = { reviseFor = inv },
@@ -206,52 +240,280 @@ fun QuotesScreen(vm: QuotesViewModel, onCompose: (String) -> Unit, onThread: (St
     }
 }
 
+// ---------- one card, one stage (ledgers 75/76, 2026-10-28) ----------
+
+/** A request's three stages. A stage EXISTS once the request reached it; the strip shows all, the card shows one. */
+private enum class InvStage { Request, Quote, Order }
+
+/** One step of the strip: the order walk's state word (done · now · wait · skip · lost) and the catalogue label. */
+private data class InvStep(val stage: InvStage, val state: String, val label: String, val exists: Boolean)
+
+private fun currentStage(inv: SellerInvitation): InvStage = when {
+    inv.order != null -> InvStage.Order
+    inv.quote != null -> InvStage.Quote
+    else -> InvStage.Request
+}
+
+/** Request ✓/●/⊖ · Quote ✓/●/○ (✕ when lost) · Order ●/○ — the order step drops out of a lost request. */
 @Composable
-private fun InvitationCard(inv: SellerInvitation, onCompose: () -> Unit, onPdf: (String, String) -> Unit, onRevise: () -> Unit, onThread: () -> Unit) {
-    val colors = WorkisTheme.colors
+private fun invSteps(inv: SellerInvitation): List<InvStep> {
+    val hasQuote = inv.quote != null
+    val hasOrder = inv.order != null
+    val lost = inv.lost == true
+    val request = InvStep(InvStage.Request, if (inv.isWithdrawn) "skip" else if (hasQuote) "done" else "now", stringResource(R.string.stage_request), true)
+    val quote = InvStep(
+        InvStage.Quote,
+        when { lost -> "lost"; hasOrder -> "done"; hasQuote -> "now"; else -> "wait" },
+        stringResource(if (lost) R.string.stage_lost else R.string.stage_quote), hasQuote,
+    )
+    val order = InvStep(InvStage.Order, if (hasOrder) "now" else "wait", stringResource(if (hasOrder) R.string.order_won else R.string.stage_order), hasOrder)
+    return listOf(request, quote, order).filter { it.exists || !lost || it.stage != InvStage.Order }
+}
+
+/**
+ * One request as ONE stage at a time: the header names the list, the buyer and the small
+ * number of the stage (no money up here — the block sums it once); the strip is the order
+ * card's walk and a tap on a step that EXISTS shows that stage; a horizontal swipe on the
+ * body walks the reached stages (leftward = next). The card opens on its CURRENT stage and
+ * the choice is forgotten when the request moves on. The actions (send · documents ·
+ * correspondence) sit under the card whatever page is shown. Blue appears once: "teklifinizi
+ * bekliyor" — the seller's own move (the rule on `WorkisColors.blue`).
+ */
+@Composable
+private fun InvitationCard(inv: SellerInvitation, loadGen: Int, onCompose: () -> Unit, onPdf: (String, String) -> Unit, onRevise: () -> Unit, onThread: () -> Unit) {
+    val steps = invSteps(inv)
+    // forgotten on every answered reload: a request that just moved on opens on its new stage
+    var shown by remember(inv.id, loadGen) { mutableStateOf<InvStage?>(null) }
+    val sel = shown?.takeIf { s -> steps.any { it.stage == s && it.exists } } ?: currentStage(inv)
+    val pick: (InvStage) -> Unit = { s -> if (steps.any { it.stage == s && it.exists }) shown = s }
+    val reached = steps.filter { it.exists }.map { it.stage }
+    val walk by rememberUpdatedState { forward: Boolean ->
+        val i = reached.indexOf(sel)
+        val j = if (forward) i + 1 else i - 1
+        if (i >= 0 && j in reached.indices) pick(reached[j])
+    }
     SurfaceCard {
-        Row(verticalAlignment = Alignment.Top) {
-            Text(inv.caseTitle ?: inv.request ?: "—", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, color = colors.ink, maxLines = 2, modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(6.dp))
-            StatusPill(if (inv.isWithdrawn) stringResource(R.string.ls_withdrawn) else inv.statusLabel ?: inv.status.orEmpty(), if (inv.isOpen) colors.accentText else colors.muted)
+        InvitationHeader(inv)
+        InvitationWalk(steps, sel, pick)
+        // the swipe: only a mostly-horizontal drag of ≥ 48 px counts; a vertical one never
+        // starts here (horizontal slop first), so the list keeps its scroll
+        Box(
+            Modifier.fillMaxWidth().pointerInput(inv.id) {
+                var start = Offset.Zero
+                var last = Offset.Zero
+                detectHorizontalDragGestures(
+                    onDragStart = { start = it; last = it },
+                    onDragEnd = {
+                        val dx = last.x - start.x
+                        val dy = last.y - start.y
+                        if (abs(dx) >= 48f && abs(dx) > abs(dy) * 1.5f) walk(dx < 0)
+                    },
+                    onHorizontalDrag = { change, _ -> last = change.position },
+                )
+            },
+        ) {
+            Crossfade(targetState = sel, label = "invStage") { stage ->
+                when (stage) {
+                    InvStage.Request -> RequestPage(inv)
+                    InvStage.Quote -> inv.quote?.let { QuoteBlock(it, inv, onRevise) }
+                    InvStage.Order -> inv.order?.let { OrderBlock(it) }
+                }
+            }
         }
+        InvitationActions(inv, onCompose, onPdf, onThread)
+    }
+}
+
+/**
+ * Three paired rows, each ONE line, never two columns: list name ↔ date · buyer (city) ↔ the
+ * stage's small number or status word · while open "teklifinizi bekliyor" alone on the right.
+ * The delivery place closes the header on every stage — a fact of the request, not of a stage.
+ */
+@Composable
+private fun InvitationHeader(inv: SellerInvitation) {
+    val colors = WorkisTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // the buyer's own words — never recased; shrinks to 80 % before it truncates
+            BasicText(
+                inv.caseTitle ?: inv.request ?: "—",
+                style = LocalTextStyle.current.merge(TextStyle(fontFamily = WorkisSans, fontWeight = FontWeight.Medium, fontSize = 16.sp, color = colors.ink)),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                autoSize = TextAutoSize.StepBased(minFontSize = 12.8.sp, maxFontSize = 16.sp, stepSize = 0.4.sp),
+                modifier = Modifier.weight(1f),
+            )
+            inv.createdAt?.let {
+                Spacer(Modifier.width(10.dp))
+                Text(it.take(10), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint, softWrap = false, maxLines = 1)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val buyer = buildAnnotatedString {
+                withStyle(SpanStyle(fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = readingSize(12.sp), color = colors.accentText)) { append(inv.buyer?.short.orEmpty()) }
+                inv.buyer?.city?.takeIf { it.isNotEmpty() }?.let { c ->
+                    withStyle(SpanStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = readingSize(12.sp), color = colors.faint)) { append(" ($c)") }
+                }
+            }
+            Text(buyer, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            HeaderMeta(inv)
+        }
+        if (inv.isOpen && inv.quote == null && inv.order == null && inv.lost != true && !inv.isWithdrawn) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                // blue = "sıra sizde" — the one place on this screen, beside its words
+                Text(stringResource(R.string.awaiting_your_quote), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.blue, maxLines = 1, softWrap = false)
+            }
+        }
+        DeliveryPlaceLine(inv.deliveryPlace, Modifier.padding(top = 3.dp))
+    }
+}
+
+/** The right side of the buyer's row: won → PO · lost → the closed word · withdrawn · quoted → WTK · open → "n kalem". */
+@Composable
+private fun HeaderMeta(inv: SellerInvitation) {
+    val colors = WorkisTheme.colors
+    val o = inv.order
+    val q = inv.quote
+    val (text, word) = when {
+        o != null -> o.poNumber to false
+        inv.lost == true -> (inv.statusLabel ?: stringResource(R.string.order_lost)) to true
+        inv.isWithdrawn -> stringResource(R.string.ls_withdrawn) to true
+        q != null -> q.number to false
+        inv.isOpen -> inv.listItems.orEmpty().size.takeIf { it > 0 }?.let { "$it " + stringResource(R.string.items_word) } to false
+        else -> (inv.statusLabel ?: inv.status) to true
+    }
+    val t = text?.takeIf { it.isNotEmpty() } ?: return
+    Spacer(Modifier.width(10.dp))
+    if (word) Text(t, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.muted, maxLines = 1, softWrap = false)
+    else Text(t, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint, maxLines = 1, softWrap = false)
+}
+
+/**
+ * The strip in the order walk's grammar: ✓ done · ● now · ○ not reached (55 %, not tappable)
+ * · ✕ lost · ⊖ withdrawn — a shape AND a word, never colour alone. The shown step sits on a
+ * soft capsule.
+ */
+@Composable
+private fun InvitationWalk(steps: List<InvStep>, selected: InvStage, onPick: (InvStage) -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 1.dp),
+    ) {
+        steps.forEachIndexed { i, s ->
+            if (i > 0) Text("›", fontSize = 11.sp, color = colors.faint)
+            val isSel = s.stage == selected
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(if (isSel) colors.ink.copy(alpha = 0.07f) else Color.Transparent, CircleShape)
+                    .selectable(selected = isSel, enabled = s.exists, role = Role.Tab) { onPick(s.stage) }
+                    .alpha(if (s.exists) 1f else 0.55f)
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+            ) {
+                if (s.state == "lost") LostGlyph() else StepGlyph(s.state)
+                Spacer(Modifier.width(5.dp))
+                Text(
+                    s.label,
+                    fontSize = 12.sp,
+                    fontWeight = if (isSel) FontWeight.SemiBold else FontWeight.Normal,
+                    color = when { isSel -> colors.ink; s.exists -> colors.muted; else -> colors.faint },
+                    maxLines = 1, softWrap = false,
+                )
+            }
+        }
+    }
+}
+
+/** ✕ lost — a ring with a cross, in the danger ink (the walk's ring, crossed). */
+@Composable
+private fun LostGlyph(size: Dp = 12.dp) {
+    val tint = WorkisTheme.colors.danger
+    Canvas(Modifier.size(size)) {
+        val r = this.size.minDimension / 2f
+        val sw = this.size.minDimension * 0.13f
+        val c = center
+        drawCircle(tint, r - sw / 2f, c, style = Stroke(sw))
+        val d = r * 0.36f
+        drawLine(tint, Offset(c.x - d, c.y - d), Offset(c.x + d, c.y + d), sw, cap = StrokeCap.Round)
+        drawLine(tint, Offset(c.x - d, c.y + d), Offset(c.x + d, c.y - d), sw, cap = StrokeCap.Round)
+    }
+}
+
+/** The request as asked: every item from the seller's chair, a faint rule between two items. */
+@Composable
+private fun RequestPage(inv: SellerInvitation) {
+    val colors = WorkisTheme.colors
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // the buyer took the request back (2026-10-04): closed, icon + words, no quote form
         if (inv.isWithdrawn) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Icon(WorkisIcons.Undo, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
             Text(stringResource(R.string.inv_withdrawn), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.muted)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(inv.buyer?.short.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = colors.accentText)
-            inv.buyer?.city?.takeIf { it.isNotEmpty() }?.let { Text("($it)", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
-            Spacer(Modifier.weight(1f))
-            inv.createdAt?.let { Text(it.take(10), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
-        }
-        DeliveryPlaceLine(inv.deliveryPlace)
         val items = inv.listItems.orEmpty()
-        if (items.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items.forEach { li -> ListItemBlock(li) }
+        if (items.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            items.forEachIndexed { i, li ->
+                if (i > 0) HorizontalDivider(color = colors.border.copy(alpha = 0.6f))
+                ListItemBlock(li)
+            }
         } else inv.shortlist?.takeIf { it.isNotEmpty() }?.let { sl ->
             Text(stringResource(R.string.shortlist_label) + ": " + sl.mapNotNull { it.name ?: it.sku }.joinToString(" · "), fontSize = 11.sp, color = colors.faint)
         }
-        val q = inv.quote
-        when {
-            q != null -> QuoteBlock(q, inv, onPdf, onRevise)
-            inv.isOpen -> Button(onClick = onCompose, colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill), modifier = Modifier.fillMaxWidth().height(44.dp)) {
+    }
+}
+
+/**
+ * Under the card whatever page is shown: the one primary action while the request is open
+ * and unquoted, then the documents in birth order (request · quote · order) as QUIET rows —
+ * muted text, faint icon; kiremit stays on "Teklif gönder" alone — then the table's door.
+ */
+@Composable
+private fun InvitationActions(inv: SellerInvitation, onCompose: () -> Unit, onPdf: (String, String) -> Unit, onThread: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Column(Modifier.padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (inv.quote == null && inv.isOpen) {
+            Button(onClick = onCompose, colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill), modifier = Modifier.fillMaxWidth().height(44.dp)) {
                 Text("✈ " + stringResource(R.string.send_quote), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
             }
         }
+        inv.rfqPdfUrl?.takeIf { it.isNotEmpty() }?.let { url -> DocRow(stringResource(R.string.rfq_doc)) { t -> onPdf(url, t) } }
+        inv.quote?.let(::quotePdfUrl)?.let { url -> DocRow(stringResource(R.string.quote_doc)) { t -> onPdf(url, t) } }
+        inv.order?.poPdfUrl?.takeIf { it.isNotEmpty() }?.let { url -> DocRow(stringResource(R.string.order_doc)) { t -> onPdf(url, t) } }
         // every invitation carries its own table (slice 2 part 2)
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(onClick = onThread).padding(vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(onClick = onThread).padding(vertical = 4.dp)) {
             Icon(WorkisIcons.Bubble, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))
             Text(stringResource(R.string.thread_open), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
         }
-        inv.order?.let { OrderBlock(it, onPdf) }
-        if (inv.lost == true) StatusPill(stringResource(R.string.order_lost))
-        inv.rfqPdfUrl?.takeIf { it.isNotEmpty() }?.let { url ->
-            val title = stringResource(R.string.rfq_pdf)
-            Text("📄 $title", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable { onPdf(url, title) })
-        }
+    }
+}
+
+/** A document as a quiet row: faint icon, muted words — never a link colour. */
+@Composable
+private fun DocRow(title: String, onOpen: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onOpen(title) }.padding(vertical = 4.dp)) {
+        Icon(WorkisIcons.DocText, contentDescription = null, tint = colors.faint, modifier = Modifier.size(15.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(title, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.muted)
+    }
+}
+
+/**
+ * "TÜPSÜZ MODEL & TEK KAPAKLI · 70X70X23 · …": the family is the product, the rest its
+ * variant — the server splits `display_name` at the first " · ". The family at 15 semibold
+ * (an ALL-CAPS one in Turkish title case, `WorkisTitleCase`), " · " + the variant at 13
+ * regular, as printed.
+ */
+@Composable
+private fun productName(full: String): AnnotatedString {
+    val ink = WorkisTheme.colors.ink
+    val (head, tail) = WorkisTitleCase.product(full)
+    return buildAnnotatedString {
+        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = readingSize(15.sp), color = ink)) { append(head) }
+        tail?.let { withStyle(SpanStyle(fontWeight = FontWeight.Normal, fontSize = readingSize(13.sp), color = ink)) { append(" · $it") } }
     }
 }
 
@@ -268,17 +530,19 @@ private fun ListItemBlock(li: InvListItem) {
     val asked = (listOf(if (alts.size == 1) li.itemName else null) + li.requirements.orEmpty()).filterNotNull().filter { it.isNotEmpty() }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.Top) {
-            Text(
-                if (alts.size == 1) (alts[0].name ?: alts[0].sku.orEmpty()) else li.itemName.orEmpty(),
-                fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, color = colors.ink, maxLines = 3, modifier = Modifier.weight(1f),
-            )
-            if (qty.isNotEmpty()) { Spacer(Modifier.width(6.dp)); Text(qty, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink) }
+            if (alts.size == 1) {
+                Text(productName(alts[0].name ?: alts[0].sku.orEmpty()), lineHeight = 20.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            } else {
+                // the buyer's row name — their record, never recased
+                Text(li.itemName.orEmpty(), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, color = colors.ink, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            }
+            if (qty.isNotEmpty()) { Spacer(Modifier.width(6.dp)); Text(qty, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink, softWrap = false) }
         }
         if (alts.size == 1) alts[0].sku?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.muted) }
         // several of my products fit — each one readable, none of them a footnote
         if (alts.size > 1) alts.forEach { a ->
             Row(verticalAlignment = Alignment.Top) {
-                Text(a.name ?: a.sku.orEmpty(), fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, maxLines = 2, modifier = Modifier.weight(1f))
+                Text(WorkisTitleCase.productLine(a.name ?: a.sku.orEmpty()), fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 a.sku?.takeIf { it.isNotEmpty() }?.let { Spacer(Modifier.width(6.dp)); Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.muted) }
             }
         }
@@ -292,34 +556,34 @@ private fun ListItemBlock(li: InvListItem) {
 private fun quotePdfUrl(q: SellerQuote): String? =
     q.id?.takeIf { it.isNotEmpty() }?.let { WORKIS_BASE_URL + "workis/quotes/$it/pdf/" } ?: q.pdfUrl?.takeIf { it.isNotEmpty() }
 
-/** "Teslim yeri: …" with a pin — the request's own delivery term (2026-09-30). */
+/** "Teslim yeri: …" with a pin — the request's own delivery term (2026-09-30); in the header on every stage. */
 @Composable
-private fun DeliveryPlaceLine(place: String?) {
+private fun DeliveryPlaceLine(place: String?, modifier: Modifier = Modifier) {
     val p = place?.takeIf { it.isNotEmpty() } ?: return
     val colors = WorkisTheme.colors
-    Row(verticalAlignment = Alignment.Top) {
+    Row(verticalAlignment = Alignment.Top, modifier = modifier) {
         Icon(Icons.Filled.Place, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
         Spacer(Modifier.width(6.dp))
-        Text(stringResource(R.string.delivery_place_label) + ": " + p, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, maxLines = 2)
+        Text(stringResource(R.string.delivery_place_label) + ": " + p, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
+/** The sent quote: state ↔ WTK on one line, the lines, a faint rule, "Toplam" ↔ the sum (the money written ONCE), the terms. */
 @Composable
-private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onPdf: (String, String) -> Unit, onRevise: () -> Unit) {
+private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onRevise: () -> Unit) {
     val colors = WorkisTheme.colors
     Column(Modifier.fillMaxWidth().background(colors.ink.copy(alpha = 0.05f), RoundedCornerShape(12.dp)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("✓ " + stringResource(R.string.quote_sent), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = SuccessGreen)
-            q.number?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
-            Spacer(Modifier.weight(1f))
-            quotePdfUrl(q)?.let { url -> val t = stringResource(R.string.quote_pdf); Text("↗ $t", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable { onPdf(url, t) }) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("✓ " + stringResource(R.string.quote_sent), fontWeight = FontWeight.Medium, fontSize = 12.sp, color = SuccessGreen, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            q.number?.let { Spacer(Modifier.width(8.dp)); Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint, maxLines = 1, softWrap = false) }
         }
         q.lines.orEmpty().forEach { l ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(l.name ?: l.sku.orEmpty(), fontSize = 13.sp, color = colors.ink, maxLines = 1, modifier = Modifier.weight(1f))
-                Text(WorkisMoney.qty(l.qty) + " × " + WorkisMoney.text(l.unitPrice, null), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
+            Row(verticalAlignment = Alignment.Top) {
+                Text(WorkisTitleCase.productLine(l.name ?: l.sku.orEmpty()), fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
-                Text(WorkisMoney.text(l.amount, null), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
+                Text(WorkisMoney.qty(l.qty) + " × " + WorkisMoney.text(l.unitPrice, null), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, softWrap = false)
+                Spacer(Modifier.width(8.dp))
+                Text(WorkisMoney.text(l.amount, null), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink, softWrap = false)
             }
             // what the line was priced against (2026-10-01): "liste X · −Y %"
             l.listPrice?.let { lp ->
@@ -329,17 +593,18 @@ private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onPdf: (String, St
                 )
             }
         }
+        HorizontalDivider(color = colors.border.copy(alpha = 0.6f))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                listOfNotNull(
-                    q.leadTimeDays?.let { "$it " + stringResource(R.string.vade_days_word) + " " + stringResource(R.string.lead_time_label) },
-                    q.validUntil?.let { stringResource(R.string.valid_until_label) + " " + it.take(10) },
-                    q.vadeDays?.let { if (it == 0) stringResource(R.string.vade_advance) else "$it " + stringResource(R.string.vade_days_word) },
-                ).joinToString(" · "),
-                fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, modifier = Modifier.weight(1f),
-            )
-            Text(stringResource(R.string.total_label) + ": " + WorkisMoney.text(q.total ?: q.price, q.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
+            Text(stringResource(R.string.total_label), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.muted, modifier = Modifier.weight(1f))
+            Text(WorkisMoney.text(q.total ?: q.price, q.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink, maxLines = 1, softWrap = false)
         }
+        // the terms as one flowing text (wraps as text, never as columns)
+        val days = listOfNotNull(
+            q.leadTimeDays?.let { "$it " + stringResource(R.string.vade_days_word) + " " + stringResource(R.string.lead_time_label) },
+            q.validUntil?.let { stringResource(R.string.valid_until_label) + " " + it.take(10) },
+            q.vadeDays?.let { if (it == 0) stringResource(R.string.vade_advance) else "$it " + stringResource(R.string.vade_days_word) },
+        )
+        if (days.isNotEmpty()) Text(days.joinToString(" · "), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp, color = colors.faint)
         // the terms the quote was sent with (2026-09-30), one muted line
         q.terms?.let { tm ->
             val warranty = tm.warrantyMonths?.let { if (it == 0) stringResource(R.string.warranty_none) else "$it " + stringResource(R.string.months_word) }
@@ -352,32 +617,25 @@ private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onPdf: (String, St
     }
 }
 
+/** The won order: ONE non-wrapping line "SİPARİŞ KAZANILDI … total", the PO under it, payment, shipment. */
 @Composable
-private fun OrderBlock(o: SellerOrder, onPdf: (String, String) -> Unit) {
+private fun OrderBlock(o: SellerOrder) {
     val colors = WorkisTheme.colors
     Column(Modifier.fillMaxWidth().background(BeigeBg.copy(alpha = 0.5f), RoundedCornerShape(12.dp)).padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.order_won).uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 1.sp, color = SuccessGreen)
-            o.poNumber?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.ink) }
-            Spacer(Modifier.weight(1f))
-            Text(WorkisMoney.text(o.total, o.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.order_won).uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 1.sp, color = SuccessGreen, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
+            Text(WorkisMoney.text(o.total, o.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink, maxLines = 1, softWrap = false)
         }
+        o.poNumber?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
         // The payment line says what the order RUNS ON. On a deferred term nothing will
         // ever be blocked — never tell the seller to wait for it (finding 28). Branch on
         // the CODE, never on the label.
         if (o.payment?.mode == "vade") {
-            OrderLine(WorkisIcons.Calendar, listOfNotNull(stringResource(R.string.pay_open_account), o.payment?.days?.let { "$it " + stringResource(R.string.pay_days_term) }).joinToString(" · "))
+            OrderLine(WorkisIcons.Calendar, listOfNotNull(stringResource(R.string.pay_open_account), o.payment.days?.let { "$it " + stringResource(R.string.pay_days_term) }).joinToString(" · "))
         } else o.escrowStateLabel?.takeIf { it.isNotEmpty() }?.let { OrderLine(WorkisIcons.Lock, it) }
         o.shipment?.let { sh ->
             OrderLine(WorkisIcons.ShippingBox, listOfNotNull(sh.number, sh.statusLabel ?: sh.status).filter { it.isNotEmpty() }.joinToString(" · "))
-        }
-        o.poPdfUrl?.takeIf { it.isNotEmpty() }?.let { url ->
-            val t = stringResource(R.string.po_pdf)
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { onPdf(url, t) }) {
-                Icon(WorkisIcons.DocText, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(t, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
-            }
         }
     }
 }
@@ -624,7 +882,7 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
                         SurfaceCard {
                             rs.forEach { r ->
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(r.name, fontSize = 13.sp, color = colors.ink)
+                                    Text(WorkisTitleCase.productLine(r.name), fontSize = 13.sp, color = colors.ink)
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Text(r.sku, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, modifier = Modifier.weight(1f))
                                         OutlinedTextField(value = qtys[r.sku].orEmpty(), onValueChange = { qtys[r.sku] = it }, placeholder = { Text(stringResource(R.string.qty_field), color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontSize = 13.sp, color = colors.ink).readingStep(), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(76.dp))

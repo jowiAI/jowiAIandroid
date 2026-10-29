@@ -160,6 +160,9 @@ never duplicate a catalog key there.
 
 - Kiremit-400 `#E8703F` = primary button fill only; kiremit-500 `#D95F2E` = slash/icons.
   One tinted primary action per screen; success green is status, never action; no pure black/white.
+- Blue (`colors.blue`, ledger 75, 2026-10-28) means ONE thing: "sıra sizde" — the reader's own move is pending ("teklifinizi
+  bekliyor"). One place per screen at most, always beside a word; never a link, a title, a document row (those are muted ink) or
+  a second accent. Kiremit stays the one action colour.
 - IBM Plex bundled in `res/font` (Sans variable + Mono statics). Mono only for logo/digits/eyebrows; Sans for reading text.
 - Reading step (ledger 57, 2026-10-13): sizes written at call sites are DESIGN sizes; `ui/theme/Type.kt` renders ≤15 at +2
   (floor 11), 16+ as written, a paired `lineHeight` grows by the same amount. It lives in `ai.workis.jowi.ui.theme.Text` —

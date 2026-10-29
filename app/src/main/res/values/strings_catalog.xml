@@ -136,6 +136,7 @@
     <string name="autonomy_sub">What Jowi may do without asking. Anything covered here never lands in Approvals.</string>
     <string name="autonomy_title">Autonomy</string>
     <string name="awaiting_quote">awaiting quote</string>
+    <string name="awaiting_your_quote">awaiting your quote</string>
     <string name="award_action">Award and order</string>
     <string name="award_confirm">One order per winning seller will be created. Continue?</string>
     <string name="awarded_title">Awarded</string>
@@ -749,6 +750,7 @@
     <string name="order_contract_after_terms">drafted once the terms are settled</string>
     <string name="order_contract_draft">Contract draft</string>
     <string name="order_delivery_code">Delivery code</string>
+    <string name="order_doc">Order letter (PDF)</string>
     <string name="order_done_empty">No completed orders yet.</string>
     <string name="order_fund">Hold the payment</string>
     <string name="order_fund_confirm">The order total moves into escrow and is released to the seller after delivery.</string>
@@ -881,6 +883,7 @@
     <string name="qty_field">Quantity</string>
     <string name="question_unit">questions</string>
     <string name="questions_title">Questions</string>
+    <string name="quote_doc">Quote (PDF)</string>
     <string name="quote_draft_saved">saved</string>
     <string name="quote_list_word">list</string>
     <string name="quote_number_label">Quote no.</string>
@@ -927,6 +930,7 @@
     <string name="retry">Try again</string>
     <string name="review_empty">Nothing awaiting review.</string>
     <string name="review_sub">Open a family, check the rows against the source page, then approve and publish. Misread families can be rejected.</string>
+    <string name="rfq_doc">Quote request (PDF)</string>
     <string name="rfq_doc_title">RFQ document</string>
     <string name="rfq_pdf">RFQ form (PDF)</string>
     <string name="role_both">Both</string>
@@ -1056,6 +1060,10 @@
     <string name="stage_invoice">Invoice</string>
     <string name="stage_job_contract">Read and sign the contract</string>
     <string name="stage_job_terms">Open the term cards</string>
+    <string name="stage_lost">Lost</string>
+    <string name="stage_order">Order</string>
+    <string name="stage_quote">Quote</string>
+    <string name="stage_request">Request</string>
     <string name="start_conv_hint">The partner sees this on their Jowi screen and activity feed.</string>
     <string name="start_conversation">Start correspondence</string>
     <string name="stat_active">Active partners</string>
