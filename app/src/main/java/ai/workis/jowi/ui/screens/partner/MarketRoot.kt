@@ -172,6 +172,8 @@ fun MarketRoot(onAskJowi: () -> Unit = {}) {
             canWithdraw = listsVm.lists?.firstOrNull { it.id == d.id }?.canWithdraw == true,
             onBack = { dest = d.back; listsVm.load() },
             onThread = { invId -> dest = MarketDest.Thread(ThreadDoor.Invitation(invId), d) },
+            // "Kaynak liste" / "Devamı" (ledger 79): the linked list, back = this one
+            onOpenList = { id -> dest = MarketDest.ListDetail(id, back = d) },
         )
         MarketDest.Quotes -> ConsoleSub(stringResource(R.string.quotes_title), { dest = MarketDest.Home }) {
             QuotesScreen(

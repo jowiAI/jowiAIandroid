@@ -271,6 +271,7 @@ private fun StageHead(o: PartnerOrder) {
         }
         val names = listOfNotNull(o.buyer?.short, o.seller?.short).filter { it.isNotEmpty() }
         if (names.isNotEmpty()) Text(names.joinToString(" · "), fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, maxLines = 2)
+        OrderNoteRows(o)
         // §7.1: a carrier moves the goods and never sees the money
         if (o.isCarrier) {
             Text(stringResource(R.string.order_no_money_for_carrier), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)

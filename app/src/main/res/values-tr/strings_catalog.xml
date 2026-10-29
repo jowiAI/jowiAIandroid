@@ -136,6 +136,7 @@
     <string name="autonomy_sub">Jowi\'nin sormadan yapabilecekleri. Burada kapsanan konular Onaylar\'a düşmez.</string>
     <string name="autonomy_title">Otonomi</string>
     <string name="awaiting_quote">teklif bekleniyor</string>
+    <string name="awaiting_your_pick">seçiminizi bekliyor</string>
     <string name="awaiting_your_quote">teklifinizi bekliyor</string>
     <string name="award_action">Onayla ve sipariş ver</string>
     <string name="award_confirm">Kazanan her satıcı için bir sipariş oluşturulacak. Devam edilsin mi?</string>
@@ -149,6 +150,7 @@
     <string name="bio_field">Özgeçmiş</string>
     <string name="bio_placeholder">Geçmişiniz, çalıştığınız standartlar, yardımcı olabileceğiniz konular.</string>
     <string name="brand_field">Marka</string>
+    <string name="buyer_note_label">Alıcı notu</string>
     <string name="c_answered">soru yanıtı</string>
     <string name="c_facts">bilgi</string>
     <string name="c_novel">yeni</string>
@@ -259,6 +261,7 @@
     <string name="cari_paid">Ödenen</string>
     <string name="cari_title">Cari</string>
     <string name="cari_virtual">sanal tedarikçi</string>
+    <string name="carried_from">önceki teklif</string>
     <string name="cases_big_title">Taleplerin</string>
     <string name="cases_empty">Henüz talep yok. İhtiyacını Jowi\'ye anlat — talep, cevabın içinden açılır.</string>
     <string name="cases_title">Taleplerin</string>
@@ -328,6 +331,7 @@
     <string name="console_tab">Panel</string>
     <string name="console_title">Panel</string>
     <string name="console_web_only">Bölge sorumlusu konsolu web\'de (workis.ai/workis/console/) — bölge verisi duvarları tek yüzeyde kalıyor.</string>
+    <string name="continued_in">Devamı</string>
     <string name="contract_accept">Kabul et ve imzala</string>
     <string name="contract_accepted">iki taraf imzaladı</string>
     <string name="contract_awaiting_other">Bu tarafın onayı bekleniyor.</string>
@@ -352,7 +356,10 @@
     <string name="decision_degraded">Jowi bu kararı çözümleyemedi — yazdığınız gibi kaydedildi ve öyle iletildi; operatör, sözleşme ve rezervasyon eşleştirilmedi.</string>
     <string name="decision_delivered">İletildi</string>
     <string name="decision_empty">Henüz karar yok. Aldığınız kararı kendi sözlerinizle yazın — Jowi kaydı oluşturur ve işi yapacak kişiye iletir.</string>
+    <string name="decision_hint">Jowi\'nin gerekçesiyle dolu gelir; düzeltin ya da kendi kararınızı yazın. Sipariş kaydınızda kalır, satıcı görmez.</string>
+    <string name="decision_label">Karar gerekçeniz</string>
     <string name="decision_not_delivered">İletilemedi</string>
+    <string name="decision_note_label">Karar gerekçesi</string>
     <string name="decision_pick_placeholder">Seçiniz</string>
     <string name="decision_pick_unknown">Bilmiyorum — belirlenmemiş kalsın</string>
     <string name="decision_prompt">Kararınızı yazın</string>
@@ -364,6 +371,7 @@
     <string name="decision_retract_confirm">Kayıt ekranda kalır, geri çekildiği görülür. Düzeltmenin yolu yeni bir karar yazmaktır.</string>
     <string name="decision_retracted_trace">Bu kararı geri çektiniz</string>
     <string name="decision_sending">İletiliyor…</string>
+    <string name="decision_stays_hint">Karar gerekçeniz sipariş kaydınızda kalır; sipariş yazısına girmez.</string>
     <string name="decision_trail">Dayanak</string>
     <string name="decision_trail_jowi">Jowi</string>
     <string name="decision_trail_you">Siz</string>
@@ -499,6 +507,7 @@
     <string name="face_id">Face ID ile kilidi aç</string>
     <string name="face_idcancel">Başka hesapla gir</string>
     <string name="face_idreason">Workis hesabınıza giriş</string>
+    <string name="fails_word">gereksinim karşılanmıyor</string>
     <string name="families_word">aile</string>
     <string name="family_live">Yayında</string>
     <string name="family_proposed">İnceleme bekliyor</string>
@@ -599,6 +608,7 @@
     <string name="inv_withdrawn">alıcı talebi geri çekti</string>
     <string name="invited_word">satıcı davet edildi</string>
     <string name="item_name">Kalem adı</string>
+    <string name="items_covered">kalem karşılandı</string>
     <string name="items_word">kalem</string>
     <string name="jowi_answered_last">son</string>
     <string name="jowi_answered_title">Jowi yanıtladı</string>
@@ -622,6 +632,7 @@
     <string name="jowi_note_title">Jowi\'nin notu</string>
     <string name="jowi_open_link">Aç</string>
     <string name="jowi_option_other_hint">Kendi cümlenizle yazın — ya da gördüğünüz etiketin adını verin.</string>
+    <string name="jowi_pick">Jowi\'nin önerisi</string>
     <string name="jowi_prompt">Jowi\'ye sor…</string>
     <string name="jowi_scope_general">Genel</string>
     <string name="jowi_scope_this_list">Bu liste</string>
@@ -643,6 +654,7 @@
     <string name="ledger_note">Bu sayaçlar katkı payı defteridir — ödeme platform açılışıyla başlar ve buradan birikir.</string>
     <string name="ledger_title">Katkı defteri</string>
     <string name="left_badge">AYRILDI</string>
+    <string name="left_out_note">sipariş dışı · listede kalır</string>
     <string name="letter_default_hint">Kendi mektubunuzu yazmazsanız varsayılan mektup gider.</string>
     <string name="letter_note_tab">Mektup &amp; not</string>
     <string name="letter_title">Teklif mektubu</string>
@@ -666,6 +678,7 @@
     <string name="lists_unit">liste</string>
     <string name="live_empty">Henüz yayında teklif yok.</string>
     <string name="live_sub">Yayındaki teklifler — fiyat, ad, temin süresi, stok ve görünürlük düzenlenebilir; Geri Al bir ürün ailesini incelemeye geri götürür.</string>
+    <string name="lowest_word">en düşük</string>
     <string name="ls_checking">Kontrol ediliyor</string>
     <string name="ls_closed">Kapandı</string>
     <string name="ls_draft">Taslak</string>
@@ -694,6 +707,7 @@
     <string name="media_title">Fotoğraf ve video</string>
     <string name="media_video_url">YouTube bağlantısı</string>
     <string name="months_word">ay</string>
+    <string name="more_expensive_word">daha pahalı</string>
     <string name="msg_word">mesaj</string>
     <string name="my_agreement">Sözleşmem</string>
     <string name="name_visibility_title">Ad görünürlüğü</string>
@@ -721,6 +735,7 @@
     <string name="no_email">e-posta yok</string>
     <string name="no_match">Eşleşme yok</string>
     <string name="no_profile_body">Bu hesabın henüz Workis üyeliği yok. Başvurunuz onaylandıysa, onay e-postanızdaki adresle girin. Yeni misin? Giriş ekranından başvurabilirsin.</string>
+    <string name="not_urgent_action">Acele değil</string>
     <string name="note_kind_duplicate">mükerrer</string>
     <string name="note_kind_incompatible">uyumsuz</string>
     <string name="note_kind_missing">eksik</string>
@@ -754,6 +769,8 @@
     <string name="order_done_empty">Henüz tamamlanan sipariş yok.</string>
     <string name="order_fund">Ödemeyi blokla</string>
     <string name="order_fund_confirm">Sipariş tutarı emanete alınır ve teslimden sonra satıcıya serbest bırakılır.</string>
+    <string name="order_letter_title">Sipariş yazısı</string>
+    <string name="order_letters">Sipariş yazıları</string>
     <string name="order_line_received">Teslim aldım</string>
     <string name="order_lines_word">kalem</string>
     <string name="order_lost">Başka satıcıya verildi</string>
@@ -847,6 +864,8 @@
     <string name="pipeline_empty">Kapsamında şu an bekleyen başvuru yok.</string>
     <string name="pipeline_leads">BAŞVURULAR</string>
     <string name="pipeline_pending">ONAY BEKLEYEN</string>
+    <string name="place_order">Siparişi ver</string>
+    <string name="place_orders">Siparişleri ver</string>
     <string name="po_pdf">Sipariş PDF</string>
     <string name="polish_action">Jowi ile düzelt</string>
     <string name="polish_apply">Uygula</string>
@@ -912,6 +931,7 @@
     <string name="reaccept_later">Daha sonra</string>
     <string name="reaccept_pending_row">Sözleşmenin yeni sürümü kabulünüzü bekliyor</string>
     <string name="reaccept_title">Sözleşme güncellendi</string>
+    <string name="recommended_word">önerilen</string>
     <string name="region_lead_label">Saha sorumlusu</string>
     <string name="reject_confirm">Aile incelemeden kaldırılır. Devam edilsin mi?</string>
     <string name="reject_family">Reddet</string>
@@ -925,6 +945,10 @@
     <string name="request_label">Talep</string>
     <string name="request_quotes">Teklif iste</string>
     <string name="requirements_title">Genel gereksinimler</string>
+    <string name="requote_carry">Geçerli teklifler taşınsın</string>
+    <string name="requote_fresh">Yeniden teklif iste</string>
+    <string name="requote_hint">Sipariş dışı kalan kalemler aynı satıcılara kendi talebi olarak gider. Geçerliliği süren teklif bağlayıcı teklif olarak taşınır, yeni liste hemen onaylanabilir; süresi geçenler yeniden istenir.</string>
+    <string name="requote_skipped">Sipariş dışı kalanlarla yeni talep</string>
     <string name="resend">E-postayı yeniden gönder</string>
     <string name="resend_invite">Daveti gönder</string>
     <string name="retry">Tekrar dene</string>
@@ -984,6 +1008,9 @@
     <string name="seg_rfq">Teklif süreci</string>
     <string name="seg_uploads">Yükleme ve belgeler</string>
     <string name="selected_tag">Seçili</string>
+    <string name="seller_note_hint">Yalnız bu satıcının sipariş yazısına alıcı notu olarak girer; satıcı aynı metni görür.</string>
+    <string name="seller_note_label">Satıcıya not</string>
+    <string name="seller_note_placeholder">Teslimat saati, kapı, irsaliye, fatura notu…</string>
     <string name="send">Gönder</string>
     <string name="send_action">Gönder</string>
     <string name="send_preview_sub">Her satıcı YALNIZCA kendisiyle eşleşen kalemleri görür.</string>
@@ -1035,6 +1062,7 @@
     <string name="signup_confirm_other">Farklı bir adresle giriş yap</string>
     <string name="signup_confirm_title">Bu adresle kayıtlı bir hesap yok</string>
     <string name="signup_confirm_yes">Hesap aç ve devam et</string>
+    <string name="source_list">Kaynak liste</string>
     <string name="source_page">kaynak sayfa</string>
     <string name="sourced_seller">/ Workis</string>
     <string name="sourced_seller_hint">Workis tedarikçi bulur — talep kalemi yazıldığı gibi taşır</string>
@@ -1060,9 +1088,11 @@
     <string name="stage_invoice">Fatura</string>
     <string name="stage_job_contract">Sözleşmeyi okuyun ve imzalayın</string>
     <string name="stage_job_terms">Koşul kartlarını açın</string>
+    <string name="stage_list">Liste</string>
     <string name="stage_lost">Kaybedildi</string>
     <string name="stage_order">Sipariş</string>
     <string name="stage_quote">Teklif</string>
+    <string name="stage_quotes">Teklifler</string>
     <string name="stage_request">Talep</string>
     <string name="start_conv_hint">Partner bunu Jowi ekranında ve akışında görür.</string>
     <string name="start_conversation">Yazışma başlat</string>
@@ -1211,6 +1241,8 @@
     <string name="upload_spec">Şartname yükle (PDF)</string>
     <string name="upload_sub">Herhangi bir ürün PDF\'i — fiyat listesi, katalog, kılavuz, yedek parça listesi veya sertifika. Tür yüklemede algılanır; ürün tabloları sayfa sayfa çıkarılır ve yayına girmeden önce incelenir.</string>
     <string name="upload_title">Belge yükle</string>
+    <string name="urgent_action">Acele</string>
+    <string name="urgent_word">acele</string>
     <string name="use_add">Ekle</string>
     <string name="use_added">Eklendi</string>
     <string name="use_badge_added">Jowi ekledi</string>

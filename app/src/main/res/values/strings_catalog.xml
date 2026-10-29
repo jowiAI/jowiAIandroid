@@ -136,6 +136,7 @@
     <string name="autonomy_sub">What Jowi may do without asking. Anything covered here never lands in Approvals.</string>
     <string name="autonomy_title">Autonomy</string>
     <string name="awaiting_quote">awaiting quote</string>
+    <string name="awaiting_your_pick">awaiting your pick</string>
     <string name="awaiting_your_quote">awaiting your quote</string>
     <string name="award_action">Award and order</string>
     <string name="award_confirm">One order per winning seller will be created. Continue?</string>
@@ -149,6 +150,7 @@
     <string name="bio_field">Bio</string>
     <string name="bio_placeholder">Your background, the standards you work with, the topics you can help with.</string>
     <string name="brand_field">Brand</string>
+    <string name="buyer_note_label">Buyer\'s note</string>
     <string name="c_answered">questions answered</string>
     <string name="c_facts">facts</string>
     <string name="c_novel">new</string>
@@ -259,6 +261,7 @@
     <string name="cari_paid">Paid</string>
     <string name="cari_title">Current account</string>
     <string name="cari_virtual">virtual supplier</string>
+    <string name="carried_from">from quote</string>
     <string name="cases_big_title">Your cases</string>
     <string name="cases_empty">No cases yet. Describe what you need to Jowi — a case opens from the answer.</string>
     <string name="cases_title">Your cases</string>
@@ -328,6 +331,7 @@
     <string name="console_tab">Panel</string>
     <string name="console_title">Panel</string>
     <string name="console_web_only">The region-lead console lives on the web (workis.ai/workis/console/) — the walls around region data stay on one surface.</string>
+    <string name="continued_in">Continued in</string>
     <string name="contract_accept">Accept and sign</string>
     <string name="contract_accepted">signed by both</string>
     <string name="contract_awaiting_other">Awaiting this party\'s acceptance.</string>
@@ -352,7 +356,10 @@
     <string name="decision_degraded">Jowi could not read this decision — it was recorded and sent as you wrote it, with no operator, contract or reservation matched.</string>
     <string name="decision_delivered">Delivered</string>
     <string name="decision_empty">No decisions yet. Write the decision you took in your own words — Jowi records it and tells the person who will act.</string>
+    <string name="decision_hint">Prefilled with Jowi\'s reason — edit it or write your own. It stays in your order record; no seller reads it.</string>
+    <string name="decision_label">Your decision</string>
     <string name="decision_not_delivered">Not delivered</string>
+    <string name="decision_note_label">Decision</string>
     <string name="decision_pick_placeholder">Choose</string>
     <string name="decision_pick_unknown">I don\'t know — leave it unresolved</string>
     <string name="decision_prompt">Write your decision</string>
@@ -364,6 +371,7 @@
     <string name="decision_retract_confirm">The record stays on screen and shows that it was withdrawn. The way to correct it is a new decision.</string>
     <string name="decision_retracted_trace">You withdrew this decision</string>
     <string name="decision_sending">Being delivered…</string>
+    <string name="decision_stays_hint">Your decision stays in your own order record; it never enters an order letter.</string>
     <string name="decision_trail">Grounds</string>
     <string name="decision_trail_jowi">Jowi</string>
     <string name="decision_trail_you">You</string>
@@ -499,6 +507,7 @@
     <string name="face_id">Unlock with Face ID</string>
     <string name="face_idcancel">Use another account</string>
     <string name="face_idreason">Sign in to your Workis account</string>
+    <string name="fails_word">requirement(s) unmet</string>
     <string name="families_word">families</string>
     <string name="family_live">Live</string>
     <string name="family_proposed">Awaiting review</string>
@@ -599,6 +608,7 @@
     <string name="inv_withdrawn">the buyer withdrew the request</string>
     <string name="invited_word">sellers invited</string>
     <string name="item_name">Item name</string>
+    <string name="items_covered">items covered</string>
     <string name="items_word">items</string>
     <string name="jowi_answered_last">last</string>
     <string name="jowi_answered_title">Jowi answered</string>
@@ -622,6 +632,7 @@
     <string name="jowi_note_title">Jowi\'s note</string>
     <string name="jowi_open_link">Open</string>
     <string name="jowi_option_other_hint">Type it in your own words — or name the label you see.</string>
+    <string name="jowi_pick">Jowi\'s pick</string>
     <string name="jowi_prompt">Ask Jowi…</string>
     <string name="jowi_scope_general">General</string>
     <string name="jowi_scope_this_list">This list</string>
@@ -643,6 +654,7 @@
     <string name="ledger_note">These counters are the contribution-pay ledger — payment starts at platform go-live and accrues from here.</string>
     <string name="ledger_title">Contribution ledger</string>
     <string name="left_badge">LEFT</string>
+    <string name="left_out_note">left out · stays on the list</string>
     <string name="letter_default_hint">The default letter goes out unless you write your own.</string>
     <string name="letter_note_tab">Letter &amp; note</string>
     <string name="letter_title">RFQ letter</string>
@@ -666,6 +678,7 @@
     <string name="lists_unit">lists</string>
     <string name="live_empty">No live offers yet.</string>
     <string name="live_sub">Live offers — price, name, lead time, stock and visibility are editable; Withdraw sends a family back to review.</string>
+    <string name="lowest_word">lowest</string>
     <string name="ls_checking">Checking</string>
     <string name="ls_closed">Closed</string>
     <string name="ls_draft">Draft</string>
@@ -694,6 +707,7 @@
     <string name="media_title">Photos &amp; videos</string>
     <string name="media_video_url">YouTube link</string>
     <string name="months_word">months</string>
+    <string name="more_expensive_word">more expensive</string>
     <string name="msg_word">messages</string>
     <string name="my_agreement">My agreement</string>
     <string name="name_visibility_title">Name visibility</string>
@@ -721,6 +735,7 @@
     <string name="no_email">no e-mail</string>
     <string name="no_match">No match yet</string>
     <string name="no_profile_body">This account has no Workis membership yet. If your application was approved, sign in with the address from your approval e-mail. New here? Apply from the sign-in screen.</string>
+    <string name="not_urgent_action">Not urgent</string>
     <string name="note_kind_duplicate">duplicate</string>
     <string name="note_kind_incompatible">incompatible</string>
     <string name="note_kind_missing">missing</string>
@@ -754,6 +769,8 @@
     <string name="order_done_empty">No completed orders yet.</string>
     <string name="order_fund">Hold the payment</string>
     <string name="order_fund_confirm">The order total moves into escrow and is released to the seller after delivery.</string>
+    <string name="order_letter_title">Order letter</string>
+    <string name="order_letters">Order letters</string>
     <string name="order_line_received">I received it</string>
     <string name="order_lines_word">lines</string>
     <string name="order_lost">Awarded elsewhere</string>
@@ -847,6 +864,8 @@
     <string name="pipeline_empty">No applications in your scope right now.</string>
     <string name="pipeline_leads">LEADS</string>
     <string name="pipeline_pending">AWAITING APPROVAL</string>
+    <string name="place_order">Place the order</string>
+    <string name="place_orders">Place the orders</string>
     <string name="po_pdf">PO PDF</string>
     <string name="polish_action">Polish with Jowi</string>
     <string name="polish_apply">Apply</string>
@@ -912,6 +931,7 @@
     <string name="reaccept_later">Later</string>
     <string name="reaccept_pending_row">A new agreement version awaits your acceptance</string>
     <string name="reaccept_title">Agreement updated</string>
+    <string name="recommended_word">recommended</string>
     <string name="region_lead_label">Field lead</string>
     <string name="reject_confirm">The family is removed from review. Continue?</string>
     <string name="reject_family">Reject</string>
@@ -925,6 +945,10 @@
     <string name="request_label">Request</string>
     <string name="request_quotes">Request quotes</string>
     <string name="requirements_title">General requirements</string>
+    <string name="requote_carry">Carry the valid quotes</string>
+    <string name="requote_fresh">Ask for fresh quotes</string>
+    <string name="requote_hint">The items left out of the order become their own request to the same sellers. A quote still valid is carried as a binding offer, so the new list can be awarded at once; expired ones are asked again.</string>
+    <string name="requote_skipped">New request with the items left out</string>
     <string name="resend">Resend e-mail</string>
     <string name="resend_invite">Send invite</string>
     <string name="retry">Try again</string>
@@ -984,6 +1008,9 @@
     <string name="seg_rfq">Quote process</string>
     <string name="seg_uploads">Upload &amp; documents</string>
     <string name="selected_tag">Selected</string>
+    <string name="seller_note_hint">Goes into this seller\'s order letter as the buyer\'s note; the seller reads the same text.</string>
+    <string name="seller_note_label">Note to the seller</string>
+    <string name="seller_note_placeholder">Delivery hours, gate, waybill or invoice remarks…</string>
     <string name="send">Send</string>
     <string name="send_action">Send</string>
     <string name="send_preview_sub">Each seller sees ONLY the items matched to them.</string>
@@ -1035,6 +1062,7 @@
     <string name="signup_confirm_other">Sign in with a different address</string>
     <string name="signup_confirm_title">No account is registered under this address</string>
     <string name="signup_confirm_yes">Open the account and continue</string>
+    <string name="source_list">Source list</string>
     <string name="source_page">source page</string>
     <string name="sourced_seller">/ Workis</string>
     <string name="sourced_seller_hint">Workis sources it — the request carries it as written</string>
@@ -1060,9 +1088,11 @@
     <string name="stage_invoice">Invoice</string>
     <string name="stage_job_contract">Read and sign the contract</string>
     <string name="stage_job_terms">Open the term cards</string>
+    <string name="stage_list">List</string>
     <string name="stage_lost">Lost</string>
     <string name="stage_order">Order</string>
     <string name="stage_quote">Quote</string>
+    <string name="stage_quotes">Quotes</string>
     <string name="stage_request">Request</string>
     <string name="start_conv_hint">The partner sees this on their Jowi screen and activity feed.</string>
     <string name="start_conversation">Start correspondence</string>
@@ -1211,6 +1241,8 @@
     <string name="upload_spec">Upload spec (PDF)</string>
     <string name="upload_sub">Any product PDF — price list, catalogue, manual, spare parts list or certificate. The type is detected on upload; product tables are extracted page by page and reviewed before anything goes live.</string>
     <string name="upload_title">Upload a document</string>
+    <string name="urgent_action">Urgent</string>
+    <string name="urgent_word">urgent</string>
     <string name="use_add">Add</string>
     <string name="use_added">Added</string>
     <string name="use_badge_added">Jowi added</string>

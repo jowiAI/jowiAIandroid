@@ -959,7 +959,7 @@ class JowiViewModel : ViewModel() {
 fun JowiScreen(vm: JowiViewModel = viewModel()) {
     val colors = WorkisTheme.colors
     vm.openList?.let { id ->
-        ai.workis.jowi.ui.screens.partner.ListDetailScreen(id, onBack = { vm.openList = null })
+        ai.workis.jowi.ui.screens.partner.ListDetailScreen(id, onBack = { vm.openList = null }, onOpenList = { vm.openList = it })
         return
     }
     // a value, not a bare string: an example or a clarify "back" lands with the

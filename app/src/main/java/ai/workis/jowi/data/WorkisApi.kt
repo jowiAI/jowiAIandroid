@@ -649,6 +649,10 @@ interface WorkisApi {
     @POST("workis/lists/items/{id}/use/")
     suspend fun listItemUse(@Path("id") id: String, @Body body: UseBody): UseReply
 
+    /** `{urgent: true|false}` on a draft's row (2026-10-29, ledger 79) — the buyer's "acele". */
+    @POST("workis/lists/items/{id}/edit/")
+    suspend fun listItemEdit(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
     @POST("workis/lists/items/{id}/delete/")
     suspend fun listItemDelete(@Path("id") id: String): SimpleResult
 
@@ -686,6 +690,10 @@ interface WorkisApi {
      *  (`offers`, the web form's product picker) at every sign-in — 233 KB / 3–4.6 s on GELİŞİM with no
      *  invitation at all. The app's quote form prices the invitation's own lines and has no picker;
      *  the product list, if ever needed, is `GET seller/offers/` read when a form opens, never here. */
+    /** A new list from the items the award left out (2026-10-29): `{carry}` → `{listId, invited, carried[], message}`; 400 + a sentence when closed. */
+    @POST("workis/lists/{id}/requote-skipped/")
+    suspend fun listRequoteSkipped(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): RequoteResult
+
     @GET("workis/seller/invitations/?offers=0")
     suspend fun sellerInvitations(): SellerInvitations
 

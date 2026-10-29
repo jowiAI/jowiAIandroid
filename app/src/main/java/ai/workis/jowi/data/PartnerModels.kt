@@ -219,7 +219,20 @@ data class PLInfo(
     @Serializable(with = PLProvenanceTolerant::class) val provenance: PLProvenance? = null,
     /** Jowi's stage counts + the server's sentence (2026-10-20, ledger 66); null = nothing to say. */
     val jowiSummary: PLJowiSummary? = null,
+    /** The buyer's decision as recorded at the award (2026-10-29, ledger 79); buyer seat only; never edited. */
+    val decisionNote: String? = null,
+    /** The one door to a new request from the items the award left out (`requote-skipped`); closed once used. */
+    val canRequoteSkipped: Boolean? = null,
+    /** The list mixes urgent and non-urgent items. */
+    val urgentMixed: Boolean? = null,
+    /** The list this one was born from, and the lists that continue it (`requote-skipped`, both ways). */
+    val parent: PLListLink? = null,
+    val children: List<PLListLink>? = null,
 )
+
+/** A list this one came from, or went on as (2026-10-29): `{id, title, status, kind}`. */
+@Serializable
+data class PLListLink(@Serializable(with = FlexString::class) val id: String? = null, val title: String? = null, val status: String? = null, val kind: String? = null)
 
 /** `list.jowiSummary {waiting, better, fits, answered, added, line}` — `line` is the sentence the page shows. */
 @Serializable
@@ -419,6 +432,8 @@ data class PLItem(
     @Serializable(with = PLUseTolerant::class) val use: PLUse? = null,
     /** The row came from another row's card ("+ Ekle") — "Jowi ekledi". */
     val jowiAdded: Boolean? = null,
+    /** The buyer's "acele" on the row (2026-10-29): rides the RFQ letter and the seller's card; toggled with `lists/items/{id}/edit/ {urgent}` in a draft. */
+    val urgent: Boolean? = null,
 ) {
     /** the bound candidate, else the top one (the web's `sel`) */
     val selected: PLCandidate?
@@ -465,7 +480,7 @@ data class PLAssignment(
 data class PLSellerTotal(@Serializable(with = FlexString::class) val sellerId: String? = null, val lbl: PLLabel? = null, val currency: String? = null, val total: Double? = null)
 
 @Serializable
-data class PLUncovered(@Serializable(with = FlexString::class) val itemId: String? = null, val name: String? = null, val qty: Double? = null, val unit: String? = null)
+data class PLUncovered(@Serializable(with = FlexString::class) val itemId: String? = null, val name: String? = null, val qty: Double? = null, val unit: String? = null, /** unticked at the award (2026-10-29) */ val skipped: Boolean? = null)
 
 /**
  * One term of a quote's sheet (2026-09-30), in registry order — what the buyer reads next
@@ -492,9 +507,76 @@ data class PLQuoteSheet(
     @Serializable(with = FlexString::class) val sellerId: String? = null,
     @SerialName("seller_id") @Serializable(with = FlexString::class) val sellerIdSnake: String? = null,
     val number: String? = null,
+    /** The server sends a BOOLEAN (coverage.py `bool(pdf_key)`) — a String here failed the whole list decode. */
+    @Serializable(with = FlexBool::class) val pdf: Boolean? = null,
     val terms: List<PLQuoteTerm>? = null,
+    // 2026-10-29: the sheet also carries the payment term, the lead time and the mode (both spellings)
+    @Serializable(with = FlexInt::class) val vadeDays: Int? = null,
+    @SerialName("vade_days") @Serializable(with = FlexInt::class) val vadeDaysSnake: Int? = null,
+    @Serializable(with = FlexInt::class) val leadTimeDays: Int? = null,
+    @SerialName("lead_time_days") @Serializable(with = FlexInt::class) val leadTimeDaysSnake: Int? = null,
+    val deliveryMode: String? = null,
+    @SerialName("delivery_mode") val deliveryModeSnake: String? = null,
 ) {
     val seller get() = sellerId ?: sellerIdSnake
+    val vade get() = vadeDays ?: vadeDaysSnake
+    val leadTime get() = leadTimeDays ?: leadTimeDaysSnake
+    val mode get() = deliveryMode ?: deliveryModeSnake
+}
+
+/**
+ * The decision page's rows (2026-10-29, ledger 79, coverage.py `items[]`): one item with every
+ * seller's quoted option, Jowi's pick marked `recommended`; `carried` when the line came over
+ * from an earlier list's still-valid quote (`requote-skipped`). Both spellings read; numbers lenient.
+ */
+@Serializable
+data class PLProposalItem(
+    @Serializable(with = FlexString::class) val itemId: String? = null,
+    @SerialName("item_id") @Serializable(with = FlexString::class) val itemIdSnake: String? = null,
+    val itemName: String? = null,
+    @SerialName("item_name") val itemNameSnake: String? = null,
+    @Serializable(with = FlexDouble::class) val qty: Double? = null,
+    val unit: String? = null,
+    val options: List<PLProposalOption>? = null,
+) {
+    val id get() = itemId ?: itemIdSnake
+    val name get() = itemName ?: itemNameSnake
+}
+
+@Serializable
+data class PLProposalOption(
+    @Serializable(with = FlexString::class) val sellerId: String? = null,
+    @SerialName("seller_id") @Serializable(with = FlexString::class) val sellerIdSnake: String? = null,
+    val seller: String? = null,
+    @Serializable(with = FlexString::class) val sku: String? = null,
+    val name: String? = null,
+    @Serializable(with = FlexString::class) val cpid: String? = null,
+    @Serializable(with = FlexDouble::class) val unitPrice: Double? = null,
+    @SerialName("unit_price") @Serializable(with = FlexDouble::class) val unitPriceSnake: Double? = null,
+    val currency: String? = null,
+    val deliveryMode: String? = null,
+    @SerialName("delivery_mode") val deliveryModeSnake: String? = null,
+    @Serializable(with = FlexInt::class) val fails: Int? = null,
+    @Serializable(with = FlexDouble::class) val amount: Double? = null,
+    val recommended: Boolean? = null,
+    val carried: PLCarried? = null,
+) {
+    val seller_ get() = sellerId ?: sellerIdSnake
+    val unit get() = unitPrice ?: unitPriceSnake
+    /** The pick's value on `award/` `selections`: `{seller_id, sku}` — keyed "sellerId|sku" on the page. */
+    val key get() = (seller_ ?: "") + "|" + (sku ?: "")
+}
+
+/** `carried {fromQuote, validUntil}` — a binding offer carried from the source list's quote. */
+@Serializable
+data class PLCarried(
+    val fromQuote: String? = null,
+    @SerialName("from_quote") val fromQuoteSnake: String? = null,
+    val validUntil: String? = null,
+    @SerialName("valid_until") val validUntilSnake: String? = null,
+) {
+    val quote get() = fromQuote ?: fromQuoteSnake
+    val until get() = validUntil ?: validUntilSnake
 }
 
 @Serializable
@@ -505,6 +587,10 @@ data class PLProposal(
     val uncovered: List<PLUncovered>? = null,
     val nQuotes: Int? = null,
     val quotes: List<PLQuoteSheet>? = null, // each quote's term sheet (2026-09-30)
+    /** Jowi's reason for the recommended coverage — the server's sentence(s), localized (2026-10-29, decision.py); null below one quote and on an ordered list. */
+    val reason: String? = null,
+    /** Every item with every seller's option — the decision page's rows (2026-10-29). */
+    val items: List<PLProposalItem>? = null,
 )
 
 @Serializable
@@ -547,7 +633,23 @@ data class PLOrder(
     val hasPdf: Boolean? = null,
     val nLines: Int? = null,
     val shipment: PLShipment? = null,
+    /** 2026-10-29: the buyer's own decision (buyer seat only) and the note to this seller. */
+    val decisionNote: String? = null,
+    val sellerNote: String? = null,
 )
+
+/** `POST lists/{id}/requote-skipped/ {carry}` → `{listId, invited, carried[], message}`; 400 + a sentence when the door is closed. */
+@Serializable
+data class RequoteResult(
+    @Serializable(with = FlexString::class) val listId: String? = null,
+    val invited: Int? = null,
+    val carried: List<RequoteCarried>? = null,
+    val message: String? = null,
+    val error: String? = null,
+)
+
+@Serializable
+data class RequoteCarried(@Serializable(with = FlexString::class) val sellerId: String? = null, val seller: String? = null, val number: String? = null)
 
 @Serializable
 data class PLVirtualInvite(
@@ -733,6 +835,8 @@ data class InvListItem(
     val requirements: List<String>? = null,
     /** What the buyer said the row is for (ledger 69, Django slice 3): '' when unanswered. */
     val use: String? = null,
+    /** The buyer's "acele" on the row (2026-10-29): "ACELE" beside the quantity. */
+    val urgent: Boolean? = null,
 )
 
 /** `listPrice` + `discountPct` echo what the line was priced against (2026-10-01). */
@@ -790,6 +894,8 @@ data class SellerOrder(
     val chatUrl: String? = null,
     val shipment: InvShipment? = null,
     val lines: List<SellerOrderLine>? = null, // canMarkDelivered (2026-10-01) — data/OrderModels.kt
+    /** The buyer's note to THIS seller, as the order letter prints it (2026-10-29): "Alıcı notu: …". */
+    val buyerNote: String? = null,
 )
 
 @Serializable

@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,9 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import ai.workis.jowi.ui.theme.Text
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -63,6 +59,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight as KeyboardArrowRightAuto
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.FocusRequester
@@ -89,11 +86,8 @@ import ai.workis.jowi.data.BindBody
 import ai.workis.jowi.data.ListRenameBody
 import ai.workis.jowi.data.PLProvenance
 import ai.workis.jowi.data.NoteBody
-import ai.workis.jowi.data.PLAssignment
 import ai.workis.jowi.data.PLCandidate
 import ai.workis.jowi.data.PLItem
-import ai.workis.jowi.data.PLProposal
-import ai.workis.jowi.data.PLQuoteTerm
 import ai.workis.jowi.data.PLSearchResult
 import ai.workis.jowi.data.PLSendRow
 import ai.workis.jowi.data.PLSuggestion
@@ -132,6 +126,33 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.util.Locale
+import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.text.style.TextDecoration
+import ai.workis.jowi.data.PLProposalItem
+import ai.workis.jowi.data.PLProposalOption
+import ai.workis.jowi.data.PLQuoteSheet
+import ai.workis.jowi.ui.theme.Kiremit800
+import ai.workis.jowi.ui.theme.PaperInk
+import ai.workis.jowi.ui.theme.PaperWhite
+import ai.workis.jowi.ui.theme.readingStep
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlin.math.abs
 
 class ListDetailViewModel : ViewModel() {
     var detail by mutableStateOf<PurchaseListDetail?>(null)
@@ -200,7 +221,98 @@ class ListDetailViewModel : ViewModel() {
         val listId = id ?: return
         viewModelScope.launch {
             val (r, err) = partnerCall(lang) { Graph.api.listDetail(listId) }
-            if (r != null) { detail = r; error = null } else error = err
+            if (r != null) landed(r) else error = err
+        }
+    }
+
+    // ---------- the four stages (2026-10-29, ledger 79) ----------
+
+    /** The stage the reader walked to; null = the list's current one. Forgotten whenever the
+     *  current stage moves (a status change, the first quote, an award) — not on every read: the
+     *  page polls while working and re-reads on changes/, and a reader on Talep stays there. */
+    var shown by mutableStateOf<ListStage?>(null)
+    private var lastCurrent: ListStage? = null
+    private var lastStatus: String? = null
+
+    /** The decision page's picks: itemId → "sellerId|sku", "-" = left out; absent = Jowi's pick. */
+    var picks by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+    /** The buyer's reason — prefilled ONCE with Jowi's while empty (quoting lists only). */
+    var decision by mutableStateOf("")
+    private var decisionPrefilled = false
+    /** The note per winning seller, typed on the order letters sheet (keyed as the proposal names the seller). */
+    var sellerNotes by mutableStateOf<Map<String, String>>(emptyMap())
+    var placing by mutableStateOf(false)
+        private set
+    /** The award's refusal, shown on the letters sheet too (the screen note sits under it). */
+    var placeError by mutableStateOf<String?>(null)
+        private set
+
+    /** Every answered read lands here: a moved stage or status forgets the walk and the picks. */
+    private fun landed(r: PurchaseListDetail) {
+        val cur = currentStage(r)
+        val status = r.list?.status
+        if (detail != null && (cur != lastCurrent || status != lastStatus)) {
+            shown = null
+            if (status != lastStatus) picks = emptyMap()
+        }
+        lastCurrent = cur; lastStatus = status
+        detail = r; error = null
+        if (!decisionPrefilled && r.isQuoting) {
+            r.proposal?.reason?.takeIf { it.isNotBlank() }?.let { if (decision.isEmpty()) decision = it; decisionPrefilled = true }
+        }
+    }
+
+    fun pick(itemId: String, key: String) { picks = picks + (itemId to key) }
+
+    /**
+     * The order letters' "Siparişleri ver": `selections` ({itemId: {seller_id, sku}} | {skip: true}),
+     * `decisionNote` (trimmed, omitted when empty), `sellerNotes` ({sellerId: text}, empty ones
+     * dropped). The server's sentence is the note; orders back = the sheet closes, the picks reset
+     * and the page re-reads onto Sipariş.
+     */
+    fun placeOrders(selections: JsonObject, onPlaced: () -> Unit) {
+        val listId = id ?: return
+        if (placing) return
+        placing = true; note = null; placeError = null
+        val notes = sellerNotes.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() }
+        val body = jsonBody(
+            "selections" to selections,
+            "decisionNote" to decision.trim().takeIf { it.isNotEmpty() },
+            "sellerNotes" to notes.takeIf { it.isNotEmpty() }?.let { m -> JsonObject(m.mapValues { JsonPrimitive(it.value) }) },
+        )
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.listAwardSelections(listId, body) }
+            placing = false
+            note = r?.message ?: r?.error ?: err
+            if (r != null && r.success != false && !r.orderIds.isNullOrEmpty()) {
+                picks = emptyMap(); sellerNotes = emptyMap(); shown = null
+                onPlaced()
+            } else placeError = r?.error ?: r?.message ?: err
+            load()
+        }
+    }
+
+    /** `POST lists/{id}/requote-skipped/ {carry}` — the items left out become their own request;
+     *  the server's sentence is the note and the child list appears under the header. */
+    fun requoteSkipped(carry: Boolean) {
+        val listId = id ?: return
+        if (busy) return
+        busy = true; note = null
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.listRequoteSkipped(listId, jsonBody("carry" to carry)) }
+            busy = false
+            note = r?.message ?: r?.error ?: err
+            load()
+        }
+    }
+
+    /** The buyer's "acele" on a draft's row: `POST lists/items/{id}/edit/ {urgent}`, then the re-read. */
+    fun setUrgent(itemId: String, on: Boolean) {
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.listItemEdit(itemId, jsonBody("urgent" to on)) }
+            if (r == null || !r.success) note = r?.error ?: r?.message ?: err
+            load()
         }
     }
 
@@ -218,7 +330,7 @@ class ListDetailViewModel : ViewModel() {
     suspend fun reload(): PurchaseListDetail? {
         val listId = id ?: return null
         val (r, err) = partnerCall(lang) { Graph.api.listDetail(listId) }
-        if (r != null) { detail = r; error = null } else error = err
+        if (r != null) landed(r) else error = err
         return r
     }
 
@@ -433,14 +545,6 @@ class ListDetailViewModel : ViewModel() {
         }
     }
     fun chase() = act { Graph.api.listChase(id!!).let { true to (it.message ?: it.error) } }
-    /** `skips` = the unticked items, sent as `selections = {itemId: {skip: true}}`; the rest get the server's proposal. */
-    fun award(skips: Set<String>, onAwarded: () -> Unit) = act {
-        val sel = JsonObject(skips.associateWith { JsonObject(mapOf("skip" to JsonPrimitive(true))) })
-        Graph.api.listAwardSelections(id!!, if (sel.isEmpty()) JsonObject(emptyMap()) else jsonBody("selections" to sel)).let {
-            if (!it.orderIds.isNullOrEmpty()) onAwarded()
-            (it.success != false) to (it.message ?: it.error)
-        }
-    }
     fun rfqPdfUrl(sellerId: String?): String = WORKIS_BASE_URL + "workis/lists/$id/rfq-pdf/" + (sellerId?.let { "?seller=$it" } ?: "")
 }
 
@@ -460,14 +564,13 @@ private fun sendGroups(d: PurchaseListDetail): List<SendGroup> {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> Unit = {}, canWithdraw: Boolean = false) {
+fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> Unit = {}, canWithdraw: Boolean = false, onOpenList: (String) -> Unit = {}) {
     val vm: ListDetailViewModel = viewModel(key = "list-$listId")
     val colors = WorkisTheme.colors
     LaunchedEffect(listId) { vm.bind(listId) }
     val d = vm.detail
     // Jowi's page + scope: "bu listede kaç kalem var?" is answered from THIS list (2026-09-19)
     LaunchedEffect(listId, d?.list?.title, d?.isDraft) { ai.workis.jowi.data.ScreenContext.openList(listId, d?.list?.title, d?.isDraft == true) }
-    var segment by rememberSaveable { mutableStateOf(0) }
     var pickItem by remember { mutableStateOf<PLItem?>(null) }
     // open the pick sheet straight on this candidate's variant list (`needs_variant`)
     var pickVariantCpid by remember { mutableStateOf<String?>(null) }
@@ -477,10 +580,13 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
     var typing by remember { mutableStateOf(false) }
     var showAdd by remember { mutableStateOf(false) }
     var showSend by remember { mutableStateOf(false) }
-    var showAward by remember { mutableStateOf(false) }
-    // items the buyer unticked before the award (2026-10-01); every other item is ordered as proposed
-    var awardSkips by remember { mutableStateOf(setOf<String>()) }
-    var rfqPdf by remember { mutableStateOf<String?>(null) }
+    // the order letters before the award (2026-10-29): one paper + one note per winning seller
+    var showLetters by remember { mutableStateOf(false) }
+    var requoteAsk by remember { mutableStateOf(false) }
+    // (title, url) of the PDF on screen — a request letter or a quote
+    var pdf by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val rfqTitle = stringResource(R.string.rfq_doc)
+    val quoteTitle = stringResource(R.string.quote_doc)
     LaunchedEffect(d?.isWorking) { while (vm.detail?.isWorking == true) { delay(4_000); vm.load() } }
     LaunchedEffect(showSend, pendingPick) {
         val p = pendingPick
@@ -511,39 +617,70 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
             when {
                 d != null -> {
                     Header(d)
-                    // a request out for quotes may be taken back (2026-10-04) — two presses, no
-                    // system dialog; the lists row's flag until this screen's own read answers
-                    if (vm.withdrawable ?: canWithdraw) WithdrawButton(busy = vm.withdrawing, onConfirm = vm::withdraw)
+                    ListLinks(d, onOpenList)
                     NoteBand(vm.note)
                     if (d.isWorking) Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = colors.faint)
                         Spacer(Modifier.width(10.dp))
                         Text(listStageWord(d.list?.stage) ?: stringResource(R.string.processing), fontSize = 13.sp, color = colors.muted)
                     }
-                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                        listOf(
-                            stringResource(R.string.seg_items) + " · ${d.items?.size ?: 0}",
-                            stringResource(R.string.seg_rfq) + " · ${d.proposal?.nQuotes ?: 0}",
-                        ).forEachIndexed { i, label ->
-                            SegmentedButton(
-                                selected = segment == i, onClick = { segment = i },
-                                shape = SegmentedButtonDefaults.itemShape(index = i, count = 2),
-                                colors = SegmentedButtonDefaults.colors(activeContainerColor = colors.surface, activeContentColor = colors.ink, inactiveContainerColor = colors.canvas, inactiveContentColor = colors.muted),
-                            ) { Text(label, fontSize = 13.sp, maxLines = 1) }
+                    // Liste › Talep › Teklifler › Sipariş (ledger 79): one stage on screen, the
+                    // strip and a horizontal swipe move only between the stages reached
+                    val steps = listSteps(d)
+                    val sel = vm.shown?.takeIf { exists(it, d) } ?: currentStage(d)
+                    val reached = steps.filter { it.exists }.map { it.stage }
+                    val walk by rememberUpdatedState { forward: Boolean ->
+                        val i = reached.indexOf(sel)
+                        val j = if (forward) i + 1 else i - 1
+                        if (i >= 0 && j in reached.indices) vm.shown = reached[j]
+                    }
+                    StageWalk(steps, sel) { s -> if (exists(s, d)) vm.shown = s }
+                    // the swipe: only a mostly-horizontal drag of ≥ 48 px counts. The detector
+                    // starts after the HORIZONTAL slop, so a vertical drag goes to the page's
+                    // scroll untouched; a child that takes the drag first (a row's urgent swipe,
+                    // the suggestions' strip) consumes it and the walk never sees it.
+                    Box(
+                        Modifier.fillMaxWidth().pointerInput(listId) {
+                            var start = Offset.Zero
+                            var last = Offset.Zero
+                            detectHorizontalDragGestures(
+                                onDragStart = { start = it; last = it },
+                                onDragEnd = {
+                                    val dx = last.x - start.x
+                                    val dy = last.y - start.y
+                                    if (abs(dx) >= 48f && abs(dx) > abs(dy) * 1.5f) walk(dx < 0)
+                                },
+                                onHorizontalDrag = { change, _ -> last = change.position },
+                            )
+                        },
+                    ) {
+                        Crossfade(targetState = sel, label = "listStage") { stage ->
+                            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                                when (stage) {
+                                    ListStage.List -> ItemsSegment(
+                                        d, vm,
+                                        onPick = { pickVariantCpid = null; pickItem = it },
+                                        onAdd = { showAdd = true },
+                                        onNeedsVariant = { row, cpid -> pickVariantCpid = cpid; pickItem = row },
+                                        onTyping = { typing = it },
+                                        pageScroll = pageScroll,
+                                    )
+                                    ListStage.Request -> RequestPage(d, vm, withdrawable = vm.withdrawable ?: canWithdraw)
+                                    ListStage.Quotes -> DecisionPage(
+                                        d, vm,
+                                        onAward = { showLetters = true },
+                                        onQuotePdf = { url -> pdf = quoteTitle to url },
+                                    )
+                                    ListStage.Order -> OrderPage(d, vm, onRequote = { requoteAsk = true })
+                                }
+                                // under every stage once the request is out: the letters, then the tables
+                                if (!d.isDraft) {
+                                    RfqDocRows(d) { sellerId -> pdf = rfqTitle to vm.rfqPdfUrl(sellerId) }
+                                    ChatInvitesSection(d, onThread)
+                                }
+                            }
                         }
                     }
-                    if (segment == 0) {
-                        ItemsSegment(
-                            d, vm,
-                            onPick = { pickVariantCpid = null; pickItem = it },
-                            onAdd = { showAdd = true },
-                            onNeedsVariant = { row, cpid -> pickVariantCpid = cpid; pickItem = row },
-                            onTyping = { typing = it },
-                            pageScroll = pageScroll,
-                        )
-                        ChatInvitesSection(d, onThread)
-                    }
-                    else RfqSegment(d, vm, awardSkips, onToggleSkip = { awardSkips = if (it in awardSkips) awardSkips - it else awardSkips + it }, onRfqPdf = { rfqPdf = vm.rfqPdfUrl(it) }, onAward = { showAward = true })
                 }
                 vm.error != null -> Text(vm.error.orEmpty(), color = colors.danger, fontSize = 13.sp)
                 else -> Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) { WorkisMark(size = 26, breathing = true) }
@@ -563,18 +700,150 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
     if (showSend && d != null) SendPreviewSheet(d, vm, onRefused = { msg, row ->
         // the gate's sentence names the rows (2026-10-03): it becomes the screen note and
         // the first open row opens once the send sheet is gone
-        vm.note = msg; segment = 0; pendingPick = row; showSend = false
+        vm.note = msg; vm.shown = ListStage.List; pendingPick = row; showSend = false
     }) { showSend = false }
-    rfqPdf?.let { url -> PdfViewerDialog(stringResource(R.string.rfq_pdf), url = url, fileName = "talep-formu.pdf") { rfqPdf = null } }
-    if (showAward) {
+    pdf?.let { (title, url) -> PdfViewerDialog(title, url = url, fileName = if (title == rfqTitle) "talep-formu.pdf" else "teklif.pdf") { pdf = null } }
+    if (showLetters && d != null) OrderLettersSheet(d, vm) { showLetters = false }
+    if (requoteAsk) {
+        // "Sipariş dışı kalanlarla yeni talep": carried quotes or a fresh round, or nothing
         AlertDialog(
-            onDismissRequest = { showAward = false },
+            onDismissRequest = { requoteAsk = false },
             containerColor = colors.surface,
-            title = { Text(stringResource(R.string.award_action), color = colors.ink) },
-            text = { Text(stringResource(R.string.award_confirm), fontSize = 14.sp, lineHeight = 20.sp, color = colors.muted) },
-            confirmButton = { TextButton(onClick = { showAward = false; vm.award(awardSkips.filter { s -> d?.proposal?.assignments.orEmpty().any { it.itemId == s } }.toSet()) { awardSkips = emptySet() } }) { Text(stringResource(R.string.award_action), color = colors.accentText, fontWeight = FontWeight.SemiBold) } },
-            dismissButton = { TextButton(onClick = { showAward = false }) { Text(stringResource(R.string.cancel), color = colors.muted) } },
+            title = { Text(stringResource(R.string.requote_skipped), color = colors.ink) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(stringResource(R.string.requote_hint), fontSize = 14.sp, lineHeight = 20.sp, color = colors.muted)
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+                        TextButton(onClick = { requoteAsk = false; vm.requoteSkipped(carry = true) }) { Text(stringResource(R.string.requote_carry), color = colors.accentText, fontWeight = FontWeight.SemiBold) }
+                        TextButton(onClick = { requoteAsk = false; vm.requoteSkipped(carry = false) }) { Text(stringResource(R.string.requote_fresh), color = colors.accentText, fontWeight = FontWeight.Medium) }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { requoteAsk = false }) { Text(stringResource(R.string.cancel), color = colors.muted) } },
         )
+    }
+}
+
+// ---------- the four stages ----------
+
+enum class ListStage { List, Request, Quotes, Order }
+
+private fun nQuotes(d: PurchaseListDetail) = d.proposal?.nQuotes ?: 0
+private fun isOrdered(d: PurchaseListDetail) = d.list?.status == "ordered"
+
+/** ordered → Sipariş; draft → Liste; else Teklifler once a quote is in, Talep before. */
+private fun currentStage(d: PurchaseListDetail): ListStage = when {
+    isOrdered(d) -> ListStage.Order
+    d.isDraft -> ListStage.List
+    nQuotes(d) > 0 -> ListStage.Quotes
+    else -> ListStage.Request
+}
+
+private fun exists(s: ListStage, d: PurchaseListDetail): Boolean = when (s) {
+    ListStage.List -> true
+    ListStage.Request -> !d.isDraft
+    ListStage.Quotes -> !d.isDraft && (nQuotes(d) > 0 || isOrdered(d))
+    ListStage.Order -> isOrdered(d)
+}
+
+private data class ListStep(val stage: ListStage, val state: String, val label: String, val exists: Boolean)
+
+/** The strip's states, the order walk's words: done · now · wait. */
+@Composable
+private fun listSteps(d: PurchaseListDetail): List<ListStep> {
+    val done = isOrdered(d)
+    val n = nQuotes(d)
+    return listOf(
+        ListStep(ListStage.List, if (d.isDraft) "now" else "done", stringResource(R.string.stage_list), true),
+        ListStep(ListStage.Request, if (d.isDraft) "wait" else if (n == 0 && !done) "now" else "done", stringResource(R.string.stage_request), exists(ListStage.Request, d)),
+        ListStep(ListStage.Quotes, if (done) "done" else if (n > 0) "now" else "wait", stringResource(R.string.stage_quotes), exists(ListStage.Quotes, d)),
+        ListStep(ListStage.Order, if (done) "now" else "wait", stringResource(if (done) R.string.ls_ordered else R.string.stage_order), done),
+    )
+}
+
+/**
+ * The strip in the seller card's grammar (QuotesScreen `InvitationWalk`): ✓ done · ● now ·
+ * ○ not reached (55 %, not tappable) — a shape AND a word, never colour alone. The shown step
+ * sits on a soft capsule.
+ */
+@Composable
+private fun StageWalk(steps: List<ListStep>, selected: ListStage, onPick: (ListStage) -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical = 1.dp),
+    ) {
+        steps.forEachIndexed { i, s ->
+            if (i > 0) Text("›", fontSize = 11.sp, color = colors.faint)
+            val isSel = s.stage == selected
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .background(if (isSel) colors.ink.copy(alpha = 0.07f) else Color.Transparent, CircleShape)
+                    .selectable(selected = isSel, enabled = s.exists, role = Role.Tab) { onPick(s.stage) }
+                    .alpha(if (s.exists) 1f else 0.55f)
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+            ) {
+                StepGlyph(s.state, cut = colors.canvas)
+                Spacer(Modifier.width(5.dp))
+                Text(
+                    s.label,
+                    fontSize = 12.sp,
+                    fontWeight = if (isSel) FontWeight.SemiBold else FontWeight.Normal,
+                    color = when { isSel -> colors.ink; s.exists -> colors.muted; else -> colors.faint },
+                    maxLines = 1, softWrap = false,
+                )
+            }
+        }
+    }
+}
+
+/** Where this list came from and the lists that continue it (`requote-skipped`, both ways). */
+@Composable
+private fun ListLinks(d: PurchaseListDetail, onOpenList: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    val parent = d.list?.parent?.takeIf { !it.id.isNullOrEmpty() }
+    val children = d.list?.children.orEmpty().filter { !it.id.isNullOrEmpty() }
+    if (parent == null && children.isEmpty()) return
+    val sourceWord = stringResource(R.string.source_list)
+    val nextWord = stringResource(R.string.continued_in)
+    SurfaceCard {
+        (listOfNotNull(parent?.let { sourceWord to it }) + children.map { nextWord to it }).forEachIndexed { i, (word, l) ->
+            if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+            Row(
+                Modifier.fillMaxWidth().clickable(role = Role.Button) { l.id?.let(onOpenList) }.padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(if (l === parent) WorkisIcons.Undo else WorkisIcons.ArrowRightCircle, contentDescription = null, tint = colors.faint, modifier = Modifier.size(15.dp))
+                Text(word, fontSize = 13.sp, color = colors.muted)
+                Text(l.title.orEmpty(), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRightAuto, contentDescription = null, tint = colors.faint)
+            }
+        }
+    }
+}
+
+/** The request letters as quiet rows under every non-draft stage: faint icon, muted words. */
+@Composable
+private fun RfqDocRows(d: PurchaseListDetail, onOpen: (String?) -> Unit) {
+    val colors = WorkisTheme.colors
+    val docs = d.rfqDocs.orEmpty()
+    if (docs.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        docs.forEach { doc ->
+            Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(doc.sellerId) }.padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(WorkisIcons.DocText, contentDescription = null, tint = colors.faint, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(stringResource(R.string.rfq_doc), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.muted, maxLines = 1, softWrap = false)
+                Text(
+                    " · " + (doc.lbl?.short ?: doc.number).orEmpty(),
+                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                )
+            }
+        }
     }
 }
 
@@ -582,15 +851,23 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
 private fun Header(d: PurchaseListDetail) {
     val colors = WorkisTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // the strip says the status (2026-10-29): up here the tags, the web's meta line
+        // ("19.10.2026 01:55 · Chat") and, on the right, whose move it is — blue only when
+        // it is the buyer's own (the rule on `WorkisColors.blue`)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatusPill(listStatusText(d.list?.status), if (d.isQuoting) colors.accentText else colors.muted)
             if (d.list?.demo == true) StatusPill(stringResource(R.string.demo_tag))
             if (d.list?.held != null) StatusPill(stringResource(R.string.held_tag), Beige)
-            Spacer(Modifier.weight(1f))
-            // the web's meta line: "19.10.2026 01:55 · Chat" (the status is the pill)
             val lang by Graph.language.collectAsState()
             val meta = listOfNotNull(metaDate(d.list?.createdAt), sourceWord(d.list?.source, lang)).filter { it.isNotEmpty() }
-            if (meta.isNotEmpty()) Text(meta.joinToString(" · "), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+            if (meta.isNotEmpty()) Text(meta.joinToString(" · "), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            Spacer(Modifier.weight(1f))
+            when {
+                isOrdered(d) -> d.orders.orEmpty().mapNotNull { it.poNumber?.takeIf { p -> p.isNotEmpty() } }.takeIf { it.isNotEmpty() }?.let {
+                    Text(it.joinToString(" · "), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                d.isQuoting && nQuotes(d) > 0 -> Text(stringResource(R.string.awaiting_your_pick), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.blue, maxLines = 1, softWrap = false)
+                d.isQuoting -> Text(stringResource(R.string.awaiting_quote), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.muted, maxLines = 1, softWrap = false)
+            }
         }
         val project = d.projects?.firstOrNull { it.id == d.list?.projectId }?.name ?: d.projects?.firstOrNull { it.isDefault == true }?.name
         project?.let {
@@ -721,10 +998,13 @@ private fun ItemsSegment(
             )
         }
         d.items.orEmpty().forEachIndexed { i, item ->
-            ItemRow(
-                item, draft = d.isDraft, prices = d.showsPrices, onClick = { onPick(item) }, onDelete = { item.id?.let { vm.deleteItem(it) } },
-                card = vm.cardOf(item), onBadge = { item.id?.let(vm::showStage) },
-            )
+            // the buyer's "acele" (ledger 79): a leading swipe on a draft's row, never a dismiss
+            UrgentSwipe(urgent = item.urgent == true, enabled = d.isDraft && item.id != null, onToggle = { item.id?.let { vm.setUrgent(it, item.urgent != true) } }) {
+                ItemRow(
+                    item, draft = d.isDraft, prices = d.showsPrices, onClick = { onPick(item) }, onDelete = { item.id?.let { vm.deleteItem(it) } },
+                    card = vm.cardOf(item), onBadge = { item.id?.let(vm::showStage) },
+                )
+            }
             if (i < d.items.orEmpty().lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
         }
         if (d.isDraft) {
@@ -909,6 +1189,11 @@ private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -
                     Text("+${n - 1}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 20.sp, color = colors.faint)
                 }
                 Spacer(Modifier.weight(1f))
+                // the buyer's "acele" (ledger 79): the WORD is the status, beige only tints it
+                if (item.urgent == true) {
+                    Spacer(Modifier.width(6.dp))
+                    UrgentWord()
+                }
                 if (item.qty != null || !item.unit.isNullOrEmpty()) {
                     Spacer(Modifier.width(6.dp))
                     Text(WorkisMoney.qty(item.qty) + " " + item.unit.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
@@ -942,6 +1227,49 @@ private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -
             if (draft) Text(stringResource(R.string.delete_item), fontSize = 11.sp, color = colors.danger, modifier = Modifier.clickable(onClick = onDelete))
         }
     }
+}
+
+/** "ACELE" — mono, beige on its soft tint, beside the quantity (the seller's card prints the same). */
+@Composable
+private fun UrgentWord() {
+    val lang by Graph.language.collectAsState()
+    Text(
+        stringResource(R.string.urgent_word).uppercase(Locale.forLanguageTag(lang)),
+        fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 1.sp, color = Beige, softWrap = false,
+        modifier = Modifier.padding(top = 2.dp).background(BeigeBg, RoundedCornerShape(6.dp)).padding(horizontal = 5.dp, vertical = 1.dp),
+    )
+}
+
+/**
+ * A draft row's leading swipe (start → end) toggles "acele": the box settles back (never a
+ * dismiss) and the list re-reads. The same toggle rides the row as an accessibility action.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UrgentSwipe(urgent: Boolean, enabled: Boolean, onToggle: () -> Unit, content: @Composable () -> Unit) {
+    if (!enabled) { content(); return }
+    val colors = WorkisTheme.colors
+    val toggle by rememberUpdatedState(onToggle)
+    val label = stringResource(if (urgent) R.string.not_urgent_action else R.string.urgent_action)
+    val state = rememberSwipeToDismissBoxState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    SwipeToDismissBox(
+        state = state,
+        enableDismissFromEndToStart = false,
+        // never a dismiss: the row settles back, the server's re-read draws the word
+        onDismiss = { v -> if (v == SwipeToDismissBoxValue.StartToEnd) toggle(); scope.launch { state.reset() } },
+        modifier = Modifier.semantics { customActions = listOf(CustomAccessibilityAction(label) { toggle(); true }) },
+        backgroundContent = {
+            Row(
+                Modifier.fillMaxSize().background(BeigeBg, RoundedCornerShape(10.dp)).padding(start = 14.dp),
+                horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(WorkisIcons.Clock, contentDescription = null, tint = Beige, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Beige)
+            }
+        },
+    ) { Box(Modifier.fillMaxWidth().background(colors.surface)) { content() } }
 }
 
 /**
@@ -1095,10 +1423,11 @@ private fun NoteLetterSection(d: PurchaseListDetail, vm: ListDetailViewModel, on
     }
 }
 
-// ---------- Teklif süreci ----------
+// ---------- Talep ----------
 
+/** The Talep stage: who was sent what and who answered; the request's own doors (chase, withdraw). */
 @Composable
-private fun RfqSegment(d: PurchaseListDetail, vm: ListDetailViewModel, awardSkips: Set<String>, onToggleSkip: (String) -> Unit, onRfqPdf: (sellerId: String?) -> Unit, onAward: () -> Unit) {
+private fun RequestPage(d: PurchaseListDetail, vm: ListDetailViewModel, withdrawable: Boolean) {
     val colors = WorkisTheme.colors
     val groups = sendGroups(d)
     val invited = groups.count { it.key != "~uncovered" }
@@ -1111,16 +1440,6 @@ private fun RfqSegment(d: PurchaseListDetail, vm: ListDetailViewModel, awardSkip
                 Text("·", color = colors.faint)
                 Text("${d.proposal?.nQuotes ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, color = colors.ink)
                 Text(stringResource(R.string.quotes_in_word), fontSize = 13.sp, color = colors.muted)
-            }
-            val docs = d.rfqDocs.orEmpty()
-            if (docs.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                docs.forEach { doc ->
-                    Text(
-                        "📄 " + (doc.number ?: stringResource(R.string.rfq_pdf)) + " · " + doc.lbl?.short.orEmpty(),
-                        fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.accentText,
-                        modifier = Modifier.background(colors.ink.copy(alpha = 0.06f), CircleShape).clickable { onRfqPdf(doc.sellerId) }.padding(horizontal = 10.dp, vertical = 6.dp),
-                    )
-                }
             }
             if (!d.pendingSellers.isNullOrEmpty() && d.isQuoting) {
                 Text("🔔 " + stringResource(R.string.chase_silent), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable(enabled = !vm.busy) { vm.chase() })
@@ -1146,7 +1465,17 @@ private fun RfqSegment(d: PurchaseListDetail, vm: ListDetailViewModel, awardSkip
         }
         Text(stringResource(R.string.virtual_sub), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
     }
-    ProposalSection(d, vm, awardSkips, onToggleSkip, onAward)
+    // a request out for quotes may be taken back (2026-10-04) — two presses, no system
+    // dialog; the lists row's flag until this screen's own read answers
+    if (withdrawable) WithdrawButton(busy = vm.withdrawing, onConfirm = vm::withdraw)
+}
+
+// ---------- Sipariş ----------
+
+/** The Sipariş stage: the orders, the buyer's recorded decision, the one door on from here. */
+@Composable
+private fun OrderPage(d: PurchaseListDetail, vm: ListDetailViewModel, onRequote: () -> Unit) {
+    val colors = WorkisTheme.colors
     val orders = d.orders.orEmpty()
     if (orders.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Eyebrow(stringResource(R.string.orders_title).uppercase())
@@ -1156,6 +1485,30 @@ private fun RfqSegment(d: PurchaseListDetail, vm: ListDetailViewModel, awardSkip
                     Row { Text(o.poNumber ?: o.id.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink, modifier = Modifier.weight(1f)); Text(WorkisMoney.text(o.total, o.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink) }
                     Text(listOfNotNull(o.lbl?.short, o.escrow, o.shipment?.let { "🚚 ${it.number.orEmpty()} ${it.status.orEmpty()}" }).joinToString(" · "), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
                 }
+            }
+        }
+    }
+    // the buyer's own reason, as recorded at the award — never edited, never a seller's to read
+    d.list?.decisionNote?.takeIf { it.isNotBlank() }?.let { dn ->
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Eyebrow(stringResource(R.string.decision_note_label).uppercase())
+            SurfaceCard { Text(dn, fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted) }
+            Text(stringResource(R.string.decision_stays_hint), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
+        }
+    }
+    // the one door on: the items the award left out become their own request (bordered — the
+    // page's fill stays with the award)
+    if (d.list?.canRequoteSkipped == true) {
+        OutlinedButton(
+            onClick = onRequote, enabled = !vm.busy,
+            border = BorderStroke(1.dp, colors.border),
+            modifier = Modifier.fillMaxWidth().height(44.dp),
+        ) {
+            if (vm.busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = colors.faint)
+            else {
+                Icon(WorkisIcons.Retry, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.requote_skipped), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.accentText, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -1200,115 +1553,363 @@ private fun SendRowLine(r: PLSendRow, uncovered: Boolean) {
     }
 }
 
-/**
- * The quote's term sheet for one seller block: the quote whose seller is the block's
- * (through the seller totals' label), or the only quote when there is one seller.
- */
-private fun termSheet(d: PurchaseListDetail, p: PLProposal, seller: String, single: Boolean): List<PLQuoteTerm>? {
-    val quotes = p.quotes?.takeIf { it.isNotEmpty() } ?: return null
-    val sid = (p.sellerTotals ?: d.sellerTotals)?.firstOrNull { it.lbl?.short == seller }?.sellerId
-    val sheet = quotes.firstOrNull { sid != null && it.seller == sid } ?: (if (single && quotes.size == 1) quotes[0] else null)
-    return sheet?.terms
+// ---------- Teklifler: the decision ----------
+
+/** The item's chosen option: the buyer's pick, "-" = left out, absent = Jowi's (`recommended`). */
+private fun chosenOption(it: PLProposalItem, picks: Map<String, String>): PLProposalOption? {
+    val opts = it.options.orEmpty()
+    val p = picks[it.id.orEmpty()] ?: return opts.firstOrNull { o -> o.recommended == true } ?: opts.firstOrNull()
+    if (p == "-") return null
+    return opts.firstOrNull { o -> o.key == p }
 }
 
-/**
- * The term sheet the buyer reads next to the price (2026-09-30), registry order: a term
- * settled in the yazışma wears the kiremit frame, a conflict the warning colour — each with
- * its words, never the colour alone.
- */
-@Composable
-private fun TermSheet(terms: List<PLQuoteTerm>) {
-    val colors = WorkisTheme.colors
-    Column(Modifier.padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        terms.forEach { t ->
-            val conflict = t.conflict == true
-            val fromChat = t.isFromChat
-            val frame = when {
-                fromChat -> Modifier.border(1.dp, Kiremit500.copy(alpha = 0.55f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp)
-                conflict -> Modifier.border(1.dp, Beige.copy(alpha = 0.7f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 3.dp)
-                else -> Modifier
-            }
-            Row(frame, verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text((t.label ?: t.key.orEmpty()) + ":", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, modifier = Modifier.padding(top = 2.dp))
-                Text(
-                    buildString {
-                        append(t.text?.takeIf { it.isNotEmpty() } ?: "—")
-                        if (conflict) append(" · ").append(stringResource(R.string.term_conflict))
-                        else if (fromChat) append(" · ").append(stringResource(R.string.term_from_chat))
-                    },
-                    fontSize = 12.sp, lineHeight = 16.sp, color = if (conflict) Beige else colors.ink, modifier = Modifier.weight(1f, fill = false),
-                )
-            }
+/** The seller as the proposal names it — a partner id or `vp:<id>` (the `sellerNotes` key too). */
+private fun sellerKey(o: PLProposalOption): String = o.seller_?.takeIf { it.isNotEmpty() } ?: o.seller.orEmpty()
+
+/** Sums per currency in the order met — one figure when the picks share a currency. */
+private fun moneyLine(options: List<PLProposalOption>): String {
+    val by = LinkedHashMap<String?, Double>()
+    options.forEach { o -> by[o.currency] = (by[o.currency] ?: 0.0) + (o.amount ?: 0.0) }
+    if (by.isEmpty()) return WorkisMoney.text(0.0, null)
+    return by.entries.joinToString(" · ") { WorkisMoney.text(it.value, it.key) }
+}
+
+/** Every seller that quoted: its sum over the items it priced and how many it covers. */
+private data class Verdict(val sellerId: String, val seller: String, val sum: Double, val covered: Int, val currency: String?)
+
+private fun verdicts(items: List<PLProposalItem>): List<Verdict> {
+    val acc = LinkedHashMap<String, Verdict>()
+    items.forEach { it ->
+        it.options.orEmpty().forEach { o ->
+            val id = sellerKey(o)
+            val v = acc[id] ?: Verdict(id, o.seller ?: id, 0.0, 0, o.currency)
+            acc[id] = v.copy(sum = v.sum + (o.amount ?: 0.0), covered = v.covered + 1)
         }
+    }
+    return acc.values.toList()
+}
+
+/** `{itemId: {seller_id, sku}}` for every chosen item, `{skip: true}` for the ones left out. */
+private fun selectionsBody(items: List<PLProposalItem>, picks: Map<String, String>): JsonObject = buildJsonObject {
+    items.forEach { it ->
+        val id = it.id ?: return@forEach
+        val o = chosenOption(it, picks)
+        if (o != null) put(id, buildJsonObject { put("seller_id", o.seller_.orEmpty()); put("sku", o.sku.orEmpty()) })
+        else put(id, buildJsonObject { put("skip", true) })
     }
 }
 
+/** The quote's facts as one flowing line: lead time · payment term · the terms (with where they came from). */
 @Composable
-private fun ProposalSection(d: PurchaseListDetail, vm: ListDetailViewModel, awardSkips: Set<String>, onToggleSkip: (String) -> Unit, onAward: () -> Unit) {
+private fun sheetFacts(sheet: PLQuoteSheet?, marks: Boolean): List<String> {
+    if (sheet == null) return emptyList()
+    val days = stringResource(R.string.vade_days_word)
+    val lead = stringResource(R.string.lead_time_label)
+    val advance = stringResource(R.string.vade_advance)
+    val conflict = stringResource(R.string.term_conflict)
+    val fromChat = stringResource(R.string.term_from_chat)
+    val out = mutableListOf<String>()
+    sheet.leadTime?.let { out += "$it $days $lead" }
+    sheet.vade?.let { out += if (it == 0) advance else "$it $days" }
+    sheet.terms.orEmpty().forEach { t ->
+        val text = t.text?.takeIf { it.isNotEmpty() }
+        if (!marks && text == null) return@forEach
+        val mark = if (!marks) "" else if (t.conflict == true) " ($conflict)" else if (t.isFromChat) " ($fromChat)" else ""
+        out += (t.label ?: t.key.orEmpty()) + ": " + (text ?: "—") + mark
+    }
+    return out
+}
+
+/**
+ * The Teklifler stage (`WorkisDecisionSections`): the summary, Jowi's pick and reason (the
+ * server's sentence), the buyer's own reason, every item with every seller's option as a
+ * radio, one block per seller with the verdict in words, one total and the one kiremit action.
+ * The app writes no sentence of its own. On an ordered list the radios are inert.
+ */
+@Composable
+private fun DecisionPage(d: PurchaseListDetail, vm: ListDetailViewModel, onAward: () -> Unit, onQuotePdf: (String) -> Unit) {
     val colors = WorkisTheme.colors
     val p = d.proposal
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Eyebrow(stringResource(if (d.list?.status == "ordered") R.string.awarded_title else R.string.proposal_title).uppercase())
-        SurfaceCard {
-            if (p != null && ((p.nQuotes ?: 0) > 0 || !p.assignments.isNullOrEmpty())) {
-                val bySeller = p.assignments.orEmpty().groupBy { it.sellerName }.toSortedMap()
-                bySeller.forEach { (seller, rows) ->
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 4.dp)) {
-                        Text(seller.uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 1.sp, color = colors.accentText)
-                        rows.forEach { a ->
-                            // a tick per item while quoting (2026-10-01): unticked = left on the list, not ordered
-                            val ticked = a.itemId?.let { it !in awardSkips } ?: true
-                            AssignmentRow(a, tick = if (d.isQuoting && a.itemId != null) ticked else null, tickEnabled = !vm.busy) { a.itemId?.let(onToggleSkip) }
-                        }
-                        termSheet(d, p, seller, single = bySeller.size == 1)?.takeIf { it.isNotEmpty() }?.let { TermSheet(it) }
-                    }
-                }
-                p.totalsByCurrency?.takeIf { it.isNotEmpty() }?.let { totals ->
-                    Row { Text(stringResource(R.string.total_label), fontSize = 13.sp, color = colors.muted, modifier = Modifier.weight(1f)); Text(totals.keys.sorted().joinToString(" · ") { WorkisMoney.text(totals[it], it) }, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink) }
-                }
-                p.uncovered?.takeIf { it.isNotEmpty() }?.let { u -> Text(stringResource(R.string.uncovered_group) + ": " + u.mapNotNull { it.name }.joinToString(", "), fontSize = 12.sp, color = colors.faint) }
-                if (d.isQuoting) {
-                    // at least one item must be ordered (400 otherwise)
-                    val anyTicked = p.assignments.orEmpty().any { a -> a.itemId?.let { it !in awardSkips } ?: true }
-                    val enabled = !vm.busy && anyTicked
-                    Row(Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onAward).padding(vertical = 8.dp), horizontalArrangement = Arrangement.Center) {
-                        if (vm.busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = colors.accentText)
-                        else Text("✓ " + stringResource(R.string.award_action), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = if (enabled) colors.accentText else colors.faint)
-                    }
-                }
-            } else {
-                Text(stringResource(R.string.proposal_empty), fontSize = 13.sp, lineHeight = 18.sp, color = colors.faint, modifier = Modifier.padding(vertical = 10.dp))
+    val items = p?.items.orEmpty()
+    val n = p?.nQuotes ?: 0
+    if (n == 0 || items.isEmpty()) {
+        SurfaceCard { Text(stringResource(R.string.proposal_empty), fontSize = 13.sp, lineHeight = 18.sp, color = colors.faint, modifier = Modifier.padding(vertical = 10.dp)) }
+        return
+    }
+    val quoting = d.isQuoting
+    val picks = vm.picks
+    val lang by Graph.language.collectAsState()
+    val locale = Locale.forLanguageTag(lang)
+
+    // n gelen teklif · k/m kalem karşılandı
+    val covered = items.count { !it.options.isNullOrEmpty() }
+    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
+        Text("$n", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = colors.ink)
+        Text(stringResource(R.string.quotes_in_word), fontSize = 13.sp, color = colors.muted)
+        Text("·", color = colors.faint)
+        Text("$covered/${items.size}", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = colors.ink)
+        Text(stringResource(R.string.items_covered), fontSize = 13.sp, color = colors.muted)
+    }
+
+    // Jowi's pick: the recommended coverage's total, the server's reason under it
+    SurfaceCard(border = Beige.copy(alpha = 0.6f), fill = BeigeBg.copy(alpha = 0.35f)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.jowi_pick).uppercase(locale), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 1.sp, color = Beige, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
+            Text(moneyLine(items.mapNotNull { chosenOption(it, emptyMap()) }), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink, maxLines = 1, softWrap = false)
+        }
+        p?.reason?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink) }
+    }
+
+    // the buyer's own reason — prefilled once with Jowi's; their record, never a seller's
+    if (quoting) {
+        val fieldColors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue, focusedLabelColor = colors.muted, unfocusedLabelColor = colors.faint)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            OutlinedTextField(
+                value = vm.decision, onValueChange = { vm.decision = it.take(1000) },
+                label = { Text(stringResource(R.string.decision_label), fontSize = 13.sp) },
+                minLines = 2, maxLines = 6, shape = RoundedCornerShape(14.dp), colors = fieldColors,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, color = colors.ink).readingStep(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(stringResource(R.string.decision_hint), fontSize = 11.sp, lineHeight = 15.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
+        }
+    }
+
+    // every item, every seller's option as a radio; a second tap on the chosen one leaves it out
+    SurfaceCard {
+        items.forEachIndexed { i, it ->
+            if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+            DecisionItem(it, picks, quoting) { key -> it.id?.let { id -> vm.pick(id, key) } }
+        }
+    }
+
+    // one block per seller that quoted: the verdict in words (the tone only tints it)
+    val all = verdicts(items)
+    val full = all.filter { it.covered == items.size }
+    val lowest = full.minByOrNull { it.sum }
+    all.forEach { v -> SellerVerdict(v, items.size, lowest, p?.quotes?.firstOrNull { it.seller == v.sellerId }, onQuotePdf) }
+
+    // the total of the picks, the award, the items nothing covers
+    val chosen = items.mapNotNull { chosenOption(it, picks) }
+    SurfaceCard {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.total_label) + " · ${chosen.size} " + stringResource(R.string.items_word), fontSize = 13.sp, color = colors.muted, modifier = Modifier.weight(1f))
+            Text(moneyLine(chosen), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = colors.ink, maxLines = 1, softWrap = false)
+        }
+        if (quoting) {
+            Button(
+                onClick = onAward, enabled = !vm.placing && chosen.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill),
+                modifier = Modifier.fillMaxWidth().height(46.dp),
+            ) {
+                if (vm.placing) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = OnKiremitFill)
+                else Text("✓ " + stringResource(R.string.award_action), fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            }
+        }
+        p?.uncovered?.filter { it.skipped != true }?.takeIf { it.isNotEmpty() }?.let { u ->
+            Text(stringResource(R.string.uncovered_group) + ": " + u.mapNotNull { it.name }.joinToString(", "), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)
+        }
+    }
+}
+
+@Composable
+private fun DecisionItem(it: PLProposalItem, picks: Map<String, String>, quoting: Boolean, onPick: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    val chosen = chosenOption(it, picks)
+    val left = picks[it.id.orEmpty()] == "-"
+    Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.Top) {
+            Text(
+                it.name.orEmpty(), fontSize = 15.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                color = if (left) colors.faint else colors.ink,
+                textDecoration = if (left) TextDecoration.LineThrough else null,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text((WorkisMoney.qty(it.qty) + " " + it.unit.orEmpty()).trim(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink, softWrap = false)
+        }
+        it.options.orEmpty().forEach { o ->
+            OptionRow(o, it, on = chosen != null && chosen.key == o.key, quoting = quoting) { on -> onPick(if (on) "-" else o.key) }
+        }
+        if (left) Text(stringResource(R.string.left_out_note), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+    }
+}
+
+/** One seller's option: the radio, the seller and the amount on one line (amounts align), the
+ *  calculation under it faint ("önerilen · unit × qty"), a carried quote, the unmet requirements. */
+@Composable
+private fun OptionRow(o: PLProposalOption, item: PLProposalItem, on: Boolean, quoting: Boolean, onTap: (Boolean) -> Unit) {
+    val colors = WorkisTheme.colors
+    Column(
+        Modifier.fillMaxWidth()
+            .selectable(selected = on, enabled = quoting, role = Role.RadioButton) { onTap(on) }
+            .padding(vertical = 3.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                if (on) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(19.dp))
+                else Box(Modifier.size(16.dp).border(1.5.dp, colors.faint, CircleShape))
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(o.seller.orEmpty(), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (on) colors.ink else colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(6.dp))
+            Text(WorkisMoney.text(o.amount, null), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = if (on) colors.ink else colors.muted, maxLines = 1, softWrap = false)
+        }
+        val sub = Modifier.padding(start = 28.dp)
+        Text(
+            listOfNotNull(
+                if (o.recommended == true) stringResource(R.string.recommended_word) else null,
+                WorkisMoney.text(o.unit, null) + " × " + WorkisMoney.qty(item.qty),
+            ).joinToString(" · "),
+            fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, modifier = sub,
+        )
+        o.carried?.quote?.takeIf { it.isNotEmpty() }?.let { q ->
+            val until = o.carried.until?.takeIf { it.isNotEmpty() }?.let { " · " + stringResource(R.string.valid_until_label) + " " + it.take(10) }.orEmpty()
+            Text(stringResource(R.string.carried_from) + " " + q + until, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, modifier = sub)
+        }
+        o.fails?.takeIf { it > 0 }?.let { f ->
+            Text("$f " + stringResource(R.string.fails_word), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = Beige, modifier = sub)
+        }
+    }
+}
+
+/** A seller's block: the name, its sum and the verdict in words, the term sheet as one flowing
+ *  line, the quote document as a quiet row. */
+@Composable
+private fun SellerVerdict(v: Verdict, nItems: Int, lowest: Verdict?, sheet: PLQuoteSheet?, onQuotePdf: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    val sum = WorkisMoney.text(v.sum, v.currency)
+    val (line, tone) = when {
+        v.covered < nItems -> "$sum · ${v.covered}/$nItems " + stringResource(R.string.items_word) to colors.muted
+        lowest?.sellerId == v.sellerId -> "$sum · " + stringResource(R.string.lowest_word) to SuccessGreen
+        lowest != null -> "$sum · " + WorkisMoney.text(v.sum - lowest.sum, null) + " " + stringResource(R.string.more_expensive_word) to Beige
+        else -> sum to colors.muted
+    }
+    Column(
+        Modifier.fillMaxWidth().background(colors.ink.copy(alpha = 0.05f), RoundedCornerShape(12.dp)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(v.seller, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.accentText, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(line, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = tone, maxLines = 2)
+        val facts = sheetFacts(sheet, marks = true)
+        if (facts.isNotEmpty()) Text(facts.joinToString(" · "), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp, color = colors.faint)
+        val qid = sheet?.id?.takeIf { it.isNotEmpty() }
+        if (sheet?.pdf == true && qid != null) {
+            Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { onQuotePdf(WORKIS_BASE_URL + "workis/quotes/$qid/pdf/") }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(WorkisIcons.DocText, contentDescription = null, tint = colors.faint, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(stringResource(R.string.quote_doc), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.muted)
             }
         }
     }
 }
 
-/** `tick` null = no tick (not quoting); true/false = ordered at award or left on the list. */
+// ---------- the order letters, before the award ----------
+
+/** One winning seller's letter: its lines in item order. */
+private data class Letter(val sellerId: String, val seller: String, val lines: List<Pair<PLProposalItem, PLProposalOption>>)
+
+private fun letters(items: List<PLProposalItem>, picks: Map<String, String>): List<Letter> {
+    val out = LinkedHashMap<String, Letter>()
+    items.forEach { it ->
+        val o = chosenOption(it, picks) ?: return@forEach
+        val id = sellerKey(o)
+        val l = out[id] ?: Letter(id, o.seller ?: id, emptyList())
+        out[id] = l.copy(lines = l.lines + (it to o))
+    }
+    return out.values.toList()
+}
+
+/**
+ * `WorkisOrderLettersSheet`: one paper per winning seller as the PDF will print it (white in
+ * both schemes), and under each a note to THAT seller; "Siparişleri ver" places them all at
+ * once (one award per request). The decision note never appears here — a seller never reads it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AssignmentRow(a: PLAssignment, tick: Boolean? = null, tickEnabled: Boolean = true, onToggle: () -> Unit = {}) {
+private fun OrderLettersSheet(d: PurchaseListDetail, vm: ListDetailViewModel, onDismiss: () -> Unit) {
     val colors = WorkisTheme.colors
-    Row(verticalAlignment = Alignment.Top) {
-        if (tick != null) {
-            Box(
-                Modifier.padding(top = 1.dp, end = 10.dp).size(20.dp)
-                    .toggleable(value = tick, enabled = tickEnabled, role = Role.Checkbox, onValueChange = { onToggle() })
-                    .semantics { contentDescription = a.name ?: a.itemName.orEmpty() },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (tick) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(20.dp))
-                else Box(Modifier.size(17.dp).border(1.5.dp, colors.faint, CircleShape))
+    val items = d.proposal?.items.orEmpty()
+    val all = letters(items, vm.picks)
+    val lang by Graph.language.collectAsState()
+    val locale = Locale.forLanguageTag(lang)
+    val fieldColors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue)
+    ModalBottomSheet(onDismissRequest = { if (!vm.placing) onDismiss() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = colors.canvas) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+            // the toolbar: ✕ · the title · the one kiremit action
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onDismiss, enabled = !vm.placing) { Icon(WorkisIcons.Cross, contentDescription = stringResource(R.string.cancel), tint = colors.muted, modifier = Modifier.size(18.dp)) }
+                Text(
+                    if (all.size > 1) stringResource(R.string.order_letters) + " · ${all.size}" else stringResource(R.string.order_letter_title),
+                    fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                )
+                Button(
+                    onClick = { vm.placeOrders(selectionsBody(items, vm.picks), onPlaced = onDismiss) },
+                    enabled = !vm.placing && all.isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill),
+                    modifier = Modifier.height(38.dp),
+                ) {
+                    if (vm.placing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = OnKiremitFill)
+                    else Text(stringResource(if (all.size > 1) R.string.place_orders else R.string.place_order), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                }
+            }
+            NoteBand(vm.placeError)
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                all.forEachIndexed { i, l ->
+                    LetterPaper(l, i + 1, all.size, d.proposal?.quotes?.firstOrNull { it.seller == l.sellerId }, locale)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                        Text((stringResource(R.string.seller_note_label) + " · " + l.seller).uppercase(locale), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 1.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        OutlinedTextField(
+                            value = vm.sellerNotes[l.sellerId].orEmpty(),
+                            onValueChange = { t -> vm.sellerNotes = vm.sellerNotes + (l.sellerId to t.take(1000)) },
+                            placeholder = { Text(stringResource(R.string.seller_note_placeholder), color = colors.faint, fontSize = 14.sp) },
+                            minLines = 2, maxLines = 6, shape = RoundedCornerShape(14.dp), colors = fieldColors,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(stringResource(R.string.seller_note_hint), fontSize = 11.sp, lineHeight = 15.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
+                    }
+                }
+                Text(stringResource(R.string.decision_stays_hint), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
+                Spacer(Modifier.height(30.dp))
             }
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            // the quoted PRODUCT leads; the buyer's generic name follows as "İstenen: …"
-            val product = a.name?.takeIf { it.isNotEmpty() && it != a.itemName }
-            Text(product ?: a.itemName.orEmpty(), fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 19.sp, color = colors.ink, maxLines = 3)
-            if (product != null) AskedLine(a.itemName, null)
+    }
+}
+
+/** The letter as the PDF will print it: the title, the lines, the total, the quote's facts — read-only paper. */
+@Composable
+private fun LetterPaper(l: Letter, index: Int, of: Int, sheet: PLQuoteSheet?, locale: Locale) {
+    val muted = PaperInk.copy(alpha = 0.65f)
+    val title = buildString {
+        append(stringResource(R.string.order_letter_title).uppercase(locale))
+        if (of > 1) append(" $index/$of")
+        append(" · ").append(l.seller)
+        sheet?.number?.takeIf { it.isNotEmpty() }?.let { append(" · ").append(it) }
+    }
+    val facts = sheetFacts(sheet, marks = false)
+    Column(
+        Modifier.fillMaxWidth().background(PaperWhite, RoundedCornerShape(10.dp)).border(1.dp, PaperInk.copy(alpha = 0.08f), RoundedCornerShape(10.dp)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(title, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 1.sp, color = Kiremit800, maxLines = 2)
+        l.lines.forEach { (item, o) ->
+            Row(verticalAlignment = Alignment.Top) {
+                Text(o.name?.takeIf { it.isNotEmpty() } ?: item.name.orEmpty(), fontSize = 13.sp, lineHeight = 18.sp, color = PaperInk, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(6.dp))
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(WorkisMoney.text(o.amount, null), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = PaperInk, softWrap = false)
+                    Text(WorkisMoney.qty(item.qty) + " × " + WorkisMoney.text(o.unit, null), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = muted, softWrap = false)
+                }
+            }
         }
-        Column(horizontalAlignment = Alignment.End) {
-            Text(WorkisMoney.text(a.amount, a.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
-            Text(WorkisMoney.qty(a.qty) + " " + a.unit.orEmpty() + " × " + WorkisMoney.text(a.unitPrice, null), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
+        Box(Modifier.fillMaxWidth().height(1.dp).background(PaperInk.copy(alpha = 0.08f)))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.total_label), fontSize = 12.sp, color = muted, modifier = Modifier.weight(1f))
+            Text(moneyLine(l.lines.map { it.second }), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = PaperInk, softWrap = false)
         }
+        if (facts.isNotEmpty()) Text(facts.joinToString(" · "), fontSize = 11.sp, lineHeight = 15.sp, color = muted)
     }
 }
 

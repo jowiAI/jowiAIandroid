@@ -443,6 +443,7 @@ private fun OrderCard(
             ).joinToString(" → "),
             fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis,
         )
+        OrderNoteRows(o)
         // one order card, as the web's (2026-09-30): how it ships, how many lines
         val mode = o.deliveryMode?.takeIf { it.isNotEmpty() }
         val nLines = o.nLines ?: 0
@@ -898,5 +899,30 @@ private fun CarrierRow(o: CarrierOption, picked: Boolean, onClick: () -> Unit) {
             if (line.isNotEmpty()) Text(line, fontSize = 12.sp, color = colors.muted)
         }
         if (picked) Icon(WorkisIcons.Check, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
+    }
+}
+
+/**
+ * Ledger 79 (2026-10-29): the buyer's note to the seller (both seats) and, on the buyer's own
+ * seat, the decision as recorded at the award — the written record, never edited. The server
+ * leaves `decisionNote` empty for the seller and the carrier, so it is drawn whenever present.
+ */
+@Composable
+internal fun OrderNoteRows(o: PartnerOrder) {
+    val colors = WorkisTheme.colors
+    o.sellerNote?.trim()?.takeIf { it.isNotEmpty() }?.let {
+        OrderNoteRow(WorkisIcons.Bubble, stringResource(R.string.buyer_note_label) + ": " + it, colors.muted)
+    }
+    o.decisionNote?.trim()?.takeIf { it.isNotEmpty() }?.let {
+        OrderNoteRow(WorkisIcons.Check, stringResource(R.string.decision_note_label) + ": " + it, colors.faint)
+    }
+}
+
+@Composable
+private fun OrderNoteRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, color: androidx.compose.ui.graphics.Color) {
+    Row(verticalAlignment = Alignment.Top) {
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.padding(top = 1.dp).size(14.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(text, fontSize = 12.sp, lineHeight = 16.sp, color = color)
     }
 }

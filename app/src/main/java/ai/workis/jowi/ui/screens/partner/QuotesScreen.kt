@@ -114,6 +114,7 @@ import ai.workis.jowi.ui.components.WorkisMark
 import ai.workis.jowi.ui.components.looksLikePdf
 import ai.workis.jowi.ui.screens.console.ConsoleSub
 import ai.workis.jowi.ui.screens.expert.NoteBand
+import ai.workis.jowi.ui.theme.Beige
 import ai.workis.jowi.ui.theme.BeigeBg
 import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.Kiremit500
@@ -537,6 +538,15 @@ private fun ListItemBlock(li: InvListItem) {
                 // the buyer's row name — their record, never recased
                 Text(li.itemName.orEmpty(), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, color = colors.ink, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             }
+            // the buyer's "acele" (ledger 79): the WORD is the status, beige only tints it
+            if (li.urgent == true) {
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    stringResource(R.string.urgent_word).uppercase(),
+                    fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 1.sp, color = Beige, softWrap = false,
+                    modifier = Modifier.padding(top = 2.dp).background(BeigeBg, RoundedCornerShape(6.dp)).padding(horizontal = 5.dp, vertical = 1.dp),
+                )
+            }
             if (qty.isNotEmpty()) { Spacer(Modifier.width(6.dp)); Text(qty, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink, softWrap = false) }
         }
         if (alts.size == 1) alts[0].sku?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.muted) }
@@ -638,6 +648,8 @@ private fun OrderBlock(o: SellerOrder) {
         o.shipment?.let { sh ->
             OrderLine(WorkisIcons.ShippingBox, listOfNotNull(sh.number, sh.statusLabel ?: sh.status).filter { it.isNotEmpty() }.joinToString(" · "))
         }
+        // the buyer's note to me, as the order letter prints it (ledger 79)
+        o.buyerNote?.trim()?.takeIf { it.isNotEmpty() }?.let { OrderLine(WorkisIcons.Bubble, stringResource(R.string.buyer_note_label) + ": " + it) }
     }
 }
 

@@ -153,6 +153,10 @@ data class PartnerOrder(
     val steps: List<OrderStep>? = null,
     /** What the live step asks of this seat — `orders/{id}/stage/` only, never on the list. */
     val job: OrderJob? = null,
+    /** 2026-10-29 (ledger 79): the buyer's note to the seller (both seats) and the buyer's own decision
+     *  as recorded at the award (buyer seat only; empty for the seller and the carrier). Never edited. */
+    val sellerNote: String? = null,
+    val decisionNote: String? = null,
 ) {
     val isCarrier get() = role == "carrier"
 }
