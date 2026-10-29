@@ -27,7 +27,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
-import ai.workis.jowi.ui.components.WorkisTitleCase
 import ai.workis.jowi.ui.theme.WorkisSans
 import ai.workis.jowi.ui.theme.readingSize
 import kotlin.math.abs
@@ -502,15 +501,17 @@ private fun DocRow(title: String, onOpen: (String) -> Unit) {
 }
 
 /**
- * "TÜPSÜZ MODEL & TEK KAPAKLI · 70X70X23 · …": the family is the product, the rest its
- * variant — the server splits `display_name` at the first " · ". The family at 15 semibold
- * (an ALL-CAPS one in Turkish title case, `WorkisTitleCase`), " · " + the variant at 13
- * regular, as printed.
+ * "Tüp Bölmeli Dik Tip Model & Tek Kapaklı · 70X70X23 · …": the family is the product, the rest
+ * its variant — the server splits `display_name` at the first " · ". The family at 15 semibold,
+ * " · " + the variant at 13 regular. Casing is the SERVER's (Django 2ebdebd2, `workis/services/names.py`,
+ * ledger 78): an all-caps family name arrives in Turkish title case; the app prints what it is sent.
  */
 @Composable
 private fun productName(full: String): AnnotatedString {
     val ink = WorkisTheme.colors.ink
-    val (head, tail) = WorkisTitleCase.product(full)
+    val at = full.indexOf(" · ")
+    val head = if (at < 0) full else full.substring(0, at)
+    val tail = if (at < 0) null else full.substring(at + 3)
     return buildAnnotatedString {
         withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, fontSize = readingSize(15.sp), color = ink)) { append(head) }
         tail?.let { withStyle(SpanStyle(fontWeight = FontWeight.Normal, fontSize = readingSize(13.sp), color = ink)) { append(" · $it") } }
@@ -542,7 +543,7 @@ private fun ListItemBlock(li: InvListItem) {
         // several of my products fit — each one readable, none of them a footnote
         if (alts.size > 1) alts.forEach { a ->
             Row(verticalAlignment = Alignment.Top) {
-                Text(WorkisTitleCase.productLine(a.name ?: a.sku.orEmpty()), fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(a.name ?: a.sku.orEmpty(), fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 a.sku?.takeIf { it.isNotEmpty() }?.let { Spacer(Modifier.width(6.dp)); Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.muted) }
             }
         }
@@ -579,7 +580,7 @@ private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onRevise: () -> Un
         }
         q.lines.orEmpty().forEach { l ->
             Row(verticalAlignment = Alignment.Top) {
-                Text(WorkisTitleCase.productLine(l.name ?: l.sku.orEmpty()), fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text(l.name ?: l.sku.orEmpty(), fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
                 Text(WorkisMoney.qty(l.qty) + " × " + WorkisMoney.text(l.unitPrice, null), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, softWrap = false)
                 Spacer(Modifier.width(8.dp))
@@ -882,7 +883,7 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
                         SurfaceCard {
                             rs.forEach { r ->
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(WorkisTitleCase.productLine(r.name), fontSize = 13.sp, color = colors.ink)
+                                    Text(r.name, fontSize = 13.sp, color = colors.ink)
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Text(r.sku, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, modifier = Modifier.weight(1f))
                                         OutlinedTextField(value = qtys[r.sku].orEmpty(), onValueChange = { qtys[r.sku] = it }, placeholder = { Text(stringResource(R.string.qty_field), color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontSize = 13.sp, color = colors.ink).readingStep(), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(76.dp))
