@@ -1279,6 +1279,7 @@
     <string name="variants_title">Satırlar</string>
     <string name="variants_word">varyant</string>
     <string name="verifying">doğrulanıyor</string>
+    <string name="version_word">Sürüm</string>
     <string name="virtual_seller_hint">Workis buldu; doğrulanmamış (e-posta yazışmasından)</string>
     <string name="virtual_sub">Jowi kalemleri kendi üslubuyla e-posta ile gönderir; yanıt, onayınızın ardından karşılaştırmaya aktarılır.</string>
     <string name="virtual_title">Sanal tedarikçiler (e-posta kanalı)</string>

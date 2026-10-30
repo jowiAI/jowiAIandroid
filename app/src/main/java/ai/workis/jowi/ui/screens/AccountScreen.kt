@@ -47,6 +47,10 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import ai.workis.jowi.ui.theme.Text
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
+import ai.workis.jowi.ui.theme.WorkisMono
+import ai.workis.jowi.BuildConfig
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -291,8 +295,26 @@ private fun AccountHome(onReaccept: () -> Unit, onDeparture: () -> Unit, onOpen:
                 fontWeight = FontWeight.Medium,
             )
         }
+        // Which code is on this phone (ledger 80): "Sürüm 0.8.6 (19) · 9eaf2b1" — version, build and
+        // the git commit stamped at build time ("+" = uncommitted changes, "?" = no git). A footer,
+        // not a row; centred, mono 12 (digits and a hash are data), the muted footer colour. The
+        // build number moves only at an upload, the commit at every push, so the commit is what tells
+        // one install from the next. X-Workis-Client keeps "app <version> (<code>)" — the sha is for
+        // the person holding the phone, not the server.
+        Text(
+            stringResource(R.string.version_word) + " " + appLine(LocalContext.current),
+            color = colors.muted, fontFamily = WorkisMono, fontSize = 12.sp, textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        )
         Spacer(Modifier.height(30.dp))
     }
+}
+
+/** "<versionName> (<versionCode>) · <git short sha>" — the same version and build the server reads in X-Workis-Client. */
+private fun appLine(context: android.content.Context): String {
+    val info = context.packageManager.getPackageInfo(context.packageName, 0)
+    val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
+    return "${info.versionName ?: "?"} ($code) · ${BuildConfig.GIT_COMMIT}"
 }
 
 /**

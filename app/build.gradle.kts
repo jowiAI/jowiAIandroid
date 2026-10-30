@@ -36,6 +36,20 @@ val keystoreProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+// Which code is on the phone (ledger 80, 2026-10-29): the git short sha stamped into BuildConfig at
+// build time — "+" when the tree had uncommitted changes, "?" when git is absent. Hesap's footer
+// prints it after the version and build; X-Workis-Client stays "app <version> (<code>)".
+val gitCommit: String = try {
+    // providers.exec, not ProcessBuilder: the configuration cache tracks it as an input and re-runs it.
+    fun git(vararg args: String): String {
+        val r = providers.exec { commandLine("git", *args); workingDir = rootDir; isIgnoreExitValue = true }
+        if (r.result.get().exitValue != 0) throw IllegalStateException(r.standardError.asText.get())
+        return r.standardOutput.asText.get().trim()
+    }
+    val sha = git("rev-parse", "--short", "HEAD")
+    if (git("status", "--porcelain").isNotEmpty()) "$sha+" else sha
+} catch (e: Exception) { "?" }
+
 android {
     namespace = "ai.workis.jowi"
     compileSdk = 37
@@ -46,6 +60,7 @@ android {
         targetSdk = 36
         versionCode = 19
         versionName = "0.8.6"
+        buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
     }
 
     signingConfigs {
@@ -73,6 +88,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
