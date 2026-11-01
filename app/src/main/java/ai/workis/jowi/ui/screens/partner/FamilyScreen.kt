@@ -622,9 +622,9 @@ private fun MediaSheet(media: CatalogMedia, vm: FamilyViewModel, seller: String?
                 )
             } else media.externalUrl?.takeIf { it.isNotEmpty() }?.let { ext ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { openInApp(context, ext) }) {
-                    Icon(WorkisIcons.Play, contentDescription = null, tint = colors.blue, modifier = Modifier.size(16.dp))
+                    Icon(WorkisIcons.Play, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(ext, fontSize = 13.sp, color = colors.blue, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(ext, fontSize = 13.sp, color = colors.accentText, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
             // status is never colour alone — star + words
