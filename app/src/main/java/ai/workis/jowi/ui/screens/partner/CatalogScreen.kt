@@ -1,5 +1,19 @@
 package ai.workis.jowi.ui.screens.partner
 
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import ai.workis.jowi.data.WorkisJson
+import ai.workis.jowi.ui.components.ImageCache
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import ai.workis.jowi.ui.theme.readingStep
+import ai.workis.jowi.ui.theme.WorkisSans
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import ai.workis.jowi.data.CatalogSheetPage
+import ai.workis.jowi.data.decodeSheetPage
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -325,17 +339,33 @@ class CatalogViewModel : ViewModel() {
      * The same file again never starts a second run: `resumed` → the note says the
      * existing row continues (no new row is waited for); `planned` → the row's
      * checklist waits for the section choice (2026-09-27). The list reloads either way.
+     * Ledger 81: a spreadsheet price list (.xlsx .xlsm .xls .csv) goes through the same door —
+     * the mime follows the file NAME's extension, never the picker; the answer's `message` (filled
+     * for a sheet, "" for a PDF) is the server's sentence on how long the work takes and stays as
+     * the note line with [mailNote] after it; `resumed` / `planned` keep their notes and win.
      */
-    fun upload(bytes: ByteArray, name: String, kind: String, pages: String, brand: String, resumedNote: String, plannedNote: String) = act {
+    fun upload(bytes: ByteArray, name: String, kind: String, pages: String, brand: String, resumedNote: String, plannedNote: String, mailNote: String) = act {
         val fields = buildMap {
             if (kind != "auto") put("kind", kind.toRequestBody("text/plain".toMediaType()))
             if (pages.isNotBlank()) put("pages", pages.trim().toRequestBody("text/plain".toMediaType()))
             if (brand.isNotBlank()) put("brand", brand.trim().toRequestBody("text/plain".toMediaType()))
         }
-        val part = MultipartBody.Part.createFormData("file", name, bytes.toRequestBody("application/pdf".toMediaType()))
+        val mime = when (name.substringAfterLast('.', "").lowercase()) {
+            "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            "xlsm" -> "application/vnd.ms-excel.sheet.macroEnabled.12"
+            "xls" -> "application/vnd.ms-excel"
+            "csv" -> "text/csv"
+            else -> "application/pdf"
+        }
+        val part = MultipartBody.Part.createFormData("file", name, bytes.toRequestBody(mime.toMediaType()))
         val (r, err) = partnerCall(lang) { Graph.api.catalogUpload(part, fields, seller) }
         if (r == null || r.success == false) false to (r?.error ?: r?.message ?: err)
-        else true to (if (r.resumed == true) resumedNote else if (r.planned == true) plannedNote else null)
+        else true to when {
+            r.resumed == true -> resumedNote
+            r.planned == true -> plannedNote
+            !r.message.isNullOrBlank() -> r.message + " " + mailNote
+            else -> null
+        }
     }
 
     /** The row whose run door is in flight — every door waits for it. */
@@ -669,6 +699,7 @@ private fun PublishCatalogContext(vm: CatalogViewModel, segment: Int) {
                 vm.page?.families.orEmpty().forEach { f ->
                     webChip(f.web)?.let { add(vis(it.text, VisStyle.CHIP)) }
                     photoChip(f.imgSrc, f.imgQuality)?.let { add(vis(it.text, VisStyle.CHIP)) }
+                    f.priceFixed?.takeIf { it > 0 }?.let { add(vis("$it " + stringResource(R.string.price_fixed_chip), VisStyle.CHIP)) }
                 }
             }
             1 -> {
@@ -815,6 +846,8 @@ private fun ReviewSections(page: CatalogPage, vm: CatalogViewModel, onOpenFamily
                                 webChip(f.web)?.let { WorkisChip(it) }
                                 photoChip(f.imgSrc, f.imgQuality)?.let { WorkisChip(it) }
                                 f.nVariants?.let { WorkisChip(ChipSpec(WorkisIcons.Table, "$it " + stringResource(R.string.variants_word), colors.muted)) }
+                                // prices the sheet's own row corrected (ledger 81, §4): beige = attention, as the low-res chip
+                                f.priceFixed?.takeIf { it > 0 }?.let { WorkisChip(ChipSpec(WorkisIcons.Tag, "$it " + stringResource(R.string.price_fixed_chip), Beige)) }
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 f.code?.takeIf { it.isNotEmpty() }?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false)) }
@@ -1204,6 +1237,16 @@ fun PickerRowSimple(label: String, value: String, options: List<String>, onPick:
 
 // MARK: - Yükleme ve belgeler
 
+/** A PDF or a spreadsheet price list (ledger 81) — the picker's filter only; the upload's mime follows the name's extension. */
+private val UPLOAD_MIMES = arrayOf(
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel.sheet.macroEnabled.12",
+    "application/vnd.ms-excel",
+    "text/csv",
+    "text/comma-separated-values",
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun UploadSections(page: CatalogPage, vm: CatalogViewModel) {
@@ -1222,6 +1265,7 @@ private fun UploadSections(page: CatalogPage, vm: CatalogViewModel) {
     )
     val resumedNote = stringResource(R.string.upload_resumed)
     val plannedNote = stringResource(R.string.upload_planned)
+    val mailNote = stringResource(R.string.upload_mail_note)
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@rememberLauncherForActivityResult
@@ -1230,7 +1274,7 @@ private fun UploadSections(page: CatalogPage, vm: CatalogViewModel) {
             val idx = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
             if (idx >= 0 && c.moveToFirst()) name = c.getString(idx) ?: name
         }
-        vm.upload(bytes, name, kind, pages, brand, resumedNote, plannedNote)
+        vm.upload(bytes, name, kind, pages, brand, resumedNote, plannedNote, mailNote)
     }
 
     SectionHeader(stringResource(R.string.upload_title).uppercase())
@@ -1253,7 +1297,7 @@ private fun UploadSections(page: CatalogPage, vm: CatalogViewModel) {
         FormRow("", brand, { brand = it }, {}, false, placeholder = stringResource(R.string.upload_brand), stacked = true)
         Row(
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center,
-            modifier = Modifier.fillMaxWidth().clickable(enabled = !vm.busy) { picker.launch(arrayOf("application/pdf")) }.padding(vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().clickable(enabled = !vm.busy) { picker.launch(UPLOAD_MIMES) }.padding(vertical = 12.dp),
         ) {
             if (vm.busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Kiremit500)
             else {
@@ -1362,7 +1406,13 @@ private fun IngestionRow(ing: CatalogIngestion, parent: CatalogIngestion?, vm: C
         if (wf != null) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Icon(WorkisIcons.Globe, contentDescription = null, tint = colors.faint, modifier = Modifier.size(11.dp))
-                Text("${wf.found ?: 0}/${wf.total ?: 0} " + stringResource(R.string.web_fetch_title), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
+                // `done` first, `found` for older rows; the minutes left are the server's number (ledger 81) — never computed here
+                val eta = wf.etaMinutes?.takeIf { wf.status == "running" && it > 0 }
+                Text(
+                    "${wf.done ?: wf.found ?: 0}/${wf.total ?: 0} " + stringResource(R.string.web_fetch_title) +
+                        (eta?.let { " · ≈ $it " + stringResource(R.string.minutes_short) } ?: ""),
+                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint,
+                )
                 if (wf.status == "running") CircularProgressIndicator(Modifier.size(10.dp), strokeWidth = 1.5.dp, color = colors.faint)
                 if (wf.status == "stalled") {
                     Text("· " + stringResource(R.string.web_fetch_stalled), fontFamily = WorkisMono, fontSize = 10.sp, color = Beige)
@@ -1445,19 +1495,98 @@ private fun DoorButton(title: String, icon: ImageVector, enabled: Boolean, destr
     }
 }
 
-/** The source PDF page rendered by the server (side-by-side verification) — also the full-size family image. */
+/** What the source URL answered: still loading, an image (cached for [AuthImage]), or a sheet's row block. */
+private sealed interface SourceBody {
+    data object Loading : SourceBody
+    data object Image : SourceBody
+    data class Sheet(val page: CatalogSheetPage) : SourceBody
+}
+
+/**
+ * The source behind a product (side-by-side verification) — also the full-size family image.
+ * Ledger 81: one raw GET, the Content-Type decides — a JPEG for a PDF upload (cached, drawn by
+ * [AuthImage]); JSON `{sheet: true, header, rows}` for a spreadsheet upload → the row block as a
+ * table that scrolls both ways, titled `sheetRowsTitle`.
+ */
 @Composable
 fun SourcePageDialog(url: String, title: String, onDismiss: () -> Unit) {
+    val body by produceState<SourceBody>(if (ImageCache.has(url)) SourceBody.Image else SourceBody.Loading, url) {
+        if (value != SourceBody.Loading) return@produceState
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                val r = Graph.api.catalogSourcePage(url)
+                val b = r.body() ?: return@runCatching null
+                val type = (b.contentType()?.toString() ?: r.headers()["Content-Type"]).orEmpty().lowercase()
+                val bytes = b.use { it.bytes() }
+                if (type.contains("json")) {
+                    (WorkisJson.parseToJsonElement(bytes.decodeToString()) as? JsonObject)?.let(::decodeSheetPage)?.let { SourceBody.Sheet(it) }
+                } else {
+                    ImageCache.store(url, bytes); null
+                }
+            }.getOrNull() ?: SourceBody.Image
+        }
+    }
+    val current = body
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.fillMaxSize().background(PaperWhite)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.done), color = PaperInk, fontWeight = FontWeight.SemiBold) }
-                Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = PaperInk, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    if (current is SourceBody.Sheet) stringResource(R.string.sheet_rows_title) else title,
+                    fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = PaperInk, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
             }
-            Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp)) {
-                AuthImage(url, Modifier.fillMaxWidth().aspectRatio(0.7f), corner = 0.dp)
+            when (current) {
+                SourceBody.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = PaperInk.copy(alpha = 0.4f))
+                }
+                SourceBody.Image -> Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(8.dp)) {
+                    AuthImage(url, Modifier.fillMaxWidth().aspectRatio(0.7f), corner = 0.dp)
+                }
+                is SourceBody.Sheet -> SheetRowsTable(current.page)
             }
         }
+    }
+}
+
+/**
+ * The sheet's row block: header semibold muted, cells mono 11 ink, one line each, a faint hairline
+ * between rows; a column is as wide as its longest cell, capped at 160dp (the cell ellipsizes).
+ */
+@Composable
+private fun SheetRowsTable(p: CatalogSheetPage) {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val headStyle = TextStyle(fontFamily = WorkisSans, fontWeight = FontWeight.SemiBold, fontSize = 12.sp).readingStep()
+    val cellStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp).readingStep()
+    val nCols = maxOf(p.header.size, p.rows.maxOfOrNull { it.size } ?: 0)
+    val widths = remember(p, density, measurer) {
+        (0 until nCols).map { c ->
+            val head = p.header.getOrNull(c)?.let { measurer.measure(it, headStyle, maxLines = 1).size.width } ?: 0
+            val cell = p.rows.maxOfOrNull { r -> r.getOrNull(c)?.takeIf { it.isNotEmpty() }?.let { measurer.measure(it, cellStyle, maxLines = 1).size.width } ?: 0 } ?: 0
+            with(density) { maxOf(head, cell).toDp() + 2.dp }.coerceIn(24.dp, 160.dp)
+        }
+    }
+    val muted = PaperInk.copy(alpha = 0.6f)
+    val hairline = PaperInk.copy(alpha = 0.08f)
+    @Composable
+    fun line(cells: List<String>, header: Boolean) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier
+                .drawBehind { drawLine(hairline, Offset(0f, size.height), Offset(size.width, size.height), strokeWidth = 1.dp.toPx()) }
+                .padding(vertical = 6.dp),
+        ) {
+            for (c in 0 until nCols) {
+                val text = cells.getOrNull(c).orEmpty()
+                if (header) Text(text, fontFamily = WorkisSans, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(widths[c]))
+                else Text(text, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = PaperInk, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(widths[c]))
+            }
+        }
+    }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
+        if (p.header.isNotEmpty()) line(p.header, header = true)
+        p.rows.forEach { line(it, header = false) }
     }
 }
 

@@ -52,7 +52,15 @@ data class CatalogPage(
 )
 
 @Serializable
-data class CatalogWebFetch(val status: String? = null, val total: Int? = null, val done: Int? = null, val found: Int? = null)
+data class CatalogWebFetch(
+    val status: String? = null,
+    @Serializable(with = FlexInt::class) val total: Int? = null,
+    @Serializable(with = FlexInt::class) val done: Int? = null,
+    @Serializable(with = FlexInt::class) val found: Int? = null,
+    /** Minutes left of the background web run (Django 2026-11-01, ledger 81) — updated at every
+     *  family, 0 when done. Printed as sent, never computed here. */
+    @Serializable(with = FlexInt::class) val etaMinutes: Int? = null,
+)
 
 @Serializable
 data class CatalogPageMapEntry(
@@ -115,6 +123,13 @@ data class CatalogIngestion(
 data class CatalogWebImage(val url: String? = null, val key: String? = null)
 
 /**
+ * The maker's technical data sheet behind the page (Django 2026-11-01, ledger 81): the detail
+ * carries `{url, pages, lang}`, the grid row a bare URL string, the ingestion's web list a bare
+ * `true|false` (`flag`). `url` empty = no sheet (`confidence` "name" never searches one).
+ */
+data class CatalogDatasheet(val url: String? = null, val pages: Int? = null, val lang: String? = null, val flag: Boolean? = null)
+
+/**
  * The maker's web page — a dict on rows and the detail, a bare string on the
  * live rows (a confidence word or a URL). `images` is a count on the row and a
  * list on the detail.
@@ -129,6 +144,7 @@ data class CatalogWeb(
     val tableRows: Int? = null,
     val codesMatched: List<String>? = null,
     val table: List<List<String>>? = null,
+    val datasheet: CatalogDatasheet? = null,
 )
 
 object CatalogWebSerializer : KSerializer<CatalogWeb> {
@@ -160,7 +176,19 @@ object CatalogWebSerializer : KSerializer<CatalogWeb> {
             tableRows = int("tableRows"),
             codesMatched = (o["codesMatched"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content },
             table = (o["table"] as? JsonArray)?.mapNotNull { row -> (row as? JsonArray)?.map { (it as? JsonPrimitive)?.content ?: it.toString() } },
+            datasheet = datasheet(o["datasheet"]),
         )
+    }
+
+    /** `{url, pages, lang}` on the detail, a URL string on the grid row, a bool on the web list; anything else null. */
+    private fun datasheet(el: JsonElement?): CatalogDatasheet? = when (el) {
+        is JsonObject -> {
+            fun str(k: String) = (el[k] as? JsonPrimitive)?.takeUnless { it is JsonNull }?.content
+            CatalogDatasheet(url = str("url"), pages = flexInt(el["pages"]), lang = str("lang"))
+        }
+        is JsonNull -> null
+        is JsonPrimitive -> if (el.isString) CatalogDatasheet(url = el.content) else el.booleanOrNull?.let { CatalogDatasheet(flag = it) }
+        else -> null
     }
 
     override fun serialize(encoder: Encoder, value: CatalogWeb) = encoder.encodeString(value.url ?: value.confidence.orEmpty())
@@ -233,6 +261,9 @@ data class CatalogFamilyRow(
     val imgQuality: String? = null, // ok | low | page | ''
     val imgSrc: String? = null, // web | catalog | upload | ''
     val web: CatalogWeb? = null,
+    /** Variants whose price the sheet's own row corrected after the read (Django 2026-11-01, §4;
+     *  ledger 81) — 0 for a PDF upload; N > 0 draws the beige chip on the row. */
+    @Serializable(with = FlexInt::class) val priceFixed: Int? = null,
 )
 
 @Serializable
@@ -388,12 +419,44 @@ data class CatalogFamilyDetail(
     val web: CatalogWeb? = null,
     val imageKey: String? = null,
     val imageQuality: String? = null,
+    /** The price check against the sheet (Django 2026-11-01, §4; ledger 81) — already applied on the server, the seller only looks. */
+    val priceCheck: CatalogPriceCheck? = null,
 ) {
     /** The hero (ledger 18): the PRIMARY row of `media[]` — the main photo lives there now, the
      *  one it replaced stays behind it — with `imageKey` only as the fallback. One slot, never two. */
     val heroKey: String? get() = media?.firstOrNull { it.isPrimary == true && !it.key.isNullOrEmpty() }?.key ?: imageKey
 
     val isLive get() = status == "approved" || !productId.isNullOrEmpty()
+}
+
+@Serializable
+data class CatalogPriceCheck(val fixed: List<CatalogPriceFixed>? = null)
+
+/** One corrected code: `sheet` = the price cell as written in the sheet, `was` = the reader's old value (null = "Workis asks"). */
+@Serializable
+data class CatalogPriceFixed(
+    @Serializable(with = FlexString::class) val code: String? = null,
+    @Serializable(with = FlexString::class) val sheet: String? = null,
+    @Serializable(with = FlexDouble::class) val was: Double? = null,
+)
+
+/**
+ * `GET source/{iid}/{page}/` on a SPREADSHEET upload (Django 2026-11-01, ledger 81): JSON
+ * `{success, sheet: true, header[], rows[][]}` — the 30–40 row block the product came from.
+ * Cells are strings; a number (or bool) is read as its text, null as "".
+ */
+data class CatalogSheetPage(val header: List<String>, val rows: List<List<String>>)
+
+fun decodeSheetPage(o: JsonObject): CatalogSheetPage? {
+    if (flexBool(o["sheet"]) != true) return null
+    fun cell(e: JsonElement): String = when (e) {
+        is JsonNull -> ""
+        is JsonPrimitive -> e.content
+        else -> e.toString()
+    }
+    val header = (o["header"] as? JsonArray)?.map(::cell).orEmpty()
+    val rows = (o["rows"] as? JsonArray)?.mapNotNull { r -> (r as? JsonArray)?.map(::cell) }.orEmpty()
+    return CatalogSheetPage(header, rows)
 }
 
 /** `{success, family:{…}}` on the preview and every cell response; a bare body is accepted too. */

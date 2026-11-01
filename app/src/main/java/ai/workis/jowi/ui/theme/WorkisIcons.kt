@@ -681,4 +681,12 @@ object WorkisIcons {
             curveTo(20.5f, 13f, 17f, 8.5f, 10f, 8f); close()
         }
     }
+
+    /** SF "tag" — prices the sheet's own row corrected (ledger 81). */
+    val Tag: ImageVector = stroked("Tag") {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(3.5f, 4.5f); lineTo(3.5f, 11f); lineTo(13f, 20.5f); lineTo(20.5f, 13f); lineTo(11f, 3.5f); lineTo(4.5f, 3.5f); close()
+            moveTo(7f, 8f); arcToRelative(1.2f, 1.2f, 0f, true, false, 2.4f, 0f); arcToRelative(1.2f, 1.2f, 0f, true, false, -2.4f, 0f)
+        }
+    }
 }

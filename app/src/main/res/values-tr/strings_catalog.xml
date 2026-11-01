@@ -351,6 +351,7 @@
     <string name="conversations_title">Yazışmalar</string>
     <string name="create">Oluştur</string>
     <string name="create_partner">Partner oluştur</string>
+    <string name="datasheet_chip">Teknik bilgi formu</string>
     <string name="days_word">gün</string>
     <string name="decision_answer_placeholder">Yanıtınız</string>
     <string name="decision_degraded">Jowi bu kararı çözümleyemedi — yazdığınız gibi kaydedildi ve öyle iletildi; operatör, sözleşme ve rezervasyon eşleştirilmedi.</string>
@@ -706,6 +707,7 @@
     <string name="media_save">Kaydet</string>
     <string name="media_title">Fotoğraf ve video</string>
     <string name="media_video_url">YouTube bağlantısı</string>
+    <string name="minutes_short">dk</string>
     <string name="months_word">ay</string>
     <string name="more_expensive_word">daha pahalı</string>
     <string name="msg_word">mesaj</string>
@@ -875,6 +877,7 @@
     <string name="preview_action">Önizleme</string>
     <string name="preview_hint">Fiyatlandırılmış satırlar teklif PDF\'ine eklenir; boş satırlar atlanır.</string>
     <string name="preview_pdf">PDF önizleme</string>
+    <string name="price_fixed_chip">fiyat tablodan alındı</string>
     <string name="price_on_request">fiyat sorunuz</string>
     <string name="price_workis_asks">Workis fiyatı ister</string>
     <string name="prices_tab">Fiyatlar</string>
@@ -1023,6 +1026,8 @@
     <string name="session_with_code">e-posta koduyla açıldı</string>
     <string name="session_with_passkey">geçiş anahtarıyla açıldı</string>
     <string name="settings_title">Ayarlar</string>
+    <string name="sheet_rows_title">Tablo satırları</string>
+    <string name="sheet_word">tablo</string>
     <string name="shipment_label_pdf">Etiket (PDF)</string>
     <string name="shortlist_label">Kataloğunuzdan alıcı kısa listesi</string>
     <string name="show_name_sub">bilgime dayanan yanıtlarda — varsayılan isimsiz, her zaman değiştirilebilir</string>
@@ -1234,6 +1239,7 @@
     <string name="upload_action">Yükle ve çıkar</string>
     <string name="upload_brand">Üretici markası (boş = belgeden)</string>
     <string name="upload_kind">Tür</string>
+    <string name="upload_mail_note">Bitince e-posta alırsınız.</string>
     <string name="upload_one_doc_note">Bir belgeyi bitirmeden aynı ürünleri içeren ikinci bir belge yüklemeyin: ikisi de onaylanırsa aynı ürün canlı kataloğa iki kez girer.</string>
     <string name="upload_pages">Sayfalar (örn. 10-16)</string>
     <string name="upload_planned">Belgenin içindekiler sayfası var — okunacak bölümleri seçin.</string>
@@ -1285,6 +1291,7 @@
     <string name="virtual_title">Sanal tedarikçiler (e-posta kanalı)</string>
     <string name="vkn_label">VKN</string>
     <string name="warranty_none">garanti yok</string>
+    <string name="was_word">önce</string>
     <string name="web_confidence_exact">tam eşleşme</string>
     <string name="web_confidence_name">ad eşleşmesi</string>
     <string name="web_confidence_none">eşleşme yok</string>

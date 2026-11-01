@@ -351,6 +351,7 @@
     <string name="conversations_title">Correspondence</string>
     <string name="create">Create</string>
     <string name="create_partner">Create partner</string>
+    <string name="datasheet_chip">Data sheet</string>
     <string name="days_word">days</string>
     <string name="decision_answer_placeholder">Your answer</string>
     <string name="decision_degraded">Jowi could not read this decision — it was recorded and sent as you wrote it, with no operator, contract or reservation matched.</string>
@@ -706,6 +707,7 @@
     <string name="media_save">Save</string>
     <string name="media_title">Photos &amp; videos</string>
     <string name="media_video_url">YouTube link</string>
+    <string name="minutes_short">min</string>
     <string name="months_word">months</string>
     <string name="more_expensive_word">more expensive</string>
     <string name="msg_word">messages</string>
@@ -875,6 +877,7 @@
     <string name="preview_action">Preview</string>
     <string name="preview_hint">Priced rows go into the quotation PDF; empty rows are skipped.</string>
     <string name="preview_pdf">PDF preview</string>
+    <string name="price_fixed_chip">prices taken from the sheet</string>
     <string name="price_on_request">on request</string>
     <string name="price_workis_asks">Workis asks the price</string>
     <string name="prices_tab">Prices</string>
@@ -1023,6 +1026,8 @@
     <string name="session_with_code">opened with the e-mail code</string>
     <string name="session_with_passkey">opened with a passkey</string>
     <string name="settings_title">Settings</string>
+    <string name="sheet_rows_title">Sheet rows</string>
+    <string name="sheet_word">sheet</string>
     <string name="shipment_label_pdf">Label (PDF)</string>
     <string name="shortlist_label">Buyer shortlist from your catalog</string>
     <string name="show_name_sub">on answers built on your knowledge — anonymous by default, changeable any time</string>
@@ -1234,6 +1239,7 @@
     <string name="upload_action">Upload &amp; extract</string>
     <string name="upload_brand">Maker brand (blank = from the document)</string>
     <string name="upload_kind">Type</string>
+    <string name="upload_mail_note">You will get an e-mail when it finishes.</string>
     <string name="upload_one_doc_note">Finish one document before uploading another that holds the same products: if both are approved, the same product enters the live catalogue twice.</string>
     <string name="upload_pages">Pages (e.g. 10-16)</string>
     <string name="upload_planned">The document has a contents page — choose the sections to read.</string>
@@ -1285,6 +1291,7 @@
     <string name="virtual_title">Virtual suppliers (e-mail channel)</string>
     <string name="vkn_label">Tax ID</string>
     <string name="warranty_none">no warranty</string>
+    <string name="was_word">was</string>
     <string name="web_confidence_exact">exact match</string>
     <string name="web_confidence_name">name match</string>
     <string name="web_confidence_none">no match</string>

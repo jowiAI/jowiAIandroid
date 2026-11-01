@@ -514,6 +514,11 @@ interface WorkisApi {
     @GET("workis/seller/catalog/search/")
     suspend fun catalogSearch(@Query("q") q: String, @Query("seller") seller: String? = null): CatalogSearchPage
 
+    /** `source/{iid}/{page}/` read raw (ledger 81): a JPEG for a PDF upload, JSON `{sheet: true, header, rows}` for a
+     *  spreadsheet — the caller branches on the Content-Type. The URL is `catalogSourceUrl(…)` (carries `?seller=`). */
+    @GET
+    suspend fun catalogSourcePage(@Url url: String): retrofit2.Response<okhttp3.ResponseBody>
+
     @Multipart
     @POST("workis/seller/catalog/upload/")
     suspend fun catalogUpload(

@@ -1,5 +1,13 @@
 package ai.workis.jowi.ui.screens.partner
 
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.style.TextDecoration
+import ai.workis.jowi.data.CatalogPriceFixed
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -420,6 +428,10 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
                     }
                 }
 
+                // the price check (ledger 81, §4): the variants whose price the sheet's own row
+                // corrected — a disclosure the seller opens to look; the correction is already on the server
+                d.priceCheck?.fixed?.takeIf { it.isNotEmpty() }?.let { PriceCheckSection(it) }
+
                 // specs
                 val specs = d.specAttrs.orEmpty()
                 if (specs.isNotEmpty()) FormSection(stringResource(R.string.specs_title).uppercase()) {
@@ -444,7 +456,21 @@ fun FamilyScreen(familyId: String, onBack: () -> Unit, seller: String? = null) {
                             WorkisChip(webChip(w) ?: ChipSpec(WorkisIcons.Globe, stringResource(R.string.web_confidence_none), colors.muted))
                             w.codesMatched?.takeIf { it.isNotEmpty() }?.let { Text("${it.size} " + stringResource(R.string.code_field).lowercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint) }
                         }
-                        Text("↗ $url", fontSize = 12.sp, color = colors.blue, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth().clickable { openInApp(context, url) }.padding(horizontal = 14.dp, vertical = 6.dp))
+                        // a link is an action, not "sıra sizde" — accent, never blue (ledger 81 / 75)
+                        Text("↗ $url", fontSize = 12.sp, color = colors.accentText, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth().clickable { openInApp(context, url) }.padding(horizontal = 14.dp, vertical = 6.dp))
+                        // the maker's technical data sheet (ledger 81): a chip that opens the PDF;
+                        // none when the server found no sheet (`confidence` "name" never searches one)
+                        w.datasheet?.url?.takeIf { it.isNotEmpty() }?.let { dsUrl ->
+                            val ds = w.datasheet
+                            val chipText = stringResource(R.string.datasheet_chip) + (ds.pages?.let { " · $it " + stringResource(R.string.page_word) } ?: "")
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.clickable { openInApp(context, dsUrl) }.padding(horizontal = 14.dp, vertical = 6.dp),
+                            ) {
+                                WorkisChip(ChipSpec(WorkisIcons.DocText, chipText, colors.accentText))
+                                ds.lang?.takeIf { it.isNotEmpty() }?.let { Text(it.uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint) }
+                            }
+                        }
                         Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
                     }
                     FormRow("", vm.webUrl, { vm.webUrl = it }, {}, false, placeholder = stringResource(R.string.web_url_field), stacked = true, keyboardType = KeyboardType.Uri)
@@ -721,6 +747,52 @@ private fun VariantSheet(vm: FamilyViewModel, variant: CatalogVariant?, onClose:
                 PickerRowSimple("CUR", currency, listOf("TRY", "USD", "EUR")) { currency = it }
             }
             errorText?.let { Text(it, fontSize = 13.sp, color = colors.danger) }
+        }
+    }
+}
+
+/**
+ * Ledger 81 (§4): "N fiyat tablodan alındı" — collapsed by default, beige (attention, as the
+ * low-res chip). Each row: the code (mono) · "önce <was, struck through>" · "tablo <the cell as
+ * written>"; `was` null = the reader had no price → "Workis fiyatı ister".
+ */
+@Composable
+private fun PriceCheckSection(fixed: List<CatalogPriceFixed>) {
+    val colors = WorkisTheme.colors
+    var open by rememberSaveable { mutableStateOf(false) }
+    val asks = stringResource(R.string.price_workis_asks)
+    val wasWord = stringResource(R.string.was_word)
+    val sheetWord = stringResource(R.string.sheet_word)
+    FormSection(null) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(horizontal = 14.dp, vertical = 12.dp),
+        ) {
+            Icon(WorkisIcons.Tag, contentDescription = null, tint = Beige, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("${fixed.size} " + stringResource(R.string.price_fixed_chip), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Beige, modifier = Modifier.weight(1f))
+            Icon(
+                Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = colors.faint,
+                modifier = Modifier.size(18.dp).rotate(if (open) 180f else 0f),
+            )
+        }
+        if (open) fixed.forEach { f ->
+            Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
+            Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp)) {
+                Text(f.code.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.ink, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = colors.faint)) { append("$wasWord ") }
+                        withStyle(SpanStyle(color = colors.faint, textDecoration = TextDecoration.LineThrough)) {
+                            append(f.was?.let { WorkisMoney.text(it, null) } ?: asks)
+                        }
+                        withStyle(SpanStyle(color = colors.faint)) { append("  $sheetWord ") }
+                        withStyle(SpanStyle(color = colors.ink, fontWeight = FontWeight.SemiBold)) { append(f.sheet?.takeIf { it.isNotEmpty() } ?: asks) }
+                    },
+                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, textAlign = TextAlign.End,
+                )
+            }
         }
     }
 }

@@ -50,18 +50,29 @@ object ImageCache {
         return lock.withLock {
             cache.get(url)?.let { return@withLock it }
             val bmp = withContext(Dispatchers.IO) {
-                runCatching {
-                    val bytes = Graph.api.download(url).use { it.bytes() }
-                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-                    var sample = 1
-                    while (maxOf(bounds.outWidth, bounds.outHeight) / sample > maxEdge) sample *= 2
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
-                }.getOrNull()
+                runCatching { decode(Graph.api.download(url).use { it.bytes() }, maxEdge) }.getOrNull()
             }
             if (bmp != null) cache.put(url, bmp)
             bmp
         }
+    }
+
+    /** Already fetched for this URL? (the source page reads its bytes once and branches on the content type). */
+    fun has(url: String): Boolean = cache.get(url) != null
+
+    /** Bytes fetched elsewhere (the source page's one raw GET) → decoded and cached under [url]; false when not an image. */
+    suspend fun store(url: String, bytes: ByteArray, maxEdge: Int = 1600): Boolean {
+        val bmp = withContext(Dispatchers.Default) { runCatching { decode(bytes, maxEdge) }.getOrNull() } ?: return false
+        cache.put(url, bmp)
+        return true
+    }
+
+    private fun decode(bytes: ByteArray, maxEdge: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / sample > maxEdge) sample *= 2
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
     }
 }
 
