@@ -83,6 +83,7 @@ fun LedgerScreen(vm: LedgerViewModel, onBack: () -> Unit) {
     LaunchedEffect(Unit) { vm.load() }
     ConsoleSub(stringResource(R.string.cari_title), onBack) {
         val accounts = vm.accounts
+        ai.workis.jowi.ui.components.ChangesWatch("orders") { vm.load() } // changes/ (ledger 86)
         when {
             accounts == null && vm.loadError != null -> Text(vm.loadError.orEmpty(), fontSize = 13.sp, color = colors.danger)
             accounts == null -> Box(Modifier.fillMaxWidth().padding(top = 30.dp), contentAlignment = Alignment.Center) {

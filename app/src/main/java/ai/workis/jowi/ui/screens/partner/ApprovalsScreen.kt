@@ -195,6 +195,9 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
             }
             else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 NoteBand(vm.note)
+                // changes/ (ledger 86): the page's scope is `orders`; an open answer form holds the
+                // re-read back and the pill is drawn here
+                ai.workis.jowi.ui.components.ChangesWatch("orders", typing = form != null) { vm.load() }
                 val privateLine = stringResource(R.string.satisfaction_private)
                 val tick: @Composable (SatisfactionAsk, Boolean) -> Unit = { a, showQuestion ->
                     val id = a.lineId.orEmpty()

@@ -149,6 +149,8 @@ fun OrderContractScreen(orderId: String, seat: String? = null, onBack: () -> Uni
                 CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Kiremit500)
             }
             else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // changes/ (ledger 86): `orders`; never under a name being signed — the pill instead
+                ai.workis.jowi.ui.components.ChangesWatch("orders", typing = vm.signerName.isNotBlank()) { vm.load(orderId) }
                 if (vm.moved) {
                     Text(
                         stringResource(R.string.contract_moved_title) + (vm.note?.let { " — $it" } ?: ""),

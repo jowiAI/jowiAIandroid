@@ -1781,7 +1781,7 @@ private fun SendGroupCard(g: SendGroup, d: PurchaseListDetail) {
         }
         Eyebrow(head.uppercase())
         SurfaceCard {
-            g.rows.forEach { r -> SendRowLine(r, uncovered) }
+            g.rows.forEach { r -> SendRowLine(r, uncovered, d.list?.units) }
         }
         if (uncovered) Text(stringResource(R.string.uncovered_sub), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
     }
@@ -1791,15 +1791,16 @@ private fun SendGroupCard(g: SendGroup, d: PurchaseListDetail) {
  * The PRODUCT leads (the variant this seller is asked for), the buyer's generic name
  * follows as "İstenen: …" — the same grammar as the list row and the seller's card.
  */
+/** `sendPreview[].unit` is the STORED value: printed as the label of `list.units`, like the row (ledger 85). */
 @Composable
-private fun SendRowLine(r: PLSendRow, uncovered: Boolean) {
+private fun SendRowLine(r: PLSendRow, uncovered: Boolean, units: List<WorkisUnit>? = null) {
     val colors = WorkisTheme.colors
     val product = if (!uncovered) r.alts?.takeIf { it.isNotEmpty() } else null
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(verticalAlignment = Alignment.Top) {
             Text(product ?: r.item.orEmpty(), fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 19.sp, color = colors.ink, maxLines = 3, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(6.dp))
-            Text(WorkisMoney.qty(r.qty) + " " + r.unit.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
+            Text((WorkisMoney.qty(r.qty) + " " + WorkisUnit.text(r.unit, null, units)).trim(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
         }
         if (product != null) AskedLine(r.item, null)
     }
@@ -2512,7 +2513,7 @@ private fun SendPreviewSheet(d: PurchaseListDetail, vm: ListDetailViewModel, onR
                         if (!uncovered) Text(stringResource(if (off) R.string.send_action else R.string.exclude_seller), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable { excluded = if (off) excluded - g.key else excluded + g.key })
                     }
                     Column(Modifier.alpha(if (off) 0.4f else 1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        g.rows.forEach { r -> SendRowLine(r, uncovered) }
+                        g.rows.forEach { r -> SendRowLine(r, uncovered, d.list?.units) }
                     }
                     if (uncovered) Text(stringResource(R.string.uncovered_sub), fontSize = 12.sp, color = colors.faint)
                 }
