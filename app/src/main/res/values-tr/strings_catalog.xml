@@ -667,6 +667,7 @@
     <string name="list_provenance_title">Bu liste nasıl kuruldu</string>
     <string name="list_retry">Yeniden dene</string>
     <string name="list_rows_hint">aday ve gereksinimleri açmak için satıra dokunun</string>
+    <string name="list_rows_no_qty">satırda adet yok — talep, her satırda kaç adet alacağınız yazıldığında gönderilir. Satıcı adedi belli olmayan satıra fiyat veremez: bir adet ile yüz adedin fiyatı aynı olmaz. Satırdaki “adet?” yazısına dokunup yazın.</string>
     <string name="list_stuck">Takıldı</string>
     <string name="list_unarchive">Arşivden çıkar</string>
     <string name="list_withdraw">Talebi geri çek</string>
@@ -902,6 +903,7 @@
     <string name="public_ask_hint">Başvuruyla ilgili her şeyi sorabilirsin — vergi levhası, üyelik, Workis\'in işleyişi. Cevaplar bilgi bankamızdan gelir; cevaplanamayan sorular ekibe ulaşır.</string>
     <string name="public_profile_title">Herkese açık profil</string>
     <string name="published_label">Yayında</string>
+    <string name="qty_ask">adet?</string>
     <string name="qty_field">Miktar</string>
     <string name="question_unit">soru</string>
     <string name="questions_title">Sorular</string>

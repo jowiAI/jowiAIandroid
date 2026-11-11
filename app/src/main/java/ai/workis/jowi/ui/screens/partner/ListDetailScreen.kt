@@ -316,6 +316,17 @@ class ListDetailViewModel : ViewModel() {
         }
     }
 
+    /** A row's quantity (ledger 83): `POST lists/items/{id}/edit/ {qty}` with the text AS TYPED —
+     *  the server reads comma or point, clears on empty and refuses zero or less with its own
+     *  sentence, which becomes the screen note. */
+    fun setQty(itemId: String, text: String) {
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.listItemEdit(itemId, jsonBody("qty" to text.trim())) }
+            note = if (r == null || !r.success) r?.error ?: r?.message ?: err else null
+            load()
+        }
+    }
+
     private fun act(after: Boolean = true, call: suspend () -> Pair<Boolean, String?>) {
         busy = true
         viewModelScope.launch {
@@ -346,9 +357,9 @@ class ListDetailViewModel : ViewModel() {
 
     /** A line of the add-item search (2026-10-05): `{cpid, sellerId, q}` + `sku` only when the
      *  line is ONE variant of a multi-variant family (the per-row search's rule). */
-    fun addSearchResult(r: PLSearchResult, q: String, onNeedsVariant: (PLItem, String) -> Unit) {
+    fun addSearchResult(r: PLSearchResult, q: String, qty: String = "", unit: String = "", onNeedsVariant: (PLItem, String) -> Unit) {
         val sku = if (r.resolved == true && (r.nVariants ?: 0) > 1) r.sku else null
-        addProductRow(r.cpid ?: return, r.sellerId, sku, q, onNeedsVariant = onNeedsVariant)
+        addProductRow(r.cpid ?: return, r.sellerId, sku, q, qty = qty, unit = unit, onNeedsVariant = onNeedsVariant)
     }
 
     /** `fromItem` = the row whose Jowi card added this one ("+ Ekle", 2026-10-20) — the stage
@@ -356,16 +367,19 @@ class ListDetailViewModel : ViewModel() {
      *  on the new row (the variant sheet, when `needs_variant`, opens over it first). */
     private fun addProductRow(
         cpid: String, sellerId: String?, sku: String? = null, q: String? = null, fromItem: String? = null,
+        qty: String? = null, unit: String? = null,
         onAdded: () -> Unit = {}, onNeedsVariant: (PLItem, String) -> Unit,
     ) {
         val listId = id ?: return
         if (busy) return
         busy = true
         viewModelScope.launch {
+            // qty / unit as typed (ledger 83): the server reads comma or point and refuses zero
             val body = jsonBody(
                 "cpid" to cpid, "sellerId" to sellerId?.let { it.toIntOrNull() ?: it },
                 "sku" to sku?.takeIf { it.isNotEmpty() }, "q" to q?.takeIf { it.isNotEmpty() },
                 "fromItem" to fromItem?.takeIf { it.isNotEmpty() },
+                "qty" to qty?.trim()?.takeIf { it.isNotEmpty() }, "unit" to unit?.trim()?.takeIf { it.isNotEmpty() },
             )
             val (r, err) = partnerCall(lang) { Graph.api.listAddProduct(listId, body) }
             busy = false
@@ -376,10 +390,12 @@ class ListDetailViewModel : ViewModel() {
             if (r.needsVariant == true) fresh?.items?.firstOrNull { it.id == r.itemId }?.let { onNeedsVariant(it, cpid) }
         }
     }
-    fun addItem(name: String, qty: Double?, unit: String, fromItem: String? = null, onDone: (Boolean, String?) -> Unit) {
+    /** A free-text row `{name, qty?, unit?}` — `qty` as typed (ledger 83; the server reads comma
+     *  or point and answers a zero or a bad number with its sentence). */
+    fun addItem(name: String, qty: String?, unit: String, fromItem: String? = null, onDone: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
             val (r, err) = partnerCall(lang) {
-                Graph.api.listAddItem(id!!, jsonBody("name" to name, "qty" to qty, "unit" to unit.ifBlank { null }, "fromItem" to fromItem?.takeIf { it.isNotEmpty() }))
+                Graph.api.listAddItem(id!!, jsonBody("name" to name, "qty" to qty?.trim()?.takeIf { it.isNotEmpty() }, "unit" to unit.ifBlank { null }, "fromItem" to fromItem?.takeIf { it.isNotEmpty() }))
             }
             val ok = r?.success == true
             onDone(ok, r?.message ?: r?.error ?: err)
@@ -536,6 +552,9 @@ class ListDetailViewModel : ViewModel() {
      */
     fun firstOpenRow(): PLItem? = detail?.items.orEmpty().firstOrNull { it.complete == false && !it.candidates.isNullOrEmpty() }
 
+    /** The first row the quantity gate waits for (ledger 83) — every row counts, free text too. */
+    fun firstNoQtyRow(): PLItem? = detail?.items.orEmpty().firstOrNull { !hasQty(it) && it.id != null }
+
     fun requestQuotes(excluded: List<String>, onDone: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
             val (r, err) = partnerCall(lang) { Graph.api.listRequestQuotes(id!!, RequestQuotesBody(excluded)) }
@@ -547,6 +566,9 @@ class ListDetailViewModel : ViewModel() {
     fun chase() = act { Graph.api.listChase(id!!).let { true to (it.message ?: it.error) } }
     fun rfqPdfUrl(sellerId: String?): String = WORKIS_BASE_URL + "workis/lists/$id/rfq-pdf/" + (sellerId?.let { "?seller=$it" } ?: "")
 }
+
+/** A row says how many: `qty` above zero (`null` = not written; Django note 2026-11-10). */
+private fun hasQty(item: PLItem): Boolean = (item.qty ?: 0.0) > 0.0
 
 private data class SendGroup(val key: String, val rows: List<PLSendRow>)
 
@@ -576,6 +598,10 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
     var pickVariantCpid by remember { mutableStateOf<String?>(null) }
     // the row "Teklif iste" was refused for — opened once the send sheet is gone
     var pendingPick by remember { mutableStateOf<PLItem?>(null) }
+    // the row whose quantity is being written (ledger 83), and the one the send gate named —
+    // opened once the send sheet is gone
+    var qtyItem by remember { mutableStateOf<PLItem?>(null) }
+    var pendingQty by remember { mutableStateOf<PLItem?>(null) }
     // an unsent note / letter in a field holds the changes/ re-read back (the pill waits)
     var typing by remember { mutableStateOf(false) }
     var showAdd by remember { mutableStateOf(false) }
@@ -591,6 +617,10 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
     LaunchedEffect(showSend, pendingPick) {
         val p = pendingPick
         if (!showSend && p != null) { delay(350); pendingPick = null; pickVariantCpid = null; pickItem = p }
+    }
+    LaunchedEffect(showSend, pendingQty) {
+        val q = pendingQty
+        if (!showSend && q != null) { delay(350); pendingQty = null; qtyItem = q }
     }
 
     // the web shows the pencil for draft and quoting only (panel_list_detail.html:185)
@@ -664,6 +694,7 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
                                         onNeedsVariant = { row, cpid -> pickVariantCpid = cpid; pickItem = row },
                                         onTyping = { typing = it },
                                         pageScroll = pageScroll,
+                                        onQty = { qtyItem = it },
                                     )
                                     ListStage.Request -> RequestPage(d, vm, withdrawable = vm.withdrawable ?: canWithdraw)
                                     ListStage.Quotes -> DecisionPage(
@@ -692,16 +723,22 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
     pickItem?.let { item ->
         key(item.id) { CandidateSheet(item, d?.isDraft == true, vm, openVariantsFor = pickVariantCpid, prices = d?.showsPrices ?: true) { pickItem = null; pickVariantCpid = null } }
     }
-    if (showAdd) AddItemSheet(vm, prices = d?.showsPrices ?: true, onPick = { r, q ->
-        // a catalogue line: the sheet is gone; `needs_variant` opens that row's variant list
+    if (showAdd) AddItemSheet(vm, prices = d?.showsPrices ?: true, onPick = { r, q, qty, unit ->
+        // a catalogue line, named and given its quantity (ledger 83): the sheet is gone;
+        // `needs_variant` opens that row's variant list
         showAdd = false
-        vm.addSearchResult(r, q) { row, cpid -> pickVariantCpid = cpid; pickItem = row }
+        vm.addSearchResult(r, q, qty, unit) { row, cpid -> pickVariantCpid = cpid; pickItem = row }
     }) { showAdd = false }
     if (showSend && d != null) SendPreviewSheet(d, vm, onRefused = { msg, row ->
         // the gate's sentence names the rows (2026-10-03): it becomes the screen note and
         // the first open row opens once the send sheet is gone
-        vm.note = msg; vm.shown = ListStage.List; pendingPick = row; showSend = false
+        vm.note = msg; vm.shown = ListStage.List; pendingQty = null; pendingPick = row; showSend = false
+    }, onNoQty = { msg, row ->
+        // the quantity gate (ledger 83): no row waits for its product or variant, so the
+        // first row without a quantity opens its quantity dialog
+        vm.note = msg; vm.shown = ListStage.List; pendingQty = row; showSend = false
     }) { showSend = false }
+    qtyItem?.let { item -> key(item.id) { QtyDialog(item, onSave = { text -> item.id?.let { vm.setQty(it, text) }; qtyItem = null }) { qtyItem = null } } }
     pdf?.let { (title, url) -> PdfViewerDialog(title, url = url, fileName = if (title == rfqTitle) "talep-formu.pdf" else "teklif.pdf") { pdf = null } }
     if (showLetters && d != null) OrderLettersSheet(d, vm) { showLetters = false }
     if (requoteAsk) {
@@ -975,6 +1012,7 @@ private fun ChatInvitesSection(d: PurchaseListDetail, onThread: (String) -> Unit
 private fun ItemsSegment(
     d: PurchaseListDetail, vm: ListDetailViewModel, onPick: (PLItem) -> Unit, onAdd: () -> Unit,
     onNeedsVariant: (PLItem, String) -> Unit, onTyping: (Boolean) -> Unit, pageScroll: ScrollState,
+    onQty: (PLItem) -> Unit = {},
 ) {
     val colors = WorkisTheme.colors
     // the web's order: Jowi's note, then how the list was built, Jowi's stage, then the rows
@@ -996,13 +1034,24 @@ private fun ItemsSegment(
                 },
                 fontSize = 12.sp, lineHeight = 17.sp,
             )
+            // rows that say no quantity yet (the web's `#liQtyNote`, ledger 83) — the same grammar
+            val noQty = d.items.orEmpty().count { !hasQty(it) }
+            if (noQty > 0) Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = colors.ink, fontWeight = FontWeight.SemiBold)) { append("$noQty ") }
+                    withStyle(SpanStyle(color = colors.muted)) { append(stringResource(R.string.list_rows_no_qty)) }
+                },
+                fontSize = 12.sp, lineHeight = 17.sp,
+            )
         }
         d.items.orEmpty().forEachIndexed { i, item ->
-            // the buyer's "acele" (ledger 79): a leading swipe on a draft's row, never a dismiss
-            UrgentSwipe(urgent = item.urgent == true, enabled = d.isDraft && item.id != null, onToggle = { item.id?.let { vm.setUrgent(it, item.urgent != true) } }) {
+            // the buyer's "acele" (ledger 79): a leading swipe on a draft's row, never a dismiss;
+            // the trailing swipe opens the row's quantity (ledger 83)
+            UrgentSwipe(urgent = item.urgent == true, enabled = d.isDraft && item.id != null, onToggle = { item.id?.let { vm.setUrgent(it, item.urgent != true) } }, onQty = { onQty(item) }) {
                 ItemRow(
                     item, draft = d.isDraft, prices = d.showsPrices, onClick = { onPick(item) }, onDelete = { item.id?.let { vm.deleteItem(it) } },
                     card = vm.cardOf(item), onBadge = { item.id?.let(vm::showStage) },
+                    onQty = { if (item.id != null) onQty(item) },
                 )
             }
             if (i < d.items.orEmpty().lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
@@ -1164,7 +1213,7 @@ private fun noteKindWord(kind: String?): String = stringResource(
 
 /** `prices` false = a buyer seat (`list.prices`): no catalogue price, range or placeholder. */
 @Composable
-private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -> Unit, onDelete: () -> Unit, card: PLUseCard? = null, onBadge: () -> Unit = {}) {
+private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -> Unit, onDelete: () -> Unit, card: PLUseCard? = null, onBadge: () -> Unit = {}, onQty: () -> Unit = {}) {
     val colors = WorkisTheme.colors
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
         Text("${item.n ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint, modifier = Modifier.width(24.dp))
@@ -1194,7 +1243,18 @@ private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -
                     Spacer(Modifier.width(6.dp))
                     UrgentWord()
                 }
-                if (item.qty != null || !item.unit.isNullOrEmpty()) {
+                if (draft) {
+                    // a draft row's quantity is its own door (ledger 83): the number as written,
+                    // or "adet?" in the accent while the row says none — the send waits for it
+                    Spacer(Modifier.width(6.dp))
+                    val unit = item.unit.orEmpty()
+                    val tap = Modifier.clickable(role = Role.Button, onClick = onQty).padding(horizontal = 2.dp)
+                    if (hasQty(item)) {
+                        Text((WorkisMoney.qty(item.qty) + " " + unit).trim(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink, softWrap = false, modifier = tap)
+                    } else {
+                        Text((stringResource(R.string.qty_ask) + " " + unit).trim(), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.accentText, softWrap = false, modifier = tap)
+                    }
+                } else if (item.qty != null || !item.unit.isNullOrEmpty()) {
                     Spacer(Modifier.width(6.dp))
                     Text(WorkisMoney.qty(item.qty) + " " + item.unit.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
                 }
@@ -1246,30 +1306,89 @@ private fun UrgentWord() {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun UrgentSwipe(urgent: Boolean, enabled: Boolean, onToggle: () -> Unit, content: @Composable () -> Unit) {
+private fun UrgentSwipe(urgent: Boolean, enabled: Boolean, onToggle: () -> Unit, onQty: (() -> Unit)? = null, content: @Composable () -> Unit) {
     if (!enabled) { content(); return }
     val colors = WorkisTheme.colors
     val toggle by rememberUpdatedState(onToggle)
+    val qty by rememberUpdatedState(onQty)
     val label = stringResource(if (urgent) R.string.not_urgent_action else R.string.urgent_action)
+    val qtyLabel = stringResource(R.string.qty_field)
     val state = rememberSwipeToDismissBoxState()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     SwipeToDismissBox(
         state = state,
-        enableDismissFromEndToStart = false,
+        // the trailing swipe = "Miktar" (ledger 83), beside "Acele" as on iOS's swipe
+        enableDismissFromEndToStart = onQty != null,
         // never a dismiss: the row settles back, the server's re-read draws the word
-        onDismiss = { v -> if (v == SwipeToDismissBoxValue.StartToEnd) toggle(); scope.launch { state.reset() } },
-        modifier = Modifier.semantics { customActions = listOf(CustomAccessibilityAction(label) { toggle(); true }) },
+        onDismiss = { v ->
+            when (v) {
+                SwipeToDismissBoxValue.StartToEnd -> toggle()
+                SwipeToDismissBoxValue.EndToStart -> qty?.invoke()
+                else -> Unit
+            }
+            scope.launch { state.reset() }
+        },
+        modifier = Modifier.semantics {
+            customActions = listOfNotNull(
+                CustomAccessibilityAction(label) { toggle(); true },
+                qty?.let { q -> CustomAccessibilityAction(qtyLabel) { q(); true } },
+            )
+        },
         backgroundContent = {
-            Row(
-                Modifier.fillMaxSize().background(BeigeBg, RoundedCornerShape(10.dp)).padding(start = 14.dp),
-                horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(WorkisIcons.Clock, contentDescription = null, tint = Beige, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Beige)
+            if (state.dismissDirection == SwipeToDismissBoxValue.EndToStart) {
+                Row(
+                    Modifier.fillMaxSize().background(colors.ink.copy(alpha = 0.06f), RoundedCornerShape(10.dp)).padding(end = 14.dp),
+                    horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(qtyLabel, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.ink)
+                    Spacer(Modifier.width(8.dp))
+                    Icon(WorkisIcons.Pencil, contentDescription = null, tint = colors.muted, modifier = Modifier.size(16.dp))
+                }
+            } else {
+                Row(
+                    Modifier.fillMaxSize().background(BeigeBg, RoundedCornerShape(10.dp)).padding(start = 14.dp),
+                    horizontalArrangement = Arrangement.Start, verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(WorkisIcons.Clock, contentDescription = null, tint = Beige, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Beige)
+                }
             }
         },
     ) { Box(Modifier.fillMaxWidth().background(colors.surface)) { content() } }
+}
+
+/**
+ * A row's quantity (ledger 83): ONE decimal field, the row's name as the title, "Miktar · <unit>"
+ * as the placeholder; "Tamam" hands the text over AS TYPED (empty clears it — the server refuses
+ * zero or a bad number with its own sentence, which lands on the screen note).
+ */
+@Composable
+private fun QtyDialog(item: PLItem, onSave: (String) -> Unit, onDismiss: () -> Unit) {
+    val colors = WorkisTheme.colors
+    var text by remember { mutableStateOf(if (hasQty(item)) WorkisMoney.qty(item.qty) else "") }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { delay(100); runCatching { focus.requestFocus() } }
+    val title = item.selected?.name?.takeIf { it.isNotEmpty() } ?: item.name.orEmpty()
+    val placeholder = listOf(stringResource(R.string.qty_field), item.unit.orEmpty()).filter { it.isNotEmpty() }.joinToString(" · ")
+    val fc = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = colors.surface,
+        title = { Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = colors.ink, maxLines = 3, overflow = TextOverflow.Ellipsis) },
+        text = {
+            OutlinedTextField(
+                value = text, onValueChange = { text = it },
+                placeholder = { Text(placeholder, color = colors.faint) },
+                singleLine = true, shape = RoundedCornerShape(14.dp), colors = fc,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onSave(text) }),
+                modifier = Modifier.fillMaxWidth().focusRequester(focus),
+            )
+        },
+        confirmButton = { TextButton(onClick = { onSave(text) }) { Text(stringResource(R.string.done), color = colors.accentText, fontWeight = FontWeight.SemiBold) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = colors.muted) } },
+    )
 }
 
 /**
@@ -2149,9 +2268,14 @@ private fun CandidateRow(c: PLCandidate, bound: Boolean, prices: Boolean, onClic
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddItemSheet(vm: ListDetailViewModel, prices: Boolean, onPick: (PLSearchResult, String) -> Unit, onDismiss: () -> Unit) {
+private fun AddItemSheet(vm: ListDetailViewModel, prices: Boolean, onPick: (PLSearchResult, String, String, String) -> Unit, onDismiss: () -> Unit) {
     val colors = WorkisTheme.colors
     var name by remember { mutableStateOf("") }
+    // the catalogue line chosen (ledger 83): it names the row, the quantity field takes the
+    // focus, and the request goes on "Ekle" — with a number or without (never required here)
+    var picked by remember { mutableStateOf<PLSearchResult?>(null) }
+    val nameFocus = remember { FocusRequester() }
+    val qtyFocus = remember { FocusRequester() }
     // `GET lists/search/?q=` as the name is typed (2026-10-05): 300 ms, two characters at least
     var results by remember { mutableStateOf<List<PLSearchResult>>(emptyList()) }
     val typed = name.trim()
@@ -2160,28 +2284,63 @@ private fun AddItemSheet(vm: ListDetailViewModel, prices: Boolean, onPick: (PLSe
         delay(300)
         results = vm.searchNew(typed)
     }
+    LaunchedEffect(picked) {
+        // the field the focus goes to appears/disappears with the pick: let it compose first
+        delay(50)
+        runCatching { if (picked != null) qtyFocus.requestFocus() }
+    }
     var qty by remember { mutableStateOf("") }
     var unit by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    fun submit() {
+        if (busy || vm.busy) return
+        val p = picked
+        // a catalogue line: the caller posts it once this sheet is gone
+        if (p != null) { onPick(p, typed, qty.trim(), unit.trim()); return }
+        if (name.isBlank()) return
+        busy = true
+        vm.addItem(name.trim(), qty.trim(), unit.trim()) { ok, msg -> busy = false; if (ok) onDismiss() else error = msg }
+    }
     val fc = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue)
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.surface) {
         Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp).imePadding(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.add_item), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = colors.ink)
-            OutlinedTextField(value = name, onValueChange = { name = it }, placeholder = { Text(stringResource(R.string.item_name), color = colors.faint) }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = fc, modifier = Modifier.fillMaxWidth())
-            if (results.isNotEmpty()) {
+            val p = picked
+            if (p != null) {
+                // the line stands in the name place; × undoes the pick
+                Row(
+                    Modifier.fillMaxWidth().border(1.dp, colors.border, RoundedCornerShape(14.dp)).padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.weight(1f)) { SearchLine(p, prices) {} }
+                    IconButton(onClick = { picked = null; runCatching { nameFocus.requestFocus() } }) {
+                        Icon(WorkisIcons.Cross, contentDescription = stringResource(R.string.cancel), tint = colors.faint, modifier = Modifier.size(16.dp))
+                    }
+                }
+            } else {
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it }, placeholder = { Text(stringResource(R.string.item_name), color = colors.faint) },
+                    singleLine = true, shape = RoundedCornerShape(14.dp), colors = fc,
+                    // the IME's next on a typed name moves to the quantity (ledger 83)
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(onNext = { runCatching { qtyFocus.requestFocus() } }),
+                    modifier = Modifier.fillMaxWidth().focusRequester(nameFocus),
+                )
+            }
+            if (results.isNotEmpty() && p == null) {
                 Eyebrow(stringResource(R.string.add_item_from_catalogue).uppercase())
-                results.forEach { r -> SearchLine(r, prices) { if (!busy && !vm.busy) onPick(r, typed) } }
+                results.forEach { r -> SearchLine(r, prices) { if (!busy && !vm.busy) { picked = r; error = null } } }
                 // the manual row stays the fallback below the catalogue lines
                 Eyebrow(stringResource(R.string.add_item_manual).uppercase())
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(value = qty, onValueChange = { qty = it }, placeholder = { Text(stringResource(R.string.qty_field), color = colors.faint) }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = fc, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f))
+                OutlinedTextField(value = qty, onValueChange = { qty = it }, placeholder = { Text(stringResource(R.string.qty_field), color = colors.faint) }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = fc, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f).focusRequester(qtyFocus))
                 OutlinedTextField(value = unit, onValueChange = { unit = it }, placeholder = { Text(stringResource(R.string.unit_field), color = colors.faint) }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = fc, modifier = Modifier.weight(1f))
             }
             error?.let { Text(it, color = colors.danger, fontSize = 13.sp) }
             Row { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = colors.muted) }; Spacer(Modifier.weight(1f))
-                Button(onClick = { busy = true; vm.addItem(name.trim(), qty.replace(',', '.').toDoubleOrNull(), unit.trim()) { ok, msg -> busy = false; if (ok) onDismiss() else error = msg } }, enabled = name.isNotBlank() && !busy, colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill), modifier = Modifier.height(44.dp)) {
+                Button(onClick = { submit() }, enabled = (picked != null || name.isNotBlank()) && !busy, colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill), modifier = Modifier.height(44.dp)) {
                     if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = OnKiremitFill) else Text(stringResource(R.string.add_item), fontWeight = FontWeight.SemiBold)
                 } }
             Spacer(Modifier.height(20.dp))
@@ -2192,7 +2351,7 @@ private fun AddItemSheet(vm: ListDetailViewModel, prices: Boolean, onPick: (PLSe
 /** "Teklif iste" — who receives what: seller sections with Skip/Send per seller, the uncovered group last. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SendPreviewSheet(d: PurchaseListDetail, vm: ListDetailViewModel, onRefused: (String?, PLItem) -> Unit, onDismiss: () -> Unit) {
+private fun SendPreviewSheet(d: PurchaseListDetail, vm: ListDetailViewModel, onRefused: (String?, PLItem) -> Unit, onNoQty: (String?, PLItem) -> Unit, onDismiss: () -> Unit) {
     val colors = WorkisTheme.colors
     val groups = remember(d) { sendGroups(d) }
     var excluded by remember { mutableStateOf(setOf<String>()) }
@@ -2229,9 +2388,12 @@ private fun SendPreviewSheet(d: PurchaseListDetail, vm: ListDetailViewModel, onR
                         // a refusal while a matched row is not complete = the variant gate (2026-10-03):
                         // the sentence goes to the list screen and that row opens there
                         val open = if (ok) null else vm.firstOpenRow()
+                        // else the quantity gate (ledger 83): the first row without a quantity
+                        val noQty = if (ok || open != null) null else vm.firstNoQtyRow()
                         when {
                             ok -> onDismiss()
                             open != null -> onRefused(msg, open)
+                            noQty != null -> onNoQty(msg, noQty)
                             else -> error = msg
                         }
                     }
