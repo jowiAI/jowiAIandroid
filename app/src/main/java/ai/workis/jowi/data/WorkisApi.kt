@@ -628,6 +628,11 @@ interface WorkisApi {
     @POST("workis/lists/{id}/withdraw/")
     suspend fun listWithdraw(@Path("id") id: String): ListActionResult
 
+    /** A withdrawn request starts again (2026-11-11, ledger 88): no body → `{success, list}`, `list` is
+     *  the NEW draft's row (same rows; no request, quotes or yazışma); 409 = `error`. The old list stays. */
+    @POST("workis/lists/{id}/copy/")
+    suspend fun listCopy(@Path("id") id: String): ListActionResult
+
     /** The list's name, by its owner (2026-10-19): a draft or a list out for quotes; `{success, list}`,
      *  400 under two characters, 409 once ordered/closed — `error` carries the sentence. */
     @POST("workis/lists/{id}/rename/")

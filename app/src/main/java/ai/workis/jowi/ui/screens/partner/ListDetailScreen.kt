@@ -180,14 +180,37 @@ class ListDetailViewModel : ViewModel() {
     var withdrawing by mutableStateOf(false)
         private set
 
-    fun bind(listId: String) { if (id != listId) { id = listId; detail = null; withdrawable = null; load(); readWithdrawable() } }
+    /** `canCopy` of this list's row (ledger 88) — not on the detail either; read with `withdrawable`. */
+    var copyable by mutableStateOf(false)
+        private set
+    var copying by mutableStateOf(false)
+        private set
+
+    fun bind(listId: String) { if (id != listId) { id = listId; detail = null; withdrawable = null; copyable = false; load(); readWithdrawable() } }
+
+    /** `POST lists/{id}/copy/` (ledger 88): the new draft's id on success, the server's sentence on the note otherwise. */
+    fun copyAsDraft(onOpen: (String) -> Unit) {
+        val listId = id ?: return
+        if (copying) return
+        copying = true
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.listCopy(listId) }
+            copying = false
+            val newId = r?.list?.id?.takeIf { r.success && it.isNotEmpty() }
+            if (newId != null) onOpen(newId) else note = r?.error ?: r?.message ?: err
+        }
+    }
 
     /** This list's row from `GET lists/` (absent = archived, so nothing to withdraw). */
     fun readWithdrawable() {
         val listId = id ?: return
         viewModelScope.launch {
             val (r, _) = partnerCall(lang) { Graph.api.lists() }
-            r?.lists?.let { rows -> withdrawable = rows.firstOrNull { it.id == listId }?.canWithdraw == true }
+            val row = r?.lists?.firstOrNull { it.id == listId }
+            r?.lists?.let { withdrawable = row?.canWithdraw == true }
+            // not among the open lists = archived (a withdrawn request is): its row is in the archive
+            val mine = row ?: r?.let { partnerCall(lang) { Graph.api.lists(archived = 1) }.first?.lists?.firstOrNull { it.id == listId } }
+            if (id == listId) copyable = mine?.canCopy == true
         }
     }
 
@@ -665,6 +688,8 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
                     Header(d)
                     ListLinks(d, onOpenList)
                     NoteBand(vm.note)
+                    // a withdrawn request starts again as a new draft (ledger 88)
+                    if (vm.copyable) CopyAsDraftButton(vm.copying) { vm.copyAsDraft(onOpenList) }
                     if (d.isWorking) Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = colors.faint)
                         Spacer(Modifier.width(10.dp))

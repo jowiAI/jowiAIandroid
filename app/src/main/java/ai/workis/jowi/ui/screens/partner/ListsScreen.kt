@@ -121,6 +121,21 @@ class ListsViewModel : ViewModel() {
         }
     }
 
+    /** `POST lists/{id}/copy/` (ledger 88): the new draft's page opens; a refusal is the screen note. */
+    fun copy(row: PurchaseListRow, onOpen: (String) -> Unit) {
+        val id = row.id ?: return
+        if (busy) return
+        busy = true; note = null
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.listCopy(id) }
+            busy = false
+            val newId = r?.list?.id?.takeIf { r.success && it.isNotEmpty() }
+            if (newId == null) note = r?.error ?: r?.message ?: err
+            load()
+            if (newId != null) onOpen(newId)
+        }
+    }
+
     fun upload(bytes: ByteArray, name: String) {
         busy = true; note = null
         viewModelScope.launch {
@@ -202,10 +217,14 @@ fun ListsScreen(vm: ListsViewModel, onOpen: (String) -> Unit) {
                 archived != null -> {
                     if (archived.isEmpty()) item { Text(stringResource(R.string.lists_archived_empty), fontSize = 13.sp, color = colors.faint) }
                     items(archived, key = { it.id ?: it.hashCode() }) { row ->
-                        SwipeRow(
-                            label = stringResource(R.string.list_unarchive), icon = WorkisIcons.Archive, tint = colors.blue,
-                            enabled = !vm.busy, onSwipe = { vm.act(row, "unarchive") },
-                        ) { ListRow(row, vm) { row.id?.let(onOpen) } }
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            SwipeRow(
+                                label = stringResource(R.string.list_unarchive), icon = WorkisIcons.Archive, tint = colors.blue,
+                                enabled = !vm.busy, onSwipe = { vm.act(row, "unarchive") },
+                            ) { ListRow(row, vm) { row.id?.let(onOpen) } }
+                            // a withdrawn request lives here: it starts again as a new draft (ledger 88)
+                            if (row.canCopy == true) CopyAsDraftButton(vm.busy) { vm.copy(row, onOpen) }
+                        }
                     }
                 }
                 else -> item { Box(Modifier.fillMaxWidth().padding(vertical = 30.dp), contentAlignment = Alignment.Center) { WorkisMark(size = 26, breathing = true) } }
@@ -249,6 +268,7 @@ fun ListsScreen(vm: ListsViewModel, onOpen: (String) -> Unit) {
                         }
                         else -> ListRow(row, vm) { row.id?.let(onOpen) }
                     }
+                    if (row.canCopy == true) CopyAsDraftButton(vm.busy) { vm.copy(row, onOpen) }
                 }
                 item {
                     Row(
@@ -381,3 +401,18 @@ internal fun WithdrawButton(busy: Boolean, startArmed: Boolean = false, onConfir
 @Composable
 internal fun listStageWord(s: String?): String? =
     if (s == "checking") stringResource(R.string.ls_checking) else listStageText(s)
+
+/** "Bu listeden yeni taslak" (ledger 88): a plain row button — nothing is deleted and no seller
+ *  hears of it, so there is no confirmation. */
+@Composable
+internal fun CopyAsDraftButton(busy: Boolean, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().clickable(enabled = !busy, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick).padding(horizontal = 4.dp, vertical = 6.dp),
+    ) {
+        Icon(WorkisIcons.Copy, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(stringResource(R.string.list_copy_as_draft), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink)
+    }
+}

@@ -663,6 +663,7 @@
     <string name="line_mark_delivered_confirm">The buyer then confirms, and the stage amount is released.</string>
     <string name="link_hint">Tapping the link in the e-mail works too.</string>
     <string name="list_archive">Archive</string>
+    <string name="list_copy_as_draft">New draft from this list</string>
     <string name="list_open_rows">rows await your pick — the request goes out once every row has its product and variant. A row without a product would ask the sellers about every similar product on it; a product without a variant cannot be quoted firmly. Open the row and choose.</string>
     <string name="list_provenance_title">How this list was built</string>
     <string name="list_retry">Try again</string>

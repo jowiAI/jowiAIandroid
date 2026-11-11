@@ -163,6 +163,8 @@ data class PurchaseListRow(
     /** Stage `error`, or a working stage silent for 3 minutes. */
     val stuck: Boolean? = null,
     val canRetry: Boolean? = null,
+    /** A new draft can be built from this list (ledger 88; today: a `withdrawn` request). */
+    val canCopy: Boolean? = null,
     val stageSince: String? = null,
     /** The screens' own words ("teklif aşamasında" / "okunuyor") — drawn before the app's map. */
     val statusLabel: String? = null,

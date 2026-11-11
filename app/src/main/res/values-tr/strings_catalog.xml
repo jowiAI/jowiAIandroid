@@ -663,6 +663,7 @@
     <string name="line_mark_delivered_confirm">Ardından alıcı onaylar ve aşama tutarı serbest bırakılır.</string>
     <string name="link_hint">Kod yerine e-postadaki bağlantıya dokunman da yeterli.</string>
     <string name="list_archive">Arşivle</string>
+    <string name="list_copy_as_draft">Bu listeden yeni taslak</string>
     <string name="list_open_rows">satır seçiminizi bekliyor — talep, her satırın ürünü ve varyantı seçildiğinde gönderilir. Ürünü seçilmemiş satır satıcılara üzerindeki bütün benzer ürünleri sorardı; varyantı seçilmemiş ürüne kesin teklif verilemez. Satırı açın ve seçin.</string>
     <string name="list_provenance_title">Bu liste nasıl kuruldu</string>
     <string name="list_retry">Yeniden dene</string>
