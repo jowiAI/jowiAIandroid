@@ -6,6 +6,7 @@ import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.withResumed
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
@@ -24,6 +25,11 @@ suspend fun biometricGate(
     val authenticators = BIOMETRIC_WEAK or DEVICE_CREDENTIAL
     val can = BiometricManager.from(activity).canAuthenticate(authenticators)
     if (can != BiometricManager.BIOMETRIC_SUCCESS) return true
+
+    // The prompt can only be shown by a RESUMED activity: asked while the app starts behind the
+    // lock screen (or in the background) it is dropped without any callback, and the launch
+    // would wait on the splash for ever. So the gate waits here until the app is in front.
+    activity.lifecycle.withResumed { }
 
     return suspendCancellableCoroutine { cont ->
         val prompt = BiometricPrompt(

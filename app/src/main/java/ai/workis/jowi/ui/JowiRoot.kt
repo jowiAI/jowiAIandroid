@@ -57,6 +57,13 @@ fun JowiRoot() {
         if (phase == LaunchPhase.Login && isAuthenticated) phase = LaunchPhase.Main
     }
 
+    // a sign-in on the login screen is an EVENT: it opens the app even when the flag above did
+    // not change (a kept token after a cancelled biometric step)
+    val signIns by Graph.auth.signIns.collectAsState()
+    LaunchedEffect(signIns) {
+        if (signIns > 0 && phase == LaunchPhase.Login && Graph.auth.hasToken) phase = LaunchPhase.Main
+    }
+
     if (showApply) {
         ApplyScreen(prefillEmail = doorEmail, onClose = { showApply = false; doorEmail = null })
         return

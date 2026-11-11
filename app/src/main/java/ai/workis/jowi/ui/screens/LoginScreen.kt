@@ -144,7 +144,9 @@ fun LoginScreen(onApply: (String) -> Unit = {}) {
                 // ask before opening one — a mistyped address used to become an
                 // empty Guest seat that nobody ever found again
                 is ApiResult.Ok -> when (val outcome = r.value) {
-                    is AuthRepository.SignIn.Opened -> Unit // root observes isAuthenticated
+                    // the session is open and the root takes over: the button stays busy so
+                    // the single-use code cannot be sent a second time
+                    is AuthRepository.SignIn.Opened -> return@launch
                     is AuthRepository.SignIn.ConfirmSignup -> confirmSignup = outcome
                 }
                 is ApiResult.Err -> error = r.message

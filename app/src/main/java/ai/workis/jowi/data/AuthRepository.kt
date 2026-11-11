@@ -58,6 +58,21 @@ class AuthRepository(
         return r
     }
 
+    /**
+     * Counts the sign-ins made on the login screen (code, signup confirm, passkey, password).
+     * The root moves to the app on THIS event, not on `isAuthenticated` changing: with a kept
+     * token (the launch's biometric step cancelled → login screen) the flag is already true,
+     * a new sign-in leaves it true, and the screen used to stay — the second tap then re-sent
+     * the single-use code and got a 400.
+     */
+    private val _signIns = MutableStateFlow(0)
+    val signIns: StateFlow<Int> = _signIns
+
+    private fun openSession(resp: AuthResponse) {
+        applyAuth(resp)
+        if (store.token != null) _signIns.value += 1
+    }
+
     private fun applyAuth(resp: AuthResponse) {
         resp.token?.let { store.token = it }
         resp.user?.let {
@@ -117,7 +132,17 @@ class AuthRepository(
     }
 
     suspend fun verifyOtp(email: String, code: String): ApiResult<SignIn> {
-        val r = safeCall(lang()) { api.otpVerify(OtpVerifyBody(normalizedEmail(email), code.trim())) }
+        // a refused code (wrong, spent, older than ten minutes) is a 400 carrying the server's
+        // sentence — show that, not the status idiom "Bir sorun oluştu (400)"
+        val r = try {
+            ApiResult.Ok(api.otpVerify(OtpVerifyBody(normalizedEmail(email), code.trim())))
+        } catch (e: HttpException) {
+            ApiResult.Err(e.code(), messageFromBody(e, lang()))
+        } catch (e: java.io.IOException) {
+            ApiResult.Err(null, statusMessage(null, lang()))
+        } catch (e: Exception) {
+            ApiResult.Err(null, statusMessage(-1, lang()))
+        }
         return when (r) {
             is ApiResult.Err -> r
             is ApiResult.Ok -> {
@@ -127,7 +152,7 @@ class AuthRepository(
                     // nothing is stored: there is no session until the person says yes
                     ApiResult.Ok(SignIn.ConfirmSignup(ticket, resp.email ?: normalizedEmail(email)))
                 } else {
-                    applyAuth(resp)
+                    openSession(resp)
                     syncPreferredLanguage()
                     ApiResult.Ok(SignIn.Opened)
                 }
@@ -142,7 +167,7 @@ class AuthRepository(
      */
     suspend fun confirmSignup(ticket: String): ApiResult<Unit> =
         try {
-            applyAuth(api.signupConfirm(SignupConfirmBody(ticket)))
+            openSession(api.signupConfirm(SignupConfirmBody(ticket)))
             syncPreferredLanguage()
             ApiResult.Ok(Unit)
         } catch (e: HttpException) {
@@ -186,7 +211,7 @@ class AuthRepository(
 
     /** A passkey sign-in answers in `otp/verify/`'s shape; it lands the same way. */
     suspend fun adoptPasskeySession(resp: AuthResponse) {
-        applyAuth(resp)
+        openSession(resp)
         syncPreferredLanguage()
     }
 
@@ -211,7 +236,7 @@ class AuthRepository(
             }
             return false
         }
-        applyAuth(resp)
+        openSession(resp)
         syncPreferredLanguage()
         // the old key is a separate per-device session now: close it deliberately
         if (!replaced.isNullOrEmpty() && replaced != store.token) {
@@ -225,7 +250,7 @@ class AuthRepository(
 
     /** Legacy password login — kept for testing while the OTP backend gap is open. */
     suspend fun loginWithPassword(email: String, password: String): ApiResult<Unit> =
-        safeCall(lang()) { applyAuth(api.login(LoginBody(email, password))) }
+        safeCall(lang()) { openSession(api.login(LoginBody(email, password))) }
 
     /**
      * Why a stored session was refused, for the login screen to say. Null means

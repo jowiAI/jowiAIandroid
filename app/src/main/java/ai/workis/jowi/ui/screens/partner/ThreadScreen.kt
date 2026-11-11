@@ -448,12 +448,18 @@ fun ThreadScreen(door: ThreadDoor, onBack: () -> Unit, onContract: (String, Stri
                 // the seven term cards live in a strip above the turns; it opens
                 // by itself while something is still missing
                 val terms = p.terms.orEmpty()
+                // while the cards are open the strip takes two thirds of the page and scrolls
+                // inside it; the turns keep the rest (it used to push them — and its own
+                // lower cards — off the screen, with nothing scrolling)
+                var termsOpen by remember { mutableStateOf(false) }
                 if (terms.isNotEmpty()) {
                     TermsStrip(
                         terms, p.nTermsOk ?: 0, p.nTerms ?: terms.size, vm,
                         // a date, a cargo level, a payment way is CHOSEN; the rest is written
                         onEdit = { if (it.key in choiceKeys && p.termChoices != null) choiceTerm = it else editTerm = it },
                         onConfirmAmendment = { confirmTerm = it },
+                        modifier = if (termsOpen) Modifier.weight(2f, fill = false) else Modifier,
+                        onOpen = { termsOpen = it },
                     )
                     Spacer(Modifier.height(10.dp))
                 }
@@ -1102,11 +1108,14 @@ private fun TermsStrip(
     vm: ThreadViewModel,
     onEdit: (OrderTerm) -> Unit,
     onConfirmAmendment: (OrderTerm) -> Unit,
+    modifier: Modifier = Modifier,
+    onOpen: (Boolean) -> Unit = {},
 ) {
     val colors = WorkisTheme.colors
     // open by itself while a term is still missing
     var open by remember(terms.size) { mutableStateOf(terms.any { it.status == "missing" }) }
-    Column(Modifier.fillMaxWidth()) {
+    LaunchedEffect(open) { onOpen(open) }
+    Column(modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -1123,7 +1132,9 @@ private fun TermsStrip(
         }
         if (open) {
             Spacer(Modifier.height(8.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // the seven cards are taller than the screen: they scroll inside the strip's share
+            // of the page, so every card (and its buttons) can be reached
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 terms.forEach { t -> TermCard(t, vm, onEdit, onConfirmAmendment) }
             }
         }

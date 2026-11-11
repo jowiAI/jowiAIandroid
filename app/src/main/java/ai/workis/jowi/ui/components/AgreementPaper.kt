@@ -3,6 +3,12 @@ package ai.workis.jowi.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -314,7 +320,13 @@ private fun SignBand(
     readOnly: Boolean = false,
 ) {
     var hadFocus by remember { mutableStateOf(false) }
-    Column(modifier) {
+    // The keyboard must never cover the cell being signed: while it has the focus, every step of
+    // the keyboard's rise asks the scrolling page to bring the WHOLE band (rule, cell, date) above
+    // it — the text field alone only keeps its caret line visible, and not on every screen.
+    val bring = remember { BringIntoViewRequester() }
+    val imeBottom = WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(hadFocus, imeBottom) { if (hadFocus && imeBottom > 0) runCatching { bring.bringIntoView() } }
+    Column(modifier.bringIntoViewRequester(bring)) {
         Box(Modifier.fillMaxWidth().height(2.5.dp).background(PaperInk))
         Row(Modifier.fillMaxWidth().height(62.dp)) {
             // dark "SIGN HERE ▸" tab
