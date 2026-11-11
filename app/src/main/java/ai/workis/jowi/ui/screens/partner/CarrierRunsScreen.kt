@@ -245,7 +245,7 @@ private fun RunsPageView(vm: CargoRunsViewModel, onBack: () -> Unit, onVehicles:
             Icon(WorkisIcons.Route, contentDescription = stringResource(R.string.cargo_plan_run), tint = colors.ink, modifier = Modifier.size(22.dp))
         }
     }) {
-        ChangesWatch("cargo") { vm.load() } // a pickup ticked elsewhere, a re-plan from the web
+        ChangesWatch("cargo", "orders") { vm.load() } // a pickup ticked elsewhere, a re-plan from the web
         DaySwitch(day) { day = it }
         Spacer(Modifier.height(12.dp))
         val runs = vm.runs

@@ -98,8 +98,7 @@ fun CalendarScreen(vm: CalendarViewModel, onBack: () -> Unit) {
     ConsoleSub(stringResource(R.string.calendar_title), onBack) {
         val board = vm.board
         // changes/ (ledger 86): the web gives this page `orders` and `cargo`
-        ai.workis.jowi.ui.components.ChangesWatch("orders") { vm.load() }
-        ai.workis.jowi.ui.components.ChangesWatch("cargo") { vm.load() }
+        ai.workis.jowi.ui.components.ChangesWatch("orders", "cargo") { vm.load() }
         when {
             board == null && vm.loadError != null -> Text(vm.loadError.orEmpty(), fontSize = 13.sp, color = colors.danger)
             board == null -> Box(Modifier.fillMaxWidth().padding(top = 30.dp), contentAlignment = Alignment.Center) {

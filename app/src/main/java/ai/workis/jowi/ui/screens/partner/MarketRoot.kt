@@ -246,10 +246,8 @@ private fun MarketHome(
                 return@Column
             }
             // the other party moved something (changes/ stamps, 20 s while resumed, or a push)
-            ChangesWatch("orders") { load(c) }
-            ChangesWatch("quotes") { load(c) }
-            ChangesWatch("lists") { load(c) }
-            if (c.isCarrier) ChangesWatch("cargo") { load(c) }
+            // ONE watcher over the Panel's scopes: scopes moving together are one re-read
+            ChangesWatch("orders", "quotes", "lists", *(if (c.isCarrier) arrayOf("cargo") else emptyArray())) { load(c) }
 
             val firm = c.company
             IdentityRow(

@@ -351,7 +351,7 @@ fun CarrierScreen(vm: CargoViewModel, onBack: () -> Unit, onRuns: () -> Unit) {
             Icon(WorkisIcons.Route, contentDescription = stringResource(R.string.cargo_runs), tint = colors.ink, modifier = Modifier.size(22.dp))
         }
     }) {
-        ai.workis.jowi.ui.components.ChangesWatch("cargo", typing = dropTarget != null) { vm.load() } // changes/ (2026-10-03); a drop reason holds it back
+        ai.workis.jowi.ui.components.ChangesWatch("cargo", "orders", typing = dropTarget != null) { vm.load() } // changes/ (2026-10-03); a drop reason holds it back
         val board = vm.board
         when {
             board == null && vm.loadError != null -> Text(vm.loadError.orEmpty(), fontSize = 13.sp, color = colors.danger)

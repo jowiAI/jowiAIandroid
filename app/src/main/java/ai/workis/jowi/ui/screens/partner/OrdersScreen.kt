@@ -270,10 +270,9 @@ fun OrdersScreen(
                 CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Kiremit500)
             }
             else -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                // the other party moved an order (`changes/`, 2026-10-03)
-                ChangesWatch(scope = "orders") { vm.load() }
-                // a quote arrived on a list in the quote stage (the strip)
-                ChangesWatch(scope = "quotes") { vm.load() }
+                // the other party moved an order (`changes/`, 2026-10-03), or a quote arrived on
+                // a list in the quote stage (the strip) — one watcher, one re-read
+                ChangesWatch("orders", "quotes") { vm.load() }
                 NoteBand(vm.note)
                 if (vm.quoting.isNotEmpty()) QuotingStrip(vm.quoting, onList)
                 if (orders.isEmpty()) Text(stringResource(R.string.orders_empty), fontSize = 14.sp, color = colors.muted, modifier = Modifier.padding(4.dp))

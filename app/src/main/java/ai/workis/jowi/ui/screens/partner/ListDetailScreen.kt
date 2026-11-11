@@ -659,7 +659,7 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
         // hoisted: Jowi's stage scrolls the page to itself (a badge tap, an add that asks)
         val pageScroll = rememberScrollState()
         Column(Modifier.fillMaxSize().verticalScroll(pageScroll).imePadding(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            ChangesWatch("lists", typing = typing) { vm.load() } // changes/ (2026-10-03)
+            ChangesWatch("lists", "quotes", typing = typing) { vm.load() } // changes/ (2026-10-03)
             when {
                 d != null -> {
                     Header(d)

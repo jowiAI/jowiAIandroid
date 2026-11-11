@@ -32,7 +32,7 @@ import kotlinx.coroutines.delay
 /**
  * Re-reads a trade screen when ITS scope moved (`GET changes/`, 2026-10-03): one tick on
  * appear and every 20 s while the app is in the foreground — never in the background —
- * plus every push naming the scope. `scope` = `orders` | `quotes` | `cargo` | `lists`.
+ * plus every push naming the scope. `scope` (+ `more`) = `orders` | `quotes` | `cargo` | `lists` | `catalog`.
  *
  * Never under a reader who is typing: with `typing` true the change is held and this
  * draws the web's "yenile" pill instead — an uncoloured glass pill, tap = `onChange`.
@@ -40,22 +40,32 @@ import kotlinx.coroutines.delay
  * otherwise. The yazışma keeps its own 8 s poll and does not use this.
  */
 @Composable
-fun ChangesWatch(scope: String, typing: Boolean = false, onChange: () -> Unit) {
-    var stale by remember(scope) { mutableStateOf(false) }
+fun ChangesWatch(scope: String, vararg more: String, typing: Boolean = false, onChange: () -> Unit) {
+    // a page may watch two scopes (the web's `change_stamps.WATCH`): ONE re-read and ONE pill
+    val scopes = remember(scope, more.toList()) { (listOf(scope) + more).toSet() }
+    var stale by remember(scopes) { mutableStateOf(false) }
     val typingNow by rememberUpdatedState(typing)
     val reread by rememberUpdatedState(onChange)
     fun moved() { if (typingNow) stale = true else reread() }
     val owner = LocalLifecycleOwner.current
-    LaunchedEffect(scope, owner) {
+    LaunchedEffect(scopes, owner) {
+        // what THIS watcher saw last for its scopes — the first reading is the baseline (the
+        // screen has just loaded); it is kept across background/foreground
+        var seen: Map<String, String>? = null
         owner.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (true) {
-                if (scope in ChangeStamps.tick()) moved()
+                ChangeStamps.read()?.let { stamps ->
+                    val mine = scopes.associateWith { stamps[it] ?: "" }
+                    val before = seen
+                    seen = mine
+                    if (before != null && before != mine) moved()
+                }
                 delay(20_000)
             }
         }
     }
-    LaunchedEffect(scope) {
-        ChangeStamps.pushes.collect { scopes -> if (scope in scopes) moved() }
+    LaunchedEffect(scopes) {
+        ChangeStamps.pushes.collect { pushed -> if (pushed.any { it in scopes }) moved() }
     }
     if (stale) {
         val colors = WorkisTheme.colors
