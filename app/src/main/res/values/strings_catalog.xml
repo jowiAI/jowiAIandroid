@@ -668,6 +668,7 @@
     <string name="list_retry">Try again</string>
     <string name="list_rows_hint">tap a row to open its candidates and requirements</string>
     <string name="list_rows_no_qty">rows have no quantity — the request goes out once every row says how many you will buy. A seller cannot price a row without it: one piece and a hundred are not the same price. Tap “qty?” on the row and write it.</string>
+    <string name="list_rows_no_unit">rows have no unit — a quantity means nothing without it: two pieces, two boxes and two metres are three different requests. Tap “unit?” on the row and choose.</string>
     <string name="list_stuck">Stuck</string>
     <string name="list_unarchive">Bring back</string>
     <string name="list_withdraw">Withdraw the request</string>
@@ -1233,6 +1234,9 @@
     <string name="unbind_action">Clear selection</string>
     <string name="uncovered_group">Items not covered</string>
     <string name="uncovered_sub">Sent to no seller — the team is looking for a supplier.</string>
+    <string name="unit_ask">unit?</string>
+    <string name="unit_content_field">Unit holds</string>
+    <string name="unit_content_hint">What one unit holds when the unit is a package: 12 adet for a box, 50 L for a tin. Leave empty otherwise.</string>
     <string name="unit_draft">DRAFT</string>
     <string name="unit_field">Unit</string>
     <string name="unit_price_field">Unit price</string>

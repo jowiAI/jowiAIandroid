@@ -49,6 +49,9 @@ data class CatalogPage(
     val live: List<CatalogLiveRow>? = null,
     val mode: String? = null,
     @Serializable(with = FlexString::class) val partnerId: String? = null,
+    /** The ONE unit list (Django 2026-11-11, ledger 84) — the live row editor's Birim picker; absent on
+     *  an older answer = the unit is shown, not editable. */
+    @Serializable(with = WorkisUnitsTolerant::class) val units: List<WorkisUnit>? = null,
 )
 
 @Serializable
@@ -276,6 +279,10 @@ data class CatalogLiveRow(
     val leadTimeDays: Int? = null,
     @Serializable(with = FlexString::class) val stock: String? = null,
     val published: Boolean? = null,
+    /** How the product is SOLD (2026-11-10, ledger 84): one of the unit list ("adet" by default),
+     *  and what one unit holds when it is a package ("12 adet", "50 L"). */
+    @Serializable(with = FlexString::class) val unit: String? = null,
+    @Serializable(with = FlexString::class) val unitContent: String? = null,
     @Serializable(with = FlexString::class) val productId: String? = null,
     @Serializable(with = FlexString::class) val familyId: String? = null,
     val group: String? = null,

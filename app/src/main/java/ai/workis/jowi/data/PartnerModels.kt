@@ -228,7 +228,42 @@ data class PLInfo(
     /** The list this one was born from, and the lists that continue it (`requote-skipped`, both ways). */
     val parent: PLListLink? = null,
     val children: List<PLListLink>? = null,
+    /** The ONE unit list (2026-11-10, ledger 84): `[{value, label}]`, label in Accept-Language — a row's
+     *  `unit` is one of the values or ''. Never embedded in the app. A drifted shape reads as none. */
+    @Serializable(with = WorkisUnitsTolerant::class) val units: List<WorkisUnit>? = null,
 )
+
+/** One entry of the server's ONE unit list (`list.units`, `seller/catalog/ → units`): `value` is
+ *  stored and sent, `label` is the reader's word. */
+@Serializable
+data class WorkisUnit(val value: String? = null, val label: String? = null) {
+    companion object {
+        /** "kutu (12 adet)", "metre" — the label (else the value as stored) + what one unit holds. */
+        fun text(value: String?, content: String? = null, units: List<WorkisUnit>?): String {
+            val v = value.orEmpty()
+            if (v.isEmpty()) return ""
+            val word = units.orEmpty().firstOrNull { it.value == v }?.label?.takeIf { it.isNotEmpty() } ?: v
+            val c = content.orEmpty().trim()
+            return if (c.isEmpty()) word else "$word ($c)"
+        }
+    }
+}
+
+/** `units` read leniently: a list of `{value, label}`; entries without a value dropped; any other shape = null. */
+object WorkisUnitsTolerant : KSerializer<List<WorkisUnit>?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("WorkisUnits", PrimitiveKind.STRING)
+    private fun text(e: JsonElement?) = (e as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content?.trim().orEmpty()
+    override fun deserialize(decoder: Decoder): List<WorkisUnit>? {
+        val json = decoder as? JsonDecoder ?: return null
+        val arr = json.decodeJsonElement() as? JsonArray ?: return null
+        return arr.mapNotNull { e ->
+            val o = e as? JsonObject ?: return@mapNotNull null
+            val v = text(o["value"]).takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            WorkisUnit(v, text(o["label"]).takeIf { it.isNotEmpty() })
+        }
+    }
+    override fun serialize(encoder: Encoder, value: List<WorkisUnit>?) = encoder.encodeNull()
+}
 
 /** A list this one came from, or went on as (2026-10-29): `{id, title, status, kind}`. */
 @Serializable
@@ -416,6 +451,8 @@ data class PLItem(
     val name: String? = null,
     val qty: Double? = null,
     val unit: String? = null,
+    /** What ONE unit holds when the row stands on a packaged product ("12 adet", "50 L"); '' otherwise (ledger 84). */
+    @Serializable(with = FlexString::class) val unitContent: String? = null,
     val requirements: List<String>? = null,
     val matchState: String? = null, // unmatched | candidates | bound
     @Serializable(with = FlexString::class) val boundCpid: String? = null,

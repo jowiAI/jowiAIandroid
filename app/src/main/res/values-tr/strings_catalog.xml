@@ -668,6 +668,7 @@
     <string name="list_retry">Yeniden dene</string>
     <string name="list_rows_hint">aday ve gereksinimleri açmak için satıra dokunun</string>
     <string name="list_rows_no_qty">satırda adet yok — talep, her satırda kaç adet alacağınız yazıldığında gönderilir. Satıcı adedi belli olmayan satıra fiyat veremez: bir adet ile yüz adedin fiyatı aynı olmaz. Satırdaki “adet?” yazısına dokunup yazın.</string>
+    <string name="list_rows_no_unit">satırda birim yok — miktar, birimi olmadan bir şey söylemez: iki adet, iki kutu ve iki metre üç ayrı istektir. Satırdaki “birim?” yazısına dokunup seçin.</string>
     <string name="list_stuck">Takıldı</string>
     <string name="list_unarchive">Arşivden çıkar</string>
     <string name="list_withdraw">Talebi geri çek</string>
@@ -1233,6 +1234,9 @@
     <string name="unbind_action">Seçimi kaldır</string>
     <string name="uncovered_group">Kapsama alınmayan kalemler</string>
     <string name="uncovered_sub">Hiçbir satıcıya gönderilmedi — ekip tedarikçi arıyor.</string>
+    <string name="unit_ask">birim?</string>
+    <string name="unit_content_field">Birim içeriği</string>
+    <string name="unit_content_hint">Birim bir ambalajsa içinde ne olduğu: kutu için 12 adet, teneke için 50 L. Değilse boş bırakın.</string>
     <string name="unit_draft">TASLAK</string>
     <string name="unit_field">Birim</string>
     <string name="unit_price_field">Birim fiyat</string>

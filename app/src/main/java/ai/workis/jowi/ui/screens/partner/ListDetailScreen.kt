@@ -75,6 +75,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import ai.workis.jowi.data.WorkisUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
@@ -316,13 +321,16 @@ class ListDetailViewModel : ViewModel() {
         }
     }
 
-    /** A row's quantity (ledger 83): `POST lists/items/{id}/edit/ {qty}` with the text AS TYPED —
-     *  the server reads comma or point, clears on empty and refuses zero or less with its own
-     *  sentence, which becomes the screen note. */
-    fun setQty(itemId: String, text: String) {
+    /** A row's quantity and unit (ledgers 83/84): `POST lists/items/{id}/edit/` with ONLY what
+     *  changed — `qty` as typed (the server reads comma or point, clears on empty, refuses zero),
+     *  `unit` = a value of `list.units`. A refusal hands the server's sentence back to the form
+     *  (it stays there); a success re-reads and clears the screen note. */
+    fun editAmount(itemId: String, qty: String?, unit: String?, onDone: (String?) -> Unit) {
         viewModelScope.launch {
-            val (r, err) = partnerCall(lang) { Graph.api.listItemEdit(itemId, jsonBody("qty" to text.trim())) }
-            note = if (r == null || !r.success) r?.error ?: r?.message ?: err else null
+            val (r, err) = partnerCall(lang) { Graph.api.listItemEdit(itemId, jsonBody("qty" to qty, "unit" to unit)) }
+            if (r == null || !r.success) { onDone(r?.error ?: r?.message ?: err ?: ""); return@launch }
+            note = null
+            onDone(null)
             load()
         }
     }
@@ -357,9 +365,9 @@ class ListDetailViewModel : ViewModel() {
 
     /** A line of the add-item search (2026-10-05): `{cpid, sellerId, q}` + `sku` only when the
      *  line is ONE variant of a multi-variant family (the per-row search's rule). */
-    fun addSearchResult(r: PLSearchResult, q: String, qty: String = "", unit: String = "", onNeedsVariant: (PLItem, String) -> Unit) {
+    fun addSearchResult(r: PLSearchResult, q: String, qty: String = "", onNeedsVariant: (PLItem, String) -> Unit) {
         val sku = if (r.resolved == true && (r.nVariants ?: 0) > 1) r.sku else null
-        addProductRow(r.cpid ?: return, r.sellerId, sku, q, qty = qty, unit = unit, onNeedsVariant = onNeedsVariant)
+        addProductRow(r.cpid ?: return, r.sellerId, sku, q, qty = qty, onNeedsVariant = onNeedsVariant)
     }
 
     /** `fromItem` = the row whose Jowi card added this one ("+ Ekle", 2026-10-20) — the stage
@@ -367,19 +375,20 @@ class ListDetailViewModel : ViewModel() {
      *  on the new row (the variant sheet, when `needs_variant`, opens over it first). */
     private fun addProductRow(
         cpid: String, sellerId: String?, sku: String? = null, q: String? = null, fromItem: String? = null,
-        qty: String? = null, unit: String? = null,
+        qty: String? = null,
         onAdded: () -> Unit = {}, onNeedsVariant: (PLItem, String) -> Unit,
     ) {
         val listId = id ?: return
         if (busy) return
         busy = true
         viewModelScope.launch {
-            // qty / unit as typed (ledger 83): the server reads comma or point and refuses zero
+            // qty as typed (ledger 83): the server reads comma or point and refuses zero; NO unit
+            // (ledger 84) — the server fills the seller's selling unit
             val body = jsonBody(
                 "cpid" to cpid, "sellerId" to sellerId?.let { it.toIntOrNull() ?: it },
                 "sku" to sku?.takeIf { it.isNotEmpty() }, "q" to q?.takeIf { it.isNotEmpty() },
                 "fromItem" to fromItem?.takeIf { it.isNotEmpty() },
-                "qty" to qty?.trim()?.takeIf { it.isNotEmpty() }, "unit" to unit?.trim()?.takeIf { it.isNotEmpty() },
+                "qty" to qty?.trim()?.takeIf { it.isNotEmpty() },
             )
             val (r, err) = partnerCall(lang) { Graph.api.listAddProduct(listId, body) }
             busy = false
@@ -391,7 +400,8 @@ class ListDetailViewModel : ViewModel() {
         }
     }
     /** A free-text row `{name, qty?, unit?}` — `qty` as typed (ledger 83; the server reads comma
-     *  or point and answers a zero or a bad number with its sentence). */
+     *  or point and answers a zero or a bad number with its sentence); `unit` = a value of
+     *  `list.units`, picked, never typed (ledger 84). */
     fun addItem(name: String, qty: String?, unit: String, fromItem: String? = null, onDone: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
             val (r, err) = partnerCall(lang) {
@@ -552,8 +562,11 @@ class ListDetailViewModel : ViewModel() {
      */
     fun firstOpenRow(): PLItem? = detail?.items.orEmpty().firstOrNull { it.complete == false && !it.candidates.isNullOrEmpty() }
 
-    /** The first row the quantity gate waits for (ledger 83) — every row counts, free text too. */
-    fun firstNoQtyRow(): PLItem? = detail?.items.orEmpty().firstOrNull { !hasQty(it) && it.id != null }
+    /** The first row the gate waits for after the product/variant rows (ledgers 83/84) — every
+     *  row counts, free text too: the first without a quantity, else the first without a unit. */
+    fun firstAmountRow(): PLItem? = detail?.items.orEmpty().let { items ->
+        items.firstOrNull { !hasQty(it) && it.id != null } ?: items.firstOrNull { !hasUnit(it) && it.id != null }
+    }
 
     fun requestQuotes(excluded: List<String>, onDone: (Boolean, String?) -> Unit) {
         viewModelScope.launch {
@@ -569,6 +582,9 @@ class ListDetailViewModel : ViewModel() {
 
 /** A row says how many: `qty` above zero (`null` = not written; Django note 2026-11-10). */
 private fun hasQty(item: PLItem): Boolean = (item.qty ?: 0.0) > 0.0
+
+/** A row says its unit: one of `list.units`, never '' (same note, §5 — ledger 84). */
+private fun hasUnit(item: PLItem): Boolean = !item.unit.isNullOrBlank()
 
 private data class SendGroup(val key: String, val rows: List<PLSendRow>)
 
@@ -598,8 +614,8 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
     var pickVariantCpid by remember { mutableStateOf<String?>(null) }
     // the row "Teklif iste" was refused for — opened once the send sheet is gone
     var pendingPick by remember { mutableStateOf<PLItem?>(null) }
-    // the row whose quantity is being written (ledger 83), and the one the send gate named —
-    // opened once the send sheet is gone
+    // the row whose quantity and unit are being written (ledgers 83/84), and the one the send
+    // gate named — opened once the send sheet is gone
     var qtyItem by remember { mutableStateOf<PLItem?>(null) }
     var pendingQty by remember { mutableStateOf<PLItem?>(null) }
     // an unsent note / letter in a field holds the changes/ re-read back (the pill waits)
@@ -723,22 +739,22 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
     pickItem?.let { item ->
         key(item.id) { CandidateSheet(item, d?.isDraft == true, vm, openVariantsFor = pickVariantCpid, prices = d?.showsPrices ?: true) { pickItem = null; pickVariantCpid = null } }
     }
-    if (showAdd) AddItemSheet(vm, prices = d?.showsPrices ?: true, onPick = { r, q, qty, unit ->
-        // a catalogue line, named and given its quantity (ledger 83): the sheet is gone;
-        // `needs_variant` opens that row's variant list
+    if (showAdd) AddItemSheet(vm, prices = d?.showsPrices ?: true, units = d?.list?.units.orEmpty(), onPick = { r, q, qty ->
+        // a catalogue line, named and given its quantity (ledger 83), no unit — the server fills
+        // the seller's (ledger 84): the sheet is gone; `needs_variant` opens that row's variant list
         showAdd = false
-        vm.addSearchResult(r, q, qty, unit) { row, cpid -> pickVariantCpid = cpid; pickItem = row }
+        vm.addSearchResult(r, q, qty) { row, cpid -> pickVariantCpid = cpid; pickItem = row }
     }) { showAdd = false }
     if (showSend && d != null) SendPreviewSheet(d, vm, onRefused = { msg, row ->
         // the gate's sentence names the rows (2026-10-03): it becomes the screen note and
         // the first open row opens once the send sheet is gone
         vm.note = msg; vm.shown = ListStage.List; pendingQty = null; pendingPick = row; showSend = false
     }, onNoQty = { msg, row ->
-        // the quantity gate (ledger 83): no row waits for its product or variant, so the
-        // first row without a quantity opens its quantity dialog
+        // the quantity and unit gate (ledgers 83/84): no row waits for its product or variant,
+        // so the first row without a quantity, else without a unit, opens its amount form
         vm.note = msg; vm.shown = ListStage.List; pendingQty = row; showSend = false
     }) { showSend = false }
-    qtyItem?.let { item -> key(item.id) { QtyDialog(item, onSave = { text -> item.id?.let { vm.setQty(it, text) }; qtyItem = null }) { qtyItem = null } } }
+    qtyItem?.let { item -> key(item.id) { RowAmountSheet(item, d?.list?.units.orEmpty(), vm) { qtyItem = null } } }
     pdf?.let { (title, url) -> PdfViewerDialog(title, url = url, fileName = if (title == rfqTitle) "talep-formu.pdf" else "teklif.pdf") { pdf = null } }
     if (showLetters && d != null) OrderLettersSheet(d, vm) { showLetters = false }
     if (requoteAsk) {
@@ -1043,15 +1059,24 @@ private fun ItemsSegment(
                 },
                 fontSize = 12.sp, lineHeight = 17.sp,
             )
+            // rows that say no unit yet (ledger 84) — the same grammar, under the quantity sentence
+            val noUnit = d.items.orEmpty().count { !hasUnit(it) }
+            if (noUnit > 0) Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = colors.ink, fontWeight = FontWeight.SemiBold)) { append("$noUnit ") }
+                    withStyle(SpanStyle(color = colors.muted)) { append(stringResource(R.string.list_rows_no_unit)) }
+                },
+                fontSize = 12.sp, lineHeight = 17.sp,
+            )
         }
         d.items.orEmpty().forEachIndexed { i, item ->
             // the buyer's "acele" (ledger 79): a leading swipe on a draft's row, never a dismiss;
-            // the trailing swipe opens the row's quantity (ledger 83)
+            // the trailing swipe opens the row's quantity and unit (ledgers 83/84)
             UrgentSwipe(urgent = item.urgent == true, enabled = d.isDraft && item.id != null, onToggle = { item.id?.let { vm.setUrgent(it, item.urgent != true) } }, onQty = { onQty(item) }) {
                 ItemRow(
                     item, draft = d.isDraft, prices = d.showsPrices, onClick = { onPick(item) }, onDelete = { item.id?.let { vm.deleteItem(it) } },
                     card = vm.cardOf(item), onBadge = { item.id?.let(vm::showStage) },
-                    onQty = { if (item.id != null) onQty(item) },
+                    onQty = { if (item.id != null) onQty(item) }, units = d.list?.units,
                 )
             }
             if (i < d.items.orEmpty().lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
@@ -1213,7 +1238,7 @@ private fun noteKindWord(kind: String?): String = stringResource(
 
 /** `prices` false = a buyer seat (`list.prices`): no catalogue price, range or placeholder. */
 @Composable
-private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -> Unit, onDelete: () -> Unit, card: PLUseCard? = null, onBadge: () -> Unit = {}, onQty: () -> Unit = {}) {
+private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -> Unit, onDelete: () -> Unit, card: PLUseCard? = null, onBadge: () -> Unit = {}, onQty: () -> Unit = {}, units: List<WorkisUnit>? = null) {
     val colors = WorkisTheme.colors
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 8.dp), verticalAlignment = Alignment.Top) {
         Text("${item.n ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint, modifier = Modifier.width(24.dp))
@@ -1243,20 +1268,31 @@ private fun ItemRow(item: PLItem, draft: Boolean, prices: Boolean, onClick: () -
                     Spacer(Modifier.width(6.dp))
                     UrgentWord()
                 }
+                // the unit as the reader's word + what one unit holds: "kutu (12 adet)" (ledger 84)
+                val unitText = WorkisUnit.text(item.unit, item.unitContent, units)
                 if (draft) {
-                    // a draft row's quantity is its own door (ledger 83): the number as written,
-                    // or "adet?" in the accent while the row says none — the send waits for it
+                    // a draft row's quantity and unit are ONE door (ledgers 83/84): what is written
+                    // in ink, "adet?" / "birim?" in the accent for what is not — the send waits for both
                     Spacer(Modifier.width(6.dp))
-                    val unit = item.unit.orEmpty()
-                    val tap = Modifier.clickable(role = Role.Button, onClick = onQty).padding(horizontal = 2.dp)
-                    if (hasQty(item)) {
-                        Text((WorkisMoney.qty(item.qty) + " " + unit).trim(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink, softWrap = false, modifier = tap)
-                    } else {
-                        Text((stringResource(R.string.qty_ask) + " " + unit).trim(), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.accentText, softWrap = false, modifier = tap)
-                    }
-                } else if (item.qty != null || !item.unit.isNullOrEmpty()) {
+                    val qtyAsk = stringResource(R.string.qty_ask)
+                    val unitAsk = stringResource(R.string.unit_ask)
+                    Text(
+                        buildAnnotatedString {
+                            if (hasQty(item)) withStyle(SpanStyle(color = colors.ink, fontFamily = WorkisMono)) { append(WorkisMoney.qty(item.qty)) }
+                            else withStyle(SpanStyle(color = colors.accentText)) { append(qtyAsk) }
+                            append(" ")
+                            if (hasUnit(item)) withStyle(SpanStyle(color = colors.ink)) { append(unitText) }
+                            else withStyle(SpanStyle(color = colors.accentText)) { append(unitAsk) }
+                        },
+                        fontWeight = FontWeight.SemiBold, fontSize = 13.sp, textAlign = TextAlign.End,
+                        modifier = Modifier.widthIn(max = 150.dp).clickable(role = Role.Button, onClick = onQty).padding(horizontal = 2.dp),
+                    )
+                } else if (item.qty != null || unitText.isNotEmpty()) {
                     Spacer(Modifier.width(6.dp))
-                    Text(WorkisMoney.qty(item.qty) + " " + item.unit.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink)
+                    Text(
+                        (WorkisMoney.qty(item.qty) + " " + unitText).trim(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink,
+                        textAlign = TextAlign.End, modifier = Modifier.widthIn(max = 150.dp),
+                    )
                 }
             }
             if (draft && sel != null && sel.resolved == true) {
@@ -1359,36 +1395,133 @@ private fun UrgentSwipe(urgent: Boolean, enabled: Boolean, onToggle: () -> Unit,
 }
 
 /**
- * A row's quantity (ledger 83): ONE decimal field, the row's name as the title, "Miktar · <unit>"
- * as the placeholder; "Tamam" hands the text over AS TYPED (empty clears it — the server refuses
- * zero or a bad number with its own sentence, which lands on the screen note).
+ * A draft row's quantity and unit (ledger 84 — replaces 83's one-field dialog): a decimal field
+ * (focused when the row says no quantity) and the unit picked from the server's `list.units`,
+ * never typed. "Tamam" posts ONLY what changed to `lists/items/{id}/edit/` — `qty` as typed, `unit`
+ * = the value. A refusal stays IN the form as the server's sentence; a success closes and re-reads.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun QtyDialog(item: PLItem, onSave: (String) -> Unit, onDismiss: () -> Unit) {
+private fun RowAmountSheet(item: PLItem, units: List<WorkisUnit>, vm: ListDetailViewModel, onDismiss: () -> Unit) {
     val colors = WorkisTheme.colors
-    var text by remember { mutableStateOf(if (hasQty(item)) WorkisMoney.qty(item.qty) else "") }
+    val hadQty = if (hasQty(item)) WorkisMoney.qty(item.qty) else ""
+    val hadUnit = item.unit.orEmpty()
+    var text by remember { mutableStateOf(hadQty) }
+    var unit by remember { mutableStateOf(hadUnit) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { delay(100); runCatching { focus.requestFocus() } }
+    LaunchedEffect(Unit) { if (hadQty.isEmpty()) { delay(100); runCatching { focus.requestFocus() } } }
     val title = item.selected?.name?.takeIf { it.isNotEmpty() } ?: item.name.orEmpty()
-    val placeholder = listOf(stringResource(R.string.qty_field), item.unit.orEmpty()).filter { it.isNotEmpty() }.joinToString(" · ")
+    fun save() {
+        if (busy) return
+        val q = text.trim()
+        val qtyOut = q.takeIf { it != hadQty }
+        val unitOut = unit.takeIf { it != hadUnit }
+        val id = item.id
+        if (id == null || (qtyOut == null && unitOut == null)) { onDismiss(); return }
+        busy = true; error = null
+        vm.editAmount(id, qtyOut, unitOut) { msg -> busy = false; if (msg == null) onDismiss() else error = msg }
+    }
     val fc = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue)
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!busy) onDismiss() },
         containerColor = colors.surface,
         title = { Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = colors.ink, maxLines = 3, overflow = TextOverflow.Ellipsis) },
         text = {
-            OutlinedTextField(
-                value = text, onValueChange = { text = it },
-                placeholder = { Text(placeholder, color = colors.faint) },
-                singleLine = true, shape = RoundedCornerShape(14.dp), colors = fc,
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { onSave(text) }),
-                modifier = Modifier.fillMaxWidth().focusRequester(focus),
-            )
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = text, onValueChange = { text = it; error = null },
+                    placeholder = { Text(stringResource(R.string.qty_field), color = colors.faint) },
+                    singleLine = true, shape = RoundedCornerShape(14.dp), colors = fc,
+                    textStyle = androidx.compose.ui.text.TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 16.sp).readingStep(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { save() }),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                )
+                Eyebrow(stringResource(R.string.unit_field).uppercase())
+                UnitChips(units, unit, enabled = !busy) { unit = it; error = null }
+                // what one unit holds, while the row keeps the unit it came with
+                item.unitContent?.trim()?.takeIf { it.isNotEmpty() && unit == hadUnit }?.let {
+                    Text(WorkisUnit.text(hadUnit, it, units), fontSize = 12.sp, color = colors.muted)
+                }
+                error?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.danger) }
+            }
         },
-        confirmButton = { TextButton(onClick = { onSave(text) }) { Text(stringResource(R.string.done), color = colors.accentText, fontWeight = FontWeight.SemiBold) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = colors.muted) } },
+        confirmButton = {
+            if (busy) CircularProgressIndicator(Modifier.padding(horizontal = 12.dp).size(18.dp), strokeWidth = 2.dp, color = Kiremit500)
+            else TextButton(onClick = { save() }) { Text(stringResource(R.string.done), color = colors.accentText, fontWeight = FontWeight.SemiBold) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.cancel), color = colors.muted) } },
     )
+}
+
+/**
+ * The server's unit list as chips (ledger 84): one tap picks, the picked one carries a tick and
+ * the ink border (never colour alone). A unit written before the list existed — not on it — stays
+ * visible as its own chip until another is picked. Used by the row form; the list is never embedded.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun UnitChips(units: List<WorkisUnit>, selected: String, enabled: Boolean = true, onPick: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    val all = buildList {
+        if (selected.isNotEmpty() && units.none { it.value == selected }) add(WorkisUnit(selected, selected))
+        addAll(units.filter { !it.value.isNullOrEmpty() })
+    }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        all.forEach { u ->
+            val v = u.value.orEmpty()
+            val on = v == selected
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .border(1.dp, if (on) colors.ink else colors.border, RoundedCornerShape(50))
+                    .clip(RoundedCornerShape(50))
+                    .selectable(selected = on, enabled = enabled, role = Role.RadioButton) { if (!on) onPick(v) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            ) {
+                if (on) {
+                    Icon(WorkisIcons.Check, contentDescription = null, tint = colors.ink, modifier = Modifier.size(13.dp))
+                    Spacer(Modifier.width(5.dp))
+                }
+                Text(u.label?.takeIf { it.isNotEmpty() } ?: v, fontSize = 13.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium, color = if (on) colors.ink else colors.muted)
+            }
+        }
+    }
+}
+
+/**
+ * A compact unit menu (ledger 84) — the add sheet's picker beside the quantity: the label of the
+ * picked unit, or "birim?" in the accent while none is; the menu lists `list.units`.
+ */
+@Composable
+private fun UnitMenu(units: List<WorkisUnit>, selected: String, modifier: Modifier = Modifier, onPick: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    var open by remember { mutableStateOf(false) }
+    Box(modifier) {
+        Row(
+            Modifier.fillMaxWidth().height(56.dp).border(1.dp, colors.border, RoundedCornerShape(14.dp)).clip(RoundedCornerShape(14.dp))
+                .clickable(role = Role.DropdownList) { open = true }.padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val word = if (selected.isEmpty()) stringResource(R.string.unit_ask) else WorkisUnit.text(selected, null, units)
+            Text(word, fontSize = 15.sp, color = if (selected.isEmpty()) colors.accentText else colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text("⌄", color = colors.faint)
+        }
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = colors.surface) {
+            if (selected.isNotEmpty()) androidx.compose.material3.DropdownMenuItem(
+                text = { Text(stringResource(R.string.unit_ask), color = colors.muted) },
+                onClick = { open = false; onPick("") },
+            )
+            units.filter { !it.value.isNullOrEmpty() }.forEach { u ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(u.label?.takeIf { it.isNotEmpty() } ?: u.value.orEmpty(), color = colors.ink, fontWeight = if (u.value == selected) FontWeight.SemiBold else FontWeight.Normal) },
+                    onClick = { open = false; onPick(u.value.orEmpty()) },
+                )
+            }
+        }
+    }
 }
 
 /**
@@ -2268,7 +2401,7 @@ private fun CandidateRow(c: PLCandidate, bound: Boolean, prices: Boolean, onClic
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddItemSheet(vm: ListDetailViewModel, prices: Boolean, onPick: (PLSearchResult, String, String, String) -> Unit, onDismiss: () -> Unit) {
+private fun AddItemSheet(vm: ListDetailViewModel, prices: Boolean, units: List<WorkisUnit>, onPick: (PLSearchResult, String, String) -> Unit, onDismiss: () -> Unit) {
     val colors = WorkisTheme.colors
     var name by remember { mutableStateOf("") }
     // the catalogue line chosen (ledger 83): it names the row, the quantity field takes the
@@ -2290,17 +2423,20 @@ private fun AddItemSheet(vm: ListDetailViewModel, prices: Boolean, onPick: (PLSe
         runCatching { if (picked != null) qtyFocus.requestFocus() }
     }
     var qty by remember { mutableStateOf("") }
+    // a typed row's unit — a value of `list.units`, "" = none picked (ledger 84; not required here,
+    // the send gate asks for it)
     var unit by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     fun submit() {
         if (busy || vm.busy) return
         val p = picked
-        // a catalogue line: the caller posts it once this sheet is gone
-        if (p != null) { onPick(p, typed, qty.trim(), unit.trim()); return }
+        // a catalogue line: the caller posts it once this sheet is gone — no unit, the server
+        // fills the seller's selling unit (ledger 84)
+        if (p != null) { onPick(p, typed, qty.trim()); return }
         if (name.isBlank()) return
         busy = true
-        vm.addItem(name.trim(), qty.trim(), unit.trim()) { ok, msg -> busy = false; if (ok) onDismiss() else error = msg }
+        vm.addItem(name.trim(), qty.trim(), unit) { ok, msg -> busy = false; if (ok) onDismiss() else error = msg }
     }
     val fc = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue)
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.surface) {
@@ -2336,7 +2472,8 @@ private fun AddItemSheet(vm: ListDetailViewModel, prices: Boolean, onPick: (PLSe
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(value = qty, onValueChange = { qty = it }, placeholder = { Text(stringResource(R.string.qty_field), color = colors.faint) }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = fc, keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.weight(1f).focusRequester(qtyFocus))
-                OutlinedTextField(value = unit, onValueChange = { unit = it }, placeholder = { Text(stringResource(R.string.unit_field), color = colors.faint) }, singleLine = true, shape = RoundedCornerShape(14.dp), colors = fc, modifier = Modifier.weight(1f))
+                // a catalogue line brings its own unit; a typed row picks one from the list — never typed
+                if (p == null && units.isNotEmpty()) UnitMenu(units, unit, Modifier.weight(1f)) { unit = it; error = null }
             }
             error?.let { Text(it, color = colors.danger, fontSize = 13.sp) }
             Row { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = colors.muted) }; Spacer(Modifier.weight(1f))
@@ -2389,7 +2526,7 @@ private fun SendPreviewSheet(d: PurchaseListDetail, vm: ListDetailViewModel, onR
                         // the sentence goes to the list screen and that row opens there
                         val open = if (ok) null else vm.firstOpenRow()
                         // else the quantity gate (ledger 83): the first row without a quantity
-                        val noQty = if (ok || open != null) null else vm.firstNoQtyRow()
+                        val noQty = if (ok || open != null) null else vm.firstAmountRow()
                         when {
                             ok -> onDismiss()
                             open != null -> onRefused(msg, open)

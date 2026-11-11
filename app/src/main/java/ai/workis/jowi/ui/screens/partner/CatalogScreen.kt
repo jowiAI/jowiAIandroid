@@ -40,6 +40,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.CheckCircle
@@ -109,6 +110,7 @@ import ai.workis.jowi.data.CatalogBand
 import ai.workis.jowi.data.CatalogLiveRow
 import ai.workis.jowi.data.CatalogSearchPage
 import ai.workis.jowi.data.CatalogPage
+import ai.workis.jowi.data.WorkisUnit
 import ai.workis.jowi.data.CatalogPlanSection
 import ai.workis.jowi.data.CatalogWeb
 import ai.workis.jowi.data.ScreenContext
@@ -1169,6 +1171,11 @@ private fun OfferEditSheet(row: CatalogLiveRow, vm: CatalogViewModel, onClose: (
     var leadTime by remember { mutableStateOf(row.leadTimeDays?.toString().orEmpty()) }
     var stock by remember { mutableStateOf(row.stock.orEmpty()) }
     var published by remember { mutableStateOf(row.published ?: true) }
+    // how the product is SOLD (ledger 84): the unit from the ONE list (`GET seller/catalog/ → units`),
+    // saved at once on a pick; what one unit holds, saved with "Tamam" (≤ 48 characters)
+    var unit by remember { mutableStateOf(row.unit.orEmpty()) }
+    var unitContent by remember { mutableStateOf(row.unitContent.orEmpty()) }
+    val units = vm.page?.units.orEmpty()
     var busy by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
     val id = row.offerId.orEmpty()
@@ -1178,7 +1185,7 @@ private fun OfferEditSheet(row: CatalogLiveRow, vm: CatalogViewModel, onClose: (
         scope.launch { busy = true; errorText = vm.offerCell(id, field, value); busy = false; if (errorText == null) savedAtOnce = true }
     }
     ModalBottomSheet(onDismissRequest = { if (savedAtOnce) vm.refreshAfterEdit(); onClose() }, containerColor = colors.surface) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 20.dp).padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.edit_row), fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = colors.ink, modifier = Modifier.weight(1f))
                 if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Kiremit500)
@@ -1191,6 +1198,7 @@ private fun OfferEditSheet(row: CatalogLiveRow, vm: CatalogViewModel, onClose: (
                             if (name != row.name.orEmpty()) add("displayName" to name)
                             if (leadTime != row.leadTimeDays?.toString().orEmpty()) add("leadTimeDays" to leadTime)
                             if (stock != row.stock.orEmpty()) add("stock" to stock)
+                            if (unitContent != row.unitContent.orEmpty()) add("unitContent" to unitContent)
                         }
                         var first: String? = null
                         for ((f, v) in pending) { val e = vm.offerCell(id, f, v); if (e != null && first == null) first = e }
@@ -1212,8 +1220,48 @@ private fun OfferEditSheet(row: CatalogLiveRow, vm: CatalogViewModel, onClose: (
                     Switch(checked = published, onCheckedChange = { published = it; saveNow("published", it) }, colors = SwitchDefaults.colors(checkedTrackColor = colors.blue))
                 }
             }
+            // how the product is sold (ledger 84): the unit picked from the server's list, never
+            // typed — with no list (an older answer) it is shown, not editable
+            FormSection(null) {
+                if (units.isEmpty()) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(stringResource(R.string.unit_field), fontSize = 14.sp, color = colors.muted)
+                        Spacer(Modifier.weight(1f))
+                        Text(unit.ifEmpty { "—" }, fontSize = 14.sp, color = colors.ink)
+                    }
+                } else {
+                    UnitPickerRow(stringResource(R.string.unit_field), unit, units) { v -> if (v != unit) { unit = v; saveNow("unit", v) } }
+                }
+                FormRow(stringResource(R.string.unit_content_field), unitContent, { unitContent = it.take(48) }, {}, false, placeholder = "—")
+            }
+            Text(stringResource(R.string.unit_content_hint), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
             errorText?.let { Text(it, fontSize = 13.sp, color = colors.danger) }
         }
+    }
+}
+
+/** The live row's Birim (ledger 84): the label of the stored value; the menu lists the server's units.
+ *  A value not on the list (written before it) stays shown as it is stored until another is picked. */
+@Composable
+private fun UnitPickerRow(label: String, value: String, units: List<WorkisUnit>, onPick: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Row(Modifier.fillMaxWidth().clickable(role = androidx.compose.ui.semantics.Role.DropdownList) { open = true }.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, fontSize = 14.sp, color = colors.muted)
+            Spacer(Modifier.weight(1f))
+            Text(WorkisUnit.text(value, null, units).ifEmpty { "—" }, fontSize = 14.sp, color = colors.accentText)
+            Text(" ⌄", color = colors.faint)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            units.filter { !it.value.isNullOrEmpty() }.forEach { u ->
+                DropdownMenuItem(
+                    text = { Text(u.label?.takeIf { it.isNotEmpty() } ?: u.value.orEmpty(), fontWeight = if (u.value == value) FontWeight.SemiBold else FontWeight.Normal) },
+                    onClick = { open = false; onPick(u.value.orEmpty()) },
+                )
+            }
+        }
+        Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border).align(Alignment.BottomStart))
     }
 }
 
