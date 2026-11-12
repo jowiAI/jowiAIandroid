@@ -58,8 +58,8 @@ android {
         applicationId = "ai.workis.jowi"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "0.8.9"
+        versionCode = 23
+        versionName = "0.8.10"
         buildConfigField("String", "GIT_COMMIT", "\"$gitCommit\"")
     }
 
