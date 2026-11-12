@@ -174,8 +174,10 @@ data class CargoShipment(
     val poNumber: String? = null,
     /** one next step (2026-10-01): scan · out · deliver · retry · null when done */
     val primaryAction: String? = null,
-    /** behind "Daha fazla": received · deliver_now · photo · failed · return · drop · label; null = an older server */
+    /** behind "Daha fazla": deliver_now · photo · failed · return · drop · label; null = an older server (`received` is gone — ledger 89) */
     val moreActions: List<String>? = null,
+    /** the pickup hop is still ahead and needs the label's code (ledger 89) */
+    val pickupNeedsCode: Boolean? = null,
 )
 
 @Serializable
@@ -191,7 +193,8 @@ data class CargoActionResult(
 )
 
 @Serializable
-data class CargoStatusBody(val status: String, val note: String? = null)
+/** `status: "kuryede"` (the pickup) is refused without `code` — the label's code as the courier read or typed it; `via` = camera | typed (ledger 89). */
+data class CargoStatusBody(val status: String, val note: String? = null, val code: String? = null, val via: String? = null)
 
 @Serializable
 data class CargoDropBody(val reason: String? = null)
@@ -272,7 +275,8 @@ data class CargoPlanReply(
 )
 
 @Serializable
-data class CargoStopBody(val shipmentId: String, val kind: String)
+/** `kind: "pickup"` is refused without `code` (ledger 89) — never the shipment's own number filled in by the app. */
+data class CargoStopBody(val shipmentId: String, val kind: String, val code: String? = null, val via: String? = null)
 
 @Serializable
 data class CargoStopReply(val runStatus: String? = null, val shipmentStatus: String? = null)

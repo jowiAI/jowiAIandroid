@@ -172,7 +172,6 @@
     <string name="cargo_accept">Accept</string>
     <string name="cargo_act_deliver_now">Deliver now</string>
     <string name="cargo_act_out">Out for delivery</string>
-    <string name="cargo_act_received">Parcel received</string>
     <string name="cargo_act_retry">Retry delivery</string>
     <string name="cargo_act_return">Return to sender</string>
     <string name="cargo_act_scan">Scan the label</string>
@@ -214,6 +213,11 @@
     <string name="cargo_pick_carrier">Pick the carrier yourself</string>
     <string name="cargo_pickup">Pickup</string>
     <string name="cargo_pickup_after">Pickup from</string>
+    <string name="cargo_pickup_confirm">Picked up</string>
+    <string name="cargo_pickup_read">Label read</string>
+    <string name="cargo_pickup_rescan">Scan again</string>
+    <string name="cargo_pickup_title">Pick up the parcel</string>
+    <string name="cargo_pickup_type_code">Or type the code on the label</string>
     <string name="cargo_plan_all_vehicles">All vehicles</string>
     <string name="cargo_plan_day">Day</string>
     <string name="cargo_plan_run">Plan route</string>
@@ -236,7 +240,6 @@
     <string name="cargo_status_kuryede">With courier</string>
     <string name="cargo_status_teslim_edilemedi">Delivery failed</string>
     <string name="cargo_stop_late">Late</string>
-    <string name="cargo_stop_picked">Picked up</string>
     <string name="cargo_stops_word">stops</string>
     <string name="cargo_title">Cargo</string>
     <string name="cargo_vehicle_add">Add vehicle</string>

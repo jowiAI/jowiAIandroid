@@ -172,7 +172,6 @@
     <string name="cargo_accept">Kabul et</string>
     <string name="cargo_act_deliver_now">Hemen teslim edin</string>
     <string name="cargo_act_out">Dağıtıma çıkın</string>
-    <string name="cargo_act_received">Paket teslim alındı</string>
     <string name="cargo_act_retry">Yeniden dağıtıma çıkın</string>
     <string name="cargo_act_return">Göndericiye iade edin</string>
     <string name="cargo_act_scan">Etiketi okutun</string>
@@ -214,6 +213,11 @@
     <string name="cargo_pick_carrier">Taşıyıcıyı kendiniz seçin</string>
     <string name="cargo_pickup">Alış</string>
     <string name="cargo_pickup_after">Alım</string>
+    <string name="cargo_pickup_confirm">Teslim aldım</string>
+    <string name="cargo_pickup_read">Etiket okundu</string>
+    <string name="cargo_pickup_rescan">Yeniden okutun</string>
+    <string name="cargo_pickup_title">Koliyi teslim alın</string>
+    <string name="cargo_pickup_type_code">Ya da etiketteki kodu yazın</string>
     <string name="cargo_plan_all_vehicles">Tüm araçlar</string>
     <string name="cargo_plan_day">Gün</string>
     <string name="cargo_plan_run">Rota planla</string>
@@ -236,7 +240,6 @@
     <string name="cargo_status_kuryede">Kuryede</string>
     <string name="cargo_status_teslim_edilemedi">Teslim edilemedi</string>
     <string name="cargo_stop_late">Gecikmede</string>
-    <string name="cargo_stop_picked">Alındı</string>
     <string name="cargo_stops_word">durak</string>
     <string name="cargo_title">Kargo</string>
     <string name="cargo_vehicle_add">Araç ekle</string>

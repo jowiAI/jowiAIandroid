@@ -88,9 +88,6 @@ import ai.workis.jowi.ui.theme.SuccessGreen
 import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
-import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
-import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 import java.time.ZoneId
@@ -174,10 +171,10 @@ class CargoViewModel : ViewModel() {
         }
     }
 
-    /** Never a status the server did not list for this shipment. */
+    /** Never a status the server did not list for this shipment — and never the pickup: that hop needs the label's code ([pickup]). */
     fun advance(sh: CargoShipment, status: String) {
         val id = sh.id ?: return
-        if (status !in sh.nextStatuses.orEmpty()) return
+        if (status == "kuryede" || status !in sh.nextStatuses.orEmpty()) return
         act {
             val (r, err) = partnerCall(lang) { Graph.api.cargoStatus(id, CargoStatusBody(status)) }
             if (r?.success == false) r.error ?: err else r?.message ?: err
@@ -202,6 +199,22 @@ class CargoViewModel : ViewModel() {
         return ok to (if (ok) r?.message else r?.error ?: err)
     }
 
+    /**
+     * The pickup (ledger 89): `{status: "kuryede", code, via}` — the code as the courier's camera
+     * read it or as they typed it, never the shipment's own number. → null when recorded, else
+     * the server's sentence for the sheet.
+     */
+    suspend fun pickup(sh: CargoShipment, code: String, via: String): String? {
+        val id = sh.id ?: return null
+        val (r, err) = partnerCall(lang) { Graph.api.cargoStatus(id, CargoStatusBody("kuryede", code = code, via = via)) }
+        val ok = r != null && r.success != false
+        if (ok) { note = r?.message; fetch(); return null }
+        return r?.error ?: err ?: ""
+    }
+
+    /** A toolbar scan that found an own shipment still waiting for its pickup: the sheet opens with the code just read. */
+    var pickupRead by mutableStateOf<Pair<CargoShipment, String>?>(null)
+
     /** The label's QR is the WSH number; the server resolves it to the carrier's OWN shipment. */
     fun scan(code: String) {
         val c = code.trim()
@@ -212,7 +225,10 @@ class CargoViewModel : ViewModel() {
             val sh = r?.shipment
             if (sh == null) { note = err; return@launch }
             fetch()
-            if (board?.shipments.orEmpty().any { it.id == sh.id }) {
+            val own = board?.shipments.orEmpty().firstOrNull { it.id == sh.id }
+            // the parcel is in the courier's hand and its label was just read: only the press is left
+            if ((own ?: sh).pickupNeedsCode == true) pickupRead = (own ?: sh) to c
+            if (own != null) {
                 highlight = sh.id; highlightTick++
             } else {
                 // own, but outside the board's latest page — say what it is
@@ -224,7 +240,7 @@ class CargoViewModel : ViewModel() {
 
 /** What each action key does on the server — the web Kargo row reads the same table (`carrier_seat.STEPS`). */
 private val postsStatus = mapOf(
-    "out" to "dagitimda", "retry" to "dagitimda", "received" to "kuryede",
+    "out" to "dagitimda", "retry" to "dagitimda",
     "failed" to "teslim_edilemedi", "return" to "iade",
 )
 
@@ -245,7 +261,6 @@ private fun actionTitle(key: String): String = when (key) {
     "retry" -> stringResource(R.string.cargo_act_retry)
     "deliver" -> stringResource(R.string.cargo_deliver)
     "deliver_now" -> stringResource(R.string.cargo_act_deliver_now)
-    "received" -> stringResource(R.string.cargo_act_received)
     "failed" -> stringResource(R.string.cargo_status_teslim_edilemedi)
     "return" -> stringResource(R.string.cargo_act_return)
     "drop" -> stringResource(R.string.cargo_drop)
@@ -258,7 +273,6 @@ private fun actionIcon(key: String): ImageVector = when (key) {
     "out" -> WorkisIcons.Truck
     "retry" -> WorkisIcons.Retry
     "deliver", "deliver_now" -> WorkisIcons.Check
-    "received" -> WorkisIcons.ShippingBox
     "failed" -> WorkisIcons.Warning
     "return", "drop" -> WorkisIcons.Undo
     "label" -> WorkisIcons.DocText
@@ -321,20 +335,17 @@ fun CarrierScreen(vm: CargoViewModel, onBack: () -> Unit, onRuns: () -> Unit) {
     var statusTarget by remember { mutableStateOf<Pair<CargoShipment, String>?>(null) }
     var labelFor by remember { mutableStateOf<CargoShipment?>(null) }
     val unavailable = stringResource(R.string.cargo_camera_unavailable)
+    // the pickup sheet (ledger 89): the row's `scan` step opens it empty, the toolbar scan with the code it read
+    var pickupTarget by remember { mutableStateOf<CargoShipment?>(null) }
     // Google's code scanner draws its own camera UI — the app asks no camera permission
-    val startScan = {
-        val options = GmsBarcodeScannerOptions.Builder().setBarcodeFormats(Barcode.FORMAT_QR_CODE).build()
-        GmsBarcodeScanning.getClient(context, options).startScan()
-            .addOnSuccessListener { b -> b.rawValue?.let(vm::scan) }
-            .addOnFailureListener { vm.note = unavailable }
-        Unit
-    }
+    val startScan = { scanLabel(context, onUnavailable = { vm.note = unavailable }, onRead = vm::scan) }
     val perform: (String, CargoShipment) -> Unit = { key, sh ->
         // an action key that posts a status, or a legacy door naming the status itself
         val code = postsStatus[key] ?: key.removePrefix("status:").takeIf { key.startsWith("status:") }
         when {
+            // the pickup hop never goes through the plain confirmation — also on the older-server doors
+            key == "scan" || code == "kuryede" -> pickupTarget = sh
             code != null -> statusTarget = sh to code
-            key == "scan" -> startScan()
             key == "deliver" || key == "deliver_now" -> otpTarget = sh
             key == "drop" -> dropTarget = sh
             key == "label" -> labelFor = sh
@@ -399,6 +410,13 @@ fun CarrierScreen(vm: CargoViewModel, onBack: () -> Unit, onRuns: () -> Unit) {
     }
     dropTarget?.let { sh -> DropDialog(onDismiss = { dropTarget = null }) { reason -> vm.drop(sh, reason) } }
     otpTarget?.let { sh -> DeliverOtpSheet(sh, vm) { otpTarget = null } }
+    val pickupCompany: (CargoShipment) -> String? = { sh -> sh.pickup?.company?.takeIf { it.isNotEmpty() } ?: sh.pickup?.name }
+    pickupTarget?.let { sh ->
+        PickupSheet(sh.number.orEmpty(), pickupCompany(sh), onClose = { pickupTarget = null }) { code, via -> vm.pickup(sh, code, via) }
+    }
+    vm.pickupRead?.let { (sh, read) ->
+        PickupSheet(sh.number.orEmpty(), pickupCompany(sh), readCode = read, onClose = { vm.pickupRead = null }) { code, via -> vm.pickup(sh, code, via) }
+    }
     labelFor?.let { sh ->
         PdfViewerDialog(
             title = stringResource(R.string.shipment_label_pdf),

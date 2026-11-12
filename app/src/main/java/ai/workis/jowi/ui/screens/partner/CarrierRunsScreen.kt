@@ -142,18 +142,19 @@ class CargoRunsViewModel : ViewModel() {
         if (r != null) { vehicles = r.vehicles.orEmpty(); vehiclesError = null } else if (vehicles == null) vehiclesError = err
     }
 
-    /** A pickup only — the dropoff is never offered (the server refuses it; the OTP door closes it). */
-    fun tick(run: CargoRun, stop: CargoStop) {
-        val runId = run.id ?: return
-        val shipmentId = stop.shipmentId ?: return
-        if (stop.kind != "pickup" || !stop.doneAt.isNullOrEmpty()) return
-        busy = true; note = null
-        viewModelScope.launch {
-            val (r, err) = partnerCall(lang) { Graph.api.cargoRunStop(runId, CargoStopBody(shipmentId, "pickup")) }
-            busy = false
-            if (r == null) note = err
-            fetch()
-        }
+    /**
+     * A pickup only — the dropoff is never offered (the server refuses it; the OTP door closes it).
+     * Ledger 89: the stop is recorded only with the label's code (`code`, `via` = camera | typed),
+     * never the stop's own number. → null when recorded, else the server's sentence for the sheet.
+     */
+    suspend fun pickup(run: CargoRun, stop: CargoStop, code: String, via: String): String? {
+        val runId = run.id ?: return null
+        val shipmentId = stop.shipmentId ?: return null
+        val (r, err) = partnerCall(lang) { Graph.api.cargoRunStop(runId, CargoStopBody(shipmentId, "pickup", code, via)) }
+        if (r == null) return err ?: ""
+        note = null
+        fetch()
+        return null
     }
 
     /** `vehicleId` = a vehicle's id or "all". → null when planned, else the server's sentence. */
@@ -372,11 +373,15 @@ private fun StopRow(run: CargoRun, stop: CargoStop, vm: CargoRunsViewModel) {
                     Text(clock(done), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = SuccessGreen)
                 }
             } else if (pickup) {
-                // the pickup tick only; a dropoff closes through the OTP delivery door
-                OutlinedButton(onClick = { vm.tick(run, stop) }, enabled = !vm.busy, modifier = Modifier.height(34.dp)) {
-                    Icon(WorkisIcons.Check, contentDescription = null, tint = colors.ink, modifier = Modifier.size(14.dp))
+                // the pickup only, and only with the label's code (ledger 89); a dropoff closes through the OTP delivery door
+                var pickupOpen by remember { mutableStateOf(false) }
+                OutlinedButton(onClick = { pickupOpen = true }, enabled = !vm.busy, modifier = Modifier.height(34.dp)) {
+                    Icon(WorkisIcons.QrScan, contentDescription = null, tint = colors.ink, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.cargo_stop_picked), fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink)
+                    Text(stringResource(R.string.cargo_act_scan), fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink)
+                }
+                if (pickupOpen) {
+                    PickupSheet(stop.number.orEmpty(), stop.place, onClose = { pickupOpen = false }) { code, via -> vm.pickup(run, stop, code, via) }
                 }
             }
         }
