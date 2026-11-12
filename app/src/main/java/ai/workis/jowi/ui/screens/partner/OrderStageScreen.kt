@@ -128,6 +128,8 @@ fun OrderStageScreen(
     // ledger 71: the PSP's card page the fund door answered — closing it re-reads
     var payPage by remember { mutableStateOf<String?>(null) }
     var readyOpen by remember { mutableStateOf(false) }
+    // "Faturayı öde" waits for the confirmation (ledger 91)
+    var payAsk by remember { mutableStateOf<OrderJob?>(null) }
     var lineConfirm by remember { mutableStateOf<OrderJobLine?>(null) }
     // the line whose "Teslim ettim" waits for the confirmation (2026-10-05)
     var lineMark by remember { mutableStateOf<OrderJobLine?>(null) }
@@ -168,6 +170,7 @@ fun OrderStageScreen(
                         onTerms = { onThread(o) },
                         onContract = { onContract(o) },
                         onFund = { confirmFund = true },
+                        onPay = { payAsk = j },
                         onReady = { readyOpen = true },
                         onConfirmLine = { lineConfirm = it },
                         onMarkLine = { lineMark = it },
@@ -213,9 +216,18 @@ fun OrderStageScreen(
         }
     }
     if (confirmFund) {
-        ConfirmDialog(stringResource(R.string.order_fund), stringResource(R.string.order_fund_confirm), destructive = false, onDismiss = { confirmFund = false }) {
+        ConfirmDialog(stringResource(R.string.order_fund), fundQuestion(o), destructive = false, onDismiss = { confirmFund = false }) {
             doors.fund(orderId, onPayPage = { u -> payPage = u }, onResult = after)
         }
+    }
+    payAsk?.let { j ->
+        // the question, then which invoice: "number · total" — both as the job carries them
+        val which = listOfNotNull(j.number, j.total?.let { WorkisMoney.text(it, j.currency) }).filter { it.isNotEmpty() }.joinToString(" · ")
+        ConfirmDialog(
+            stringResource(R.string.invoice_pay),
+            listOf(stringResource(R.string.invoice_pay_confirm), which).filter { it.isNotEmpty() }.joinToString("\n"),
+            destructive = false, onDismiss = { payAsk = null },
+        ) { j.invoiceId?.let { doors.payInvoice(it, after) } }
     }
     payPage?.let { u -> PaymentWebView(u) { payPage = null; doors.load(); vm.load(orderId) } }
     lineConfirm?.let { l ->
@@ -277,11 +289,40 @@ private fun StageHead(o: PartnerOrder) {
             Text(stringResource(R.string.order_no_money_for_carrier), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)
         } else {
             Text(WorkisMoney.text(o.total, o.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = colors.ink)
+            OrderMoneyWords(o)
             o.escrowLabel?.takeIf { it.isNotEmpty() }?.let { WorkisChip(ChipSpec(WorkisIcons.Lock, it, colors.muted)) }
         }
         o.steps?.takeIf { it.isNotEmpty() }?.let { OrderWalk(it) }
         o.next?.let { OrderNextLine(it) }
     }
+}
+
+/**
+ * The server's money sentences, printed as sent (ledger 91): a split order's part
+ * ("Bölüm 1/2 · EUR"), the VAT lines under the total, the cargo fee blocked beside it.
+ * Two amounts, never summed; an empty sentence draws nothing.
+ */
+@Composable
+internal fun OrderMoneyWords(o: PartnerOrder) {
+    val colors = WorkisTheme.colors
+    val part = o.split?.part
+    val of = o.split?.of
+    if (part != null && of != null && of > 1) {
+        Text(
+            "${stringResource(R.string.order_part)} $part/$of" + (o.currency?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""),
+            fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.muted,
+        )
+    }
+    o.vatWords?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted) }
+    o.cargoWords?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted) }
+}
+
+/** What the block confirmation says: the question (the cargo one when a cargo sentence came), then the server's two sentences. */
+@Composable
+internal fun fundQuestion(o: PartnerOrder?): String {
+    val cargo = o?.cargoWords?.takeIf { it.isNotEmpty() }
+    val question = stringResource(if (cargo == null) R.string.order_fund_confirm else R.string.order_fund_confirm_cargo)
+    return listOfNotNull(question, o?.vatWords, cargo).filter { it.isNotEmpty() }.joinToString("\n\n")
 }
 
 // ---------- one step: its line, its note, its dated movements
@@ -323,6 +364,7 @@ private fun JobView(
     onTerms: () -> Unit,
     onContract: () -> Unit,
     onFund: () -> Unit,
+    onPay: () -> Unit,
     onReady: () -> Unit,
     onConfirmLine: (OrderJobLine) -> Unit,
     onMarkLine: (OrderJobLine) -> Unit,
@@ -355,8 +397,10 @@ private fun JobView(
             OrderDoorRow(WorkisIcons.ShippingBox, stringResource(R.string.order_ready_action), enabled = !busy, onClick = onReady)
         }
         "lines" -> job.lines.orEmpty().forEach { l -> LineJob(l, busy, onConfirmLine, onMarkLine, onObject, onWithdraw) }
-        // read-only: there is no collect door in the app
-        "collect" -> {
+        // the invoice's facts. Read-only for `collect` (there is no collect door in the app);
+        // `pay` (ledger 91) adds its button under them — an open objection holds it, and the
+        // sentence stands where the button would
+        "collect", "pay" -> {
             job.number?.takeIf { it.isNotEmpty() }?.let { StageFact(stringResource(R.string.stage_invoice), it) }
             job.total?.let { StageFact(stringResource(R.string.total_label), WorkisMoney.text(it, job.currency)) }
             job.due?.takeIf { it.isNotEmpty() }?.let { StageFact(stringResource(R.string.cari_due), shortDate(it)) }
@@ -366,6 +410,8 @@ private fun JobView(
                     Spacer(Modifier.width(6.dp))
                     Text(stringResource(R.string.stage_collect_suspended), fontSize = 12.sp, lineHeight = 16.sp, color = Beige)
                 }
+            } else if (job.kind == "pay" && job.invoiceId != null) {
+                OrderDoorRow(WorkisIcons.CreditCard, stringResource(R.string.invoice_pay), enabled = !busy, onClick = onPay)
             }
         }
         else -> Unit

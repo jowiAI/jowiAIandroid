@@ -611,6 +611,8 @@
     <string name="internal_note">Internal note</string>
     <string name="inv_withdrawn">the buyer withdrew the request</string>
     <string name="invited_word">sellers invited</string>
+    <string name="invoice_pay">Pay the invoice</string>
+    <string name="invoice_pay_confirm">The invoice is paid through Workis; the seller is paid after it.</string>
     <string name="item_name">Item name</string>
     <string name="items_covered">items covered</string>
     <string name="items_word">items</string>
@@ -777,12 +779,14 @@
     <string name="order_done_empty">No completed orders yet.</string>
     <string name="order_fund">Hold the payment</string>
     <string name="order_fund_confirm">The order total moves into escrow and is released to the seller after delivery.</string>
+    <string name="order_fund_confirm_cargo">The order total and the cargo fee are blocked together, each in its own currency. The order total is released to the seller after delivery.</string>
     <string name="order_letter_title">Order letter</string>
     <string name="order_letters">Order letters</string>
     <string name="order_line_received">I received it</string>
     <string name="order_lines_word">lines</string>
     <string name="order_lost">Awarded elsewhere</string>
     <string name="order_no_money_for_carrier">Amounts are not shown on a carrier card.</string>
+    <string name="order_part">Part</string>
     <string name="order_po_form_pdf">Purchase order (PDF)</string>
     <string name="order_promised">Promised</string>
     <string name="order_rate_carrier">Rate the courier</string>

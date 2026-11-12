@@ -315,6 +315,10 @@ interface WorkisApi {
     @POST("workis/orders/{id}/fund/")
     suspend fun orderFund(@Path("id") id: String): OrderFundResult
 
+    /** A deferred (open-account) invoice is paid through Workis (ledger 91, Django 9c8cad20): no body → `{success, message, order}`; 400 `{error}`. */
+    @POST("workis/invoices/{id}/pay/")
+    suspend fun invoicePay(@Path("id") id: String): OrderFundResult
+
     @POST("workis/orders/lines/{lineId}/received/")
     suspend fun orderLineReceived(@Path("lineId") lineId: String): SimpleResult
 

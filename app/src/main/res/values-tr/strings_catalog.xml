@@ -611,6 +611,8 @@
     <string name="internal_note">İç not</string>
     <string name="inv_withdrawn">alıcı talebi geri çekti</string>
     <string name="invited_word">satıcı davet edildi</string>
+    <string name="invoice_pay">Faturayı öde</string>
+    <string name="invoice_pay_confirm">Fatura Workis üzerinden ödenir; satıcıya ardından aktarılır.</string>
     <string name="item_name">Kalem adı</string>
     <string name="items_covered">kalem karşılandı</string>
     <string name="items_word">kalem</string>
@@ -777,12 +779,14 @@
     <string name="order_done_empty">Henüz tamamlanan sipariş yok.</string>
     <string name="order_fund">Ödemeyi blokla</string>
     <string name="order_fund_confirm">Sipariş tutarı emanete alınır ve teslimden sonra satıcıya serbest bırakılır.</string>
+    <string name="order_fund_confirm_cargo">Sipariş toplamı ve kargo bedeli birlikte, her biri kendi para biriminde bloke edilir. Sipariş toplamı teslimden sonra satıcıya serbest bırakılır.</string>
     <string name="order_letter_title">Sipariş yazısı</string>
     <string name="order_letters">Sipariş yazıları</string>
     <string name="order_line_received">Teslim aldım</string>
     <string name="order_lines_word">kalem</string>
     <string name="order_lost">Başka satıcıya verildi</string>
     <string name="order_no_money_for_carrier">Taşıyıcı kartında tutar gösterilmez.</string>
+    <string name="order_part">Bölüm</string>
     <string name="order_po_form_pdf">Sipariş formu (PDF)</string>
     <string name="order_promised">Söz verilen</string>
     <string name="order_rate_carrier">Taşıyıcıyı değerlendir</string>

@@ -101,6 +101,13 @@ data class OrderStep(
     val rows: List<OrderStepRow>? = null,
 )
 
+/** Lenient: an odd field must not cost the card. */
+@Serializable
+data class OrderSplit(
+    @Serializable(with = FlexInt::class) val part: Int? = null,
+    @Serializable(with = FlexInt::class) val of: Int? = null,
+)
+
 @Serializable
 data class OrderContractBadge(val version: Int? = null, val status: String? = null) // draft | accepted
 
@@ -114,9 +121,23 @@ data class PartnerOrder(
     val seller: OrderParty? = null,
     val virtual: Boolean? = null,
     val vlines: List<OrderVLine>? = null,
-    /** null on a carrier card (§7.1) — never draw a zero there. */
+    /**
+     * null on a carrier card (§7.1) — never draw a zero there. Since 2026-11-12 (ledger 91) the
+     * amount that is BLOCKED: goods + VAT (an order from before the rule carries no VAT and an
+     * empty `vatWords`). The app computes no VAT, no total, no rate.
+     */
     val total: Double? = null,
     val currency: String? = null,
+    /** The server's ready sentence under the total; empty = print nothing (never "KDV yok"). */
+    val vatWords: String? = null,
+    /** The cargo fee blocked WITH the order, incl. VAT, in the tariff's own currency — as sent
+     *  (buyer card only). Never added to `total`: the currencies may differ. */
+    val cargoWords: String? = null,
+    /** One quote in several currencies = one order per currency: this card is part `part` of `of`. */
+    val split: OrderSplit? = null,
+    /** A non-member's one-off sale (ledger 90): comes with `virtual: true`; the buyer is shown no
+     *  difference — nothing is drawn from it. */
+    val oneOff: Boolean? = null,
     val escrow: String? = null, // a display fact only — never what opens Blokla
     val escrowLabel: String? = null,
     /**
@@ -206,7 +227,7 @@ data class OrderJobLine(
 /** The live step's job — one shape for every `kind`; the unused fields stay null. */
 @Serializable
 data class OrderJob(
-    val kind: String? = null, // terms | contract | fund | ready | lines | collect
+    val kind: String? = null, // terms | contract | fund | ready | lines | collect | pay (the buyer pays a deferred invoice on Workis, ledger 91)
     // terms — `current` is the term KEY; the card's `terms.current` names it
     val current: String? = null,
     val i: Int? = null,

@@ -160,6 +160,12 @@ class OrdersViewModel : ViewModel() {
         }
     }
 
+    /** "Faturayı öde" (ledger 91): the server's message (or its refusal) is the sentence; a yes re-reads. */
+    fun payInvoice(invoiceId: String, onResult: ((Boolean, String?) -> Unit)? = null) = act(onResult) {
+        val (r, err) = partnerCall(lang) { Graph.api.invoicePay(invoiceId) }
+        (r?.success == true) to (r?.error ?: r?.message ?: err)
+    }
+
     fun lineReceived(lineId: String) = act {
         val (r, err) = partnerCall(lang) { Graph.api.orderLineReceived(lineId) }
         (r?.success == true) to (r?.error ?: r?.message ?: err)
@@ -321,7 +327,7 @@ fun OrdersScreen(
         }
     }
     confirmFund?.let { o ->
-        ConfirmDialog(stringResource(R.string.order_fund), stringResource(R.string.order_fund_confirm), destructive = false, onDismiss = { confirmFund = null }) {
+        ConfirmDialog(stringResource(R.string.order_fund), fundQuestion(o), destructive = false, onDismiss = { confirmFund = null }) {
             o.id?.let { vm.fund(it, onPayPage = { u -> payPage = u }) }
         }
     }
@@ -421,6 +427,8 @@ private fun OrderCard(
                 Text(WorkisMoney.text(o.total, o.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
             }
         }
+        // the server's VAT and cargo sentences under the total (ledger 91) — never on a carrier card
+        if (!o.isCarrier) OrderMoneyWords(o)
         // the payment word is a legal fact and is NEVER cut: it takes its own
         // line under the amount rather than an ellipsis beside it (seen on a
         // narrow screen as "Güvenceli ödeme yok (açık hes…", 2026-09-19)

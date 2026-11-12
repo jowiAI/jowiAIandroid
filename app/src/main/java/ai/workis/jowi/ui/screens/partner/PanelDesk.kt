@@ -257,7 +257,7 @@ private fun jobIcon(job: String?): ImageVector = when (job) {
     "fund" -> WorkisIcons.Lock
     "ready" -> WorkisIcons.ShippingBox
     "lines" -> WorkisIcons.Checklist
-    "collect" -> WorkisIcons.CreditCard
+    "collect", "pay" -> WorkisIcons.CreditCard
     else -> WorkisIcons.Dot
 }
 
