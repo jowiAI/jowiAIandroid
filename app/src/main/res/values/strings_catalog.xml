@@ -354,6 +354,7 @@
     <string name="conversations_title">Correspondence</string>
     <string name="create">Create</string>
     <string name="create_partner">Create partner</string>
+    <string name="currency_field">Currency</string>
     <string name="datasheet_chip">Data sheet</string>
     <string name="days_word">days</string>
     <string name="decision_answer_placeholder">Your answer</string>
@@ -517,6 +518,7 @@
     <string name="family_proposed">Awaiting review</string>
     <string name="filter_document">Document</string>
     <string name="fix_or_resend">Fix the address or send again</string>
+    <string name="goods_total_ex_vat">Goods total (excl. VAT)</string>
     <string name="groups_add">Add a Workis group</string>
     <string name="groups_all_word">all</string>
     <string name="groups_choose">Choose its group</string>
@@ -929,6 +931,7 @@
     <string name="quote_terms_hint">Packaging and warranty become the order\'s terms at award — a blank one is asked later.</string>
     <string name="quote_terms_sheet">Terms</string>
     <string name="quote_terms_title">Terms of the quote</string>
+    <string name="quote_total_inc_vat">Quote total (incl. VAT)</string>
     <string name="quote_total_label">Quote total</string>
     <string name="quotes_empty">No quote requests yet.</string>
     <string name="quotes_in_word">quotes in</string>
@@ -1298,6 +1301,7 @@
     <string name="variants_empty">This product has no published variants.</string>
     <string name="variants_title">Rows</string>
     <string name="variants_word">variants</string>
+    <string name="vat_word">VAT</string>
     <string name="verifying">verifying</string>
     <string name="version_word">Version</string>
     <string name="virtual_seller_hint">Found by Workis; unverified (from an e-mail correspondence)</string>

@@ -838,7 +838,16 @@ data class InvBuyer(val short: String? = null, val city: String? = null, val hov
  * `discountPct` (2026-10-01) = the seller's usual rate on it, a percentage (12 = 12 %).
  */
 @Serializable
-data class SellerProduct(val sku: String? = null, val name: String? = null, @Serializable(with = FlexDouble::class) val listPrice: Double? = null, @Serializable(with = FlexDouble::class) val discountPct: Double? = null)
+data class SellerProduct(
+    val sku: String? = null, val name: String? = null,
+    @Serializable(with = FlexDouble::class) val listPrice: Double? = null, @Serializable(with = FlexDouble::class) val discountPct: Double? = null,
+    /** Ledger 92 (Django 6a6ec710, 72bfdf39): the row's currency — the request's, or on a free request the product's own. */
+    val currency: String? = null,
+    /** The catalogue price in ANOTHER currency as words ("12,50 EUR") — a reference only; `listPrice` is null then, nothing pre-fills. */
+    val otherPrice: String? = null,
+    /** A percentage (20), null when the product carries none. Prices are always WITHOUT VAT. */
+    @Serializable(with = FlexDouble::class) val vatRate: Double? = null,
+)
 
 /**
  * The terms born with the quote (2026-09-30), frozen at award for both seats.
@@ -888,7 +897,36 @@ data class QuoteLine(
     @Serializable(with = FlexDouble::class) val amount: Double? = null,
     @Serializable(with = FlexDouble::class) val listPrice: Double? = null,
     @Serializable(with = FlexDouble::class) val discountPct: Double? = null,
+    val currency: String? = null,
+    @Serializable(with = FlexDouble::class) val vatRate: Double? = null,
 )
+
+/** One VAT group of a sent quote: `rate` is a percentage, `amount` the VAT on that rate's lines. */
+@Serializable
+data class QuoteVat(
+    @Serializable(with = FlexDouble::class) val rate: Double? = null,
+    @Serializable(with = FlexDouble::class) val amount: Double? = null,
+)
+
+/** One currency of a sent quote (ledger 92): `total` WITHOUT VAT, one `vat` group per rate, `gross` WITH VAT. Currencies are never summed. */
+@Serializable
+data class QuoteTotal(
+    val currency: String? = null,
+    @Serializable(with = FlexDouble::class) val total: Double? = null,
+    val vat: List<QuoteVat>? = null,
+    @Serializable(with = FlexDouble::class) val gross: Double? = null,
+)
+
+/** Decodes to null instead of failing the invitation when `totals` is not the expected shape. */
+object QuoteTotalsTolerant : KSerializer<List<QuoteTotal>?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("QuoteTotals", PrimitiveKind.STRING)
+    override fun deserialize(decoder: Decoder): List<QuoteTotal>? {
+        val json = decoder as? JsonDecoder ?: return null
+        val arr = json.decodeJsonElement() as? JsonArray ?: return null
+        return arr.mapNotNull { el -> runCatching { json.json.decodeFromJsonElement(QuoteTotal.serializer(), el) }.getOrNull() }
+    }
+    override fun serialize(encoder: Encoder, value: List<QuoteTotal>?) {}
+}
 
 @Serializable
 data class SellerQuote(
@@ -909,6 +947,8 @@ data class SellerQuote(
     @Serializable(with = FlexDouble::class) val total: Double? = null,
     val pdfUrl: String? = null,
     val terms: QuoteTerms? = null, // echoes what was sent (2026-09-30)
+    /** Per currency (ledger 92); `currency` above is "" on a quote in several currencies. */
+    @Serializable(with = QuoteTotalsTolerant::class) val totals: List<QuoteTotal>? = null,
 )
 
 @Serializable
@@ -962,6 +1002,12 @@ data class SellerInvitation(
     val quote: SellerQuote? = null,
     val order: SellerOrder? = null,
     val lost: Boolean? = null,
+    /** The request says the currency (ledger 92): "TRY" | "USD" | "EUR", or "" = the seller is free and
+     *  every line carries its own (`currencies` feeds the per-line picker). */
+    val quoteCurrency: String? = null,
+    val currencies: List<String>? = null,
+    /** The server's sentence for the seller, printed above the prices as sent. */
+    val currencyNote: String? = null,
 ) {
     /** `withdrawn` (2026-10-04, lists_seat.py:116 / quotes_seat.py:299): the buyer took the request
      *  back — closed, no quote form; a quote already given stays on the record. */

@@ -354,6 +354,7 @@
     <string name="conversations_title">Yazışmalar</string>
     <string name="create">Oluştur</string>
     <string name="create_partner">Partner oluştur</string>
+    <string name="currency_field">Para birimi</string>
     <string name="datasheet_chip">Teknik bilgi formu</string>
     <string name="days_word">gün</string>
     <string name="decision_answer_placeholder">Yanıtınız</string>
@@ -517,6 +518,7 @@
     <string name="family_proposed">İnceleme bekliyor</string>
     <string name="filter_document">Belge</string>
     <string name="fix_or_resend">Adresi düzelt ya da yeniden gönder</string>
+    <string name="goods_total_ex_vat">Ürünler toplamı (KDV hariç)</string>
     <string name="groups_add">Workis grubu ekle</string>
     <string name="groups_all_word">tümü</string>
     <string name="groups_choose">Grubunu seç</string>
@@ -929,6 +931,7 @@
     <string name="quote_terms_hint">Ambalaj ve garanti, sipariş verildiğinde siparişin koşulları olur — boş bırakılan sonra sorulur.</string>
     <string name="quote_terms_sheet">Koşullar</string>
     <string name="quote_terms_title">Teklifin koşulları</string>
+    <string name="quote_total_inc_vat">Teklif toplamı (KDV dâhil)</string>
     <string name="quote_total_label">Teklif toplamı</string>
     <string name="quotes_empty">Henüz teklif isteği yok.</string>
     <string name="quotes_in_word">gelen teklif</string>
@@ -1298,6 +1301,7 @@
     <string name="variants_empty">Bu ürünün yayında varyantı yok.</string>
     <string name="variants_title">Satırlar</string>
     <string name="variants_word">varyant</string>
+    <string name="vat_word">KDV</string>
     <string name="verifying">doğrulanıyor</string>
     <string name="version_word">Sürüm</string>
     <string name="virtual_seller_hint">Workis buldu; doğrulanmamış (e-posta yazışmasından)</string>

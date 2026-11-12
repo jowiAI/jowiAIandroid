@@ -94,6 +94,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -594,7 +595,8 @@ private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onRevise: () -> Un
                 Spacer(Modifier.width(8.dp))
                 Text(WorkisMoney.qty(l.qty) + " × " + WorkisMoney.text(l.unitPrice, null), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, softWrap = false)
                 Spacer(Modifier.width(8.dp))
-                Text(WorkisMoney.text(l.amount, null), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink, softWrap = false)
+                // on a quote in several currencies each amount says its own
+                Text(WorkisMoney.text(l.amount, l.currency.takeIf { q.totals.orEmpty().size > 1 }), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink, softWrap = false)
             }
             // what the line was priced against (2026-10-01): "liste X · −Y %"
             l.listPrice?.let { lp ->
@@ -605,9 +607,21 @@ private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onRevise: () -> Un
             }
         }
         HorizontalDivider(color = colors.border.copy(alpha = 0.6f))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.total_label), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.muted, modifier = Modifier.weight(1f))
-            Text(WorkisMoney.text(q.total ?: q.price, q.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink, maxLines = 1, softWrap = false)
+        val totals = q.totals.orEmpty()
+        if (totals.isNotEmpty()) {
+            // the server's sums, one block per currency — never added together (ledger 92)
+            totals.forEach { tot ->
+                val vat = tot.vat.orEmpty().filter { it.amount != null }
+                if (vat.isEmpty() || tot.gross == null) {
+                    QuoteSumRow(stringResource(R.string.goods_total_ex_vat), tot.total, tot.currency, strong = true)
+                } else {
+                    QuoteSumRow(stringResource(R.string.goods_total_ex_vat), tot.total, tot.currency, strong = false)
+                    vat.forEach { g -> QuoteSumRow(vatLine(g.rate), g.amount, tot.currency, strong = false) }
+                    QuoteSumRow(stringResource(R.string.quote_total_inc_vat), tot.gross, tot.currency, strong = true)
+                }
+            }
+        } else {
+            QuoteSumRow(stringResource(R.string.total_label), q.total ?: q.price, q.currency, strong = true)
         }
         // the terms as one flowing text (wraps as text, never as columns)
         val days = listOfNotNull(
@@ -626,6 +640,38 @@ private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onRevise: () -> Un
             Text(stringResource(R.string.quote_revise), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable(onClick = onRevise))
         }
     }
+}
+
+/** One sum of the sent quote: the label ↔ the server's number in its own currency. */
+@Composable
+private fun QuoteSumRow(label: String, value: Double?, currency: String?, strong: Boolean) {
+    val colors = WorkisTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, fontSize = 12.sp, fontWeight = if (strong) FontWeight.Medium else FontWeight.Normal, color = colors.muted, modifier = Modifier.weight(1f))
+        Text(
+            WorkisMoney.text(value, currency?.takeIf { it.isNotEmpty() }), fontFamily = WorkisMono,
+            fontWeight = if (strong) FontWeight.SemiBold else FontWeight.Medium, fontSize = if (strong) 14.sp else 12.sp,
+            color = colors.ink, maxLines = 1, softWrap = false,
+        )
+    }
+}
+
+/** "KDV %20" / "VAT 20%" — the rate is a percentage as the server sends it (ledger 92). */
+@Composable
+private fun vatLine(rate: Double?): String {
+    val r = WorkisMoney.pct(rate)
+    return if (Graph.language.value == "en") stringResource(R.string.vat_word) + " $r%" else stringResource(R.string.vat_word) + " %$r"
+}
+
+/**
+ * What the typing adds up to in ONE currency (ledger 92): `net` = Σ qty × unit price without VAT;
+ * `vat` = (rate, amount) highest rate first, null when a priced row of that currency carries no
+ * rate — the server decides that row's rate, the form does not guess. A preview only.
+ */
+private class QuoteSum(val currency: String) {
+    var net: BigDecimal = BigDecimal.ZERO
+    var vat: MutableList<Pair<Double, BigDecimal>>? = mutableListOf()
+    val gross: BigDecimal? get() = vat?.fold(net) { acc, g -> acc + g.second }
 }
 
 /** The won order: ONE non-wrapping line "SİPARİŞ KAZANILDI … total", the PO under it, payment, shipment. */
@@ -673,6 +719,8 @@ private fun OrderLine(icon: androidx.compose.ui.graphics.vector.ImageVector, tex
 private data class PriceRow(
     val sku: String, val name: String, val group: String?, val qty: Double?, val unit: String?,
     val listPrice: Double? = null, val discountPct: Double? = null, val single: Boolean = false,
+    // ledger 92: the row's currency as sent, the catalogue price in another currency (a reference only), the VAT percentage
+    val currency: String? = null, val otherPrice: String? = null, val vatRate: Double? = null,
 ) {
     val list: BigDecimal? get() = listPrice?.takeIf { it > 0 }?.let { BigDecimal.valueOf(it) }
 }
@@ -725,7 +773,7 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
         val li = inv.listItems.orEmpty()
         if (li.isNotEmpty()) li.flatMap { item ->
             val alts = item.alts.orEmpty()
-            alts.mapNotNull { a -> a.sku?.let { PriceRow(it, a.name ?: it, item.itemName, item.qty, item.unit, a.listPrice, a.discountPct, single = alts.size == 1) } }
+            alts.mapNotNull { a -> a.sku?.let { PriceRow(it, a.name ?: it, item.itemName, item.qty, item.unit, a.listPrice, a.discountPct, single = alts.size == 1, currency = a.currency, otherPrice = a.otherPrice, vatRate = a.vatRate) } }
         }
         else inv.shortlist.orEmpty().mapNotNull { p -> p.sku?.let { PriceRow(it, p.name ?: it, null, inv.qty, null) } }
     }
@@ -734,6 +782,13 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
     // sku → discount % text (rows with a list price)
     val discounts = remember { mutableStateMapOf<String, String>().apply { rows.forEach { r -> prefillOf(r)?.second?.let { put(r.sku, it) } } } }
     val qtys = remember { mutableStateMapOf<String, String>().apply { rows.forEach { put(it.sku, WorkisMoney.qty(it.qty)) } } }
+    // ledger 92: the request names ONE currency for every seller, or ("" / absent) the seller is free
+    // and each line says its own — a picker over the server's list, sku → currency
+    val fixedCurrency = inv.quoteCurrency?.takeIf { it.isNotEmpty() }
+    val pickable = if (fixedCurrency == null) inv.currencies.orEmpty() else emptyList()
+    val currencies = remember { mutableStateMapOf<String, String>() }
+    fun currencyOf(r: PriceRow): String? =
+        fixedCurrency ?: currencies[r.sku]?.takeIf { it.isNotEmpty() } ?: r.currency?.takeIf { it.isNotEmpty() }
     var leadTime by rememberSaveable { mutableStateOf("") }
     var validDays by rememberSaveable { mutableStateOf("30") }
     var vade by rememberSaveable { mutableStateOf(0) }
@@ -779,6 +834,9 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
                 put("listPrice", JsonPrimitive(WorkisMoney.plain(lp)))
                 discounts[r.sku].orEmpty().trim().takeIf { it.isNotEmpty() }?.let { put("discountPct", JsonPrimitive(apiNumber(it))) }
             }
+            // a free request: the line says its currency (send and draft alike); on a request that
+            // names one nothing is sent — the server writes the request's. No rate is ever sent.
+            if (fixedCurrency == null) currencyOf(r)?.let { put("currency", JsonPrimitive(it)) }
         }
     })
     // only what was stated
@@ -794,11 +852,25 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
     )
     // the web's Send guard: packaging and warranty months become the order's terms at award
     val termsMissing = packaging.isBlank() || warrantyMonths.trim().toIntOrNull() == null
-    // Σ qty × unit price over the priced rows — a preview, never the amount of record
-    val runningTotal: BigDecimal? = rows.mapNotNull { r ->
-        val p = WorkisMoney.parse(prices[r.sku]) ?: return@mapNotNull null
-        p * (WorkisMoney.parse(qtys[r.sku]) ?: r.qty?.let { BigDecimal.valueOf(it) } ?: BigDecimal.ONE)
-    }.takeIf { it.isNotEmpty() }?.fold(BigDecimal.ZERO, BigDecimal::add)
+    // What the typing adds up to, ONE block per currency — never summed, nothing converted. A line's
+    // VAT is rounded to the kuruş on its own (round(qty × unit × rate) / 100), then grouped by rate.
+    // A preview, never the amount of record: after Send the quote prints the server's `totals`.
+    val runningSums: List<QuoteSum> = buildList {
+        rows.forEach { r ->
+            val p = WorkisMoney.parse(prices[r.sku]) ?: return@forEach
+            val amount = p * (WorkisMoney.parse(qtys[r.sku]) ?: r.qty?.let { BigDecimal.valueOf(it) } ?: BigDecimal.ONE)
+            val cur = currencyOf(r).orEmpty()
+            val sum = firstOrNull { it.currency == cur } ?: QuoteSum(cur).also { add(it) }
+            sum.net += amount
+            val rate = r.vatRate
+            if (rate == null) { sum.vat = null; return@forEach }
+            val groups = sum.vat ?: return@forEach
+            val lineVat = (amount * BigDecimal.valueOf(rate)).setScale(0, RoundingMode.HALF_UP).divide(HUNDRED)
+            val i = groups.indexOfFirst { it.first == rate }
+            if (i >= 0) groups[i] = rate to (groups[i].second + lineVat) else groups += rate to lineVat
+        }
+        forEach { it.vat?.sortByDescending { g -> g.first } }
+    }
 
     fun signature(): String = body().toString()
     /** A draft is what the seller typed: it wins over the prefill, never over an edit made meanwhile. */
@@ -809,6 +881,7 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
             val p = l.text("unit_price", "unitPrice")
             if (p != null) { prices[sku] = p; discounts[sku] = l.text("discount_pct", "discountPct").orEmpty() }
             l.text("qty")?.let { qtys[sku] = it }
+            l.text("currency")?.takeIf { it in pickable }?.let { currencies[sku] = it }
         }
         d.text("lead_time_days", "leadTimeDays")?.let { leadTime = it }
         d.text("valid_days", "validDays")?.let { validDays = it }
@@ -865,6 +938,14 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
             Text(inv.buyer?.short.orEmpty() + (inv.buyer?.city?.let { " ($it)" } ?: ""), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
             // the request's own term, above the price grid
             DeliveryPlaceLine(inv.deliveryPlace)
+            // the currency rule of this request, in the server's words (ledger 92)
+            inv.currencyNote?.takeIf { it.isNotEmpty() }?.let { cn ->
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(WorkisIcons.CreditCard, contentDescription = null, tint = colors.muted, modifier = Modifier.padding(top = 2.dp).size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(cn, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
+                }
+            }
             // the autosave tick: icon + word, never colour alone
             AnimatedVisibility(visible = draftTick, enter = fadeIn(), exit = fadeOut()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -908,8 +989,21 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
                                             Text(stringResource(R.string.quote_list_word) + " " + WorkisMoney.text(list.toDouble(), null), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, modifier = Modifier.weight(1f))
                                             OutlinedTextField(value = discounts[r.sku].orEmpty(), onValueChange = { setDiscount(r, it) }, placeholder = { Text("%", color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink).readingStep(), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(72.dp).semantics { contentDescription = discountLabel })
                                             Text("%", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
+                                        } else if (!r.otherPrice.isNullOrEmpty()) {
+                                            // the catalogue price is in another currency: a reference, nothing pre-filled, no discount
+                                            Text(stringResource(R.string.quote_list_word) + " " + r.otherPrice, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1, modifier = Modifier.weight(1f))
                                         } else Spacer(Modifier.weight(1f))
                                         OutlinedTextField(value = prices[r.sku].orEmpty(), onValueChange = { setPrice(r, it) }, placeholder = { Text(stringResource(R.string.unit_price_field), color = colors.faint, fontSize = 12.sp) }, singleLine = true, shape = RoundedCornerShape(10.dp), colors = fc, textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = colors.ink).readingStep(), keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = Modifier.width(120.dp))
+                                        if (pickable.size > 1) {
+                                            // a free request: each line says its own currency
+                                            CurrencyMenu(currencyOf(r) ?: pickable[0], pickable) { currencies[r.sku] = it }
+                                        } else currencyOf(r)?.let { c ->
+                                            Text(c, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint)
+                                        }
+                                    }
+                                    // the price is without VAT; the row's rate, when it carries one
+                                    r.vatRate?.let { rate ->
+                                        Text(vatLine(rate), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
                                     }
                                 }
                             }
@@ -917,12 +1011,18 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
                         if (g.isNotEmpty() && rs.size > 1) Text(stringResource(R.string.alts_hint), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
                     }
                 }
-                // the quote total follows the typing — a preview of the sum the server will write
-                runningTotal?.let { total ->
+                // the totals follow the typing — one block per currency, the binding words
+                runningSums.forEach { sum ->
                     SurfaceCard {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(stringResource(R.string.quote_total_label), fontSize = 13.sp, color = colors.muted, modifier = Modifier.weight(1f))
-                            Text(WorkisMoney.text(total.toDouble(), null), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = colors.ink)
+                        val cur = sum.currency.takeIf { it.isNotEmpty() }
+                        val vat = sum.vat
+                        val gross = sum.gross
+                        if (vat != null && gross != null) {
+                            ComposerSumRow(stringResource(R.string.goods_total_ex_vat), sum.net, cur, strong = false)
+                            vat.forEach { g -> ComposerSumRow(vatLine(g.first), g.second, cur, strong = false) }
+                            ComposerSumRow(stringResource(R.string.quote_total_inc_vat), gross, cur, strong = true)
+                        } else {
+                            ComposerSumRow(stringResource(R.string.goods_total_ex_vat), sum.net, cur, strong = true)
                         }
                     }
                 }
@@ -972,6 +1072,40 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
                 Row { TextButton(onClick = { suggestion = null }) { Text(stringResource(R.string.polish_ignore), color = colors.muted) }; Spacer(Modifier.weight(1f))
                     Button(onClick = { if (target == "letter") letter = text else note = text; suggestion = null }, colors = ButtonDefaults.buttonColors(containerColor = Kiremit400, contentColor = OnKiremitFill), modifier = Modifier.height(44.dp)) { Text(stringResource(R.string.polish_apply), fontWeight = FontWeight.SemiBold) } }
                 Spacer(Modifier.height(20.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ComposerSumRow(label: String, value: BigDecimal, currency: String?, strong: Boolean) {
+    val colors = WorkisTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, fontSize = 13.sp, color = colors.muted, modifier = Modifier.weight(1f))
+        Text(
+            WorkisMoney.text(value.toDouble(), currency), fontFamily = WorkisMono,
+            fontWeight = if (strong) FontWeight.SemiBold else FontWeight.Medium, fontSize = if (strong) 15.sp else 13.sp, color = colors.ink,
+        )
+    }
+}
+
+/** The line's currency on a free request: the code + a caret, a menu over the server's list. */
+@Composable
+private fun CurrencyMenu(value: String, options: List<String>, onPick: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    var open by remember { mutableStateOf(false) }
+    val label = stringResource(R.string.currency_field)
+    Box {
+        Text(
+            "$value ⌄", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.ink,
+            modifier = Modifier.clickable { open = true }.padding(vertical = 8.dp).semantics { contentDescription = "$label: $value" },
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { c ->
+                DropdownMenuItem(
+                    text = { Text(c, fontFamily = WorkisMono, fontSize = 14.sp, color = colors.ink, fontWeight = if (c == value) FontWeight.SemiBold else FontWeight.Normal) },
+                    onClick = { open = false; onPick(c) },
+                )
             }
         }
     }
