@@ -5,12 +5,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
@@ -447,39 +449,62 @@ fun ThreadScreen(door: ThreadDoor, onBack: () -> Unit, onContract: (String, Stri
                 InspectionStrip(p)
                 // the seven term cards live in a strip above the turns; it opens
                 // by itself while something is still missing
-                val terms = p.terms.orEmpty()
-                // while the cards are open the strip takes two thirds of the page and scrolls
-                // inside it; the turns keep the rest (it used to push them — and its own
-                // lower cards — off the screen, with nothing scrolling)
-                var termsOpen by remember { mutableStateOf(false) }
-                if (terms.isNotEmpty()) {
-                    TermsStrip(
-                        terms, p.nTermsOk ?: 0, p.nTerms ?: terms.size, vm,
-                        // a date, a cargo level, a payment way is CHOSEN; the rest is written
-                        onEdit = { if (it.key in choiceKeys && p.termChoices != null) choiceTerm = it else editTerm = it },
-                        onConfirmAmendment = { confirmTerm = it },
-                        modifier = if (termsOpen) Modifier.weight(2f, fill = false) else Modifier,
-                        onOpen = { termsOpen = it },
-                    )
-                    Spacer(Modifier.height(10.dp))
-                }
-                val seats = otherSeats(p)
-                LazyColumn(state = listState, modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    // what the two parties wrote before the award opens the order's
-                    // story — read-only, under its own heading, quieter than the table
-                    val quote = p.quoteStage.orEmpty()
-                    if (quote.isNotEmpty()) {
-                        item(key = "quote-stage-title") {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                                Icon(WorkisIcons.Bubble, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(8.dp))
-                                Text(stringResource(R.string.thread_quote_stage_title), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.muted)
-                            }
+                BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                    val turnsMax = maxHeight / 3
+                    Column(Modifier.fillMaxSize()) {
+                        val terms = p.terms.orEmpty()
+                        // while the cards are open the strip scrolls inside its own share of the page:
+                        // the turns take what they NEED, a third of the page at most, and the cards get
+                        // everything else — a table with no turns yet leaves the whole page to the cards
+                        // (a fixed 2:1 split left a third of the screen empty under them)
+                        var termsOpen by remember { mutableStateOf(false) }
+                        if (terms.isNotEmpty()) {
+                            TermsStrip(
+                                terms, p.nTermsOk ?: 0, p.nTerms ?: terms.size, vm,
+                                // a date, a cargo level, a payment way is CHOSEN; the rest is written
+                                onEdit = { if (it.key in choiceKeys && p.termChoices != null) choiceTerm = it else editTerm = it },
+                                onConfirmAmendment = { confirmTerm = it },
+                                modifier = if (termsOpen) Modifier.weight(1f, fill = false) else Modifier,
+                                onOpen = { termsOpen = it },
+                            )
+                            Spacer(Modifier.height(10.dp))
                         }
-                        itemsIndexed(quote, key = { i, m -> "q-" + (m.id ?: "$i") }) { i, m ->
-                            Column(Modifier.alpha(0.75f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        val seats = otherSeats(p)
+                        LazyColumn(state = listState, modifier = if (termsOpen) Modifier.heightIn(max = turnsMax) else Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // what the two parties wrote before the award opens the order's
+                            // story — read-only, under its own heading, quieter than the table
+                            val quote = p.quoteStage.orEmpty()
+                            if (quote.isNotEmpty()) {
+                                item(key = "quote-stage-title") {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                                        Icon(WorkisIcons.Bubble, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(stringResource(R.string.thread_quote_stage_title), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.muted)
+                                    }
+                                }
+                                itemsIndexed(quote, key = { i, m -> "q-" + (m.id ?: "$i") }) { i, m ->
+                                    Column(Modifier.alpha(0.75f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        val day = dayOf(m.at)
+                                        val prevDay = quote.getOrNull(i - 1)?.let { dayOf(it.at) }
+                                        if (day.isNotEmpty() && day != prevDay) {
+                                            Text(
+                                                day, fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint,
+                                                textAlign = TextAlign.Center,
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                            )
+                                        }
+                                        // no receipts, no "Geri çek": that table is closed
+                                        MessageRow(m, seats, vm, readOnly = true) {}
+                                    }
+                                }
+                                item(key = "quote-stage-end") {
+                                    Box(Modifier.fillMaxWidth().padding(top = 4.dp).height(1.dp).background(colors.border))
+                                }
+                            }
+                            itemsIndexed(messages, key = { i, m -> m.id ?: "m$i" }) { i, m ->
+                                // a faint date line whenever the day turns over
                                 val day = dayOf(m.at)
-                                val prevDay = quote.getOrNull(i - 1)?.let { dayOf(it.at) }
+                                val prevDay = messages.getOrNull(i - 1)?.let { dayOf(it.at) }
                                 if (day.isNotEmpty() && day != prevDay) {
                                     Text(
                                         day, fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint,
@@ -487,34 +512,17 @@ fun ThreadScreen(door: ThreadDoor, onBack: () -> Unit, onContract: (String, Stri
                                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                     )
                                 }
-                                // no receipts, no "Geri çek": that table is closed
-                                MessageRow(m, seats, vm, readOnly = true) {}
+                                MessageRow(m, seats, vm) { retractTarget = m }
                             }
-                        }
-                        item(key = "quote-stage-end") {
-                            Box(Modifier.fillMaxWidth().padding(top = 4.dp).height(1.dp).background(colors.border))
-                        }
-                    }
-                    itemsIndexed(messages, key = { i, m -> m.id ?: "m$i" }) { i, m ->
-                        // a faint date line whenever the day turns over
-                        val day = dayOf(m.at)
-                        val prevDay = messages.getOrNull(i - 1)?.let { dayOf(it.at) }
-                        if (day.isNotEmpty() && day != prevDay) {
-                            Text(
-                                day, fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            )
-                        }
-                        MessageRow(m, seats, vm) { retractTarget = m }
-                    }
-                    if (vm.localLines.isNotEmpty()) {
-                        item { PrivateCard(vm.localLines.toList(), vm.privateNote) }
-                        if (vm.tableRetry != null) {
-                            item { SendToTableChip(enabled = !vm.busy) { vm.sendToTable() } }
+                            if (vm.localLines.isNotEmpty()) {
+                                item { PrivateCard(vm.localLines.toList(), vm.privateNote) }
+                                if (vm.tableRetry != null) {
+                                    item { SendToTableChip(enabled = !vm.busy) { vm.sendToTable() } }
+                                }
+                            }
+                            item { Spacer(Modifier.height(8.dp)) }
                         }
                     }
-                    item { Spacer(Modifier.height(8.dp)) }
                 }
                 // the coordinator reads the table; no composer
                 if (!p.readOnly) {
