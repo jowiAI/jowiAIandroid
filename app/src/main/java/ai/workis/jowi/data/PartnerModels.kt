@@ -599,9 +599,22 @@ data class PLProposalOption(
     @Serializable(with = FlexDouble::class) val amount: Double? = null,
     val recommended: Boolean? = null,
     val carried: PLCarried? = null,
+    /**
+     * Ledger 94 (2026-11-12/14): `amount` is NET; the server's own VAT and gross of the line and its
+     * rate (percent, null = the line carries none); in a matrix cell `lowest` (the lowest unit price
+     * among the offers in ITS currency, only where two sellers compare) and `off` (priced in another
+     * currency than the request named — never compared by number).
+     */
+    @Serializable(with = FlexDouble::class) val vat: Double? = null,
+    @Serializable(with = FlexDouble::class) val gross: Double? = null,
+    @Serializable(with = FlexDouble::class) val vatRate: Double? = null,
+    @SerialName("vat_rate") @Serializable(with = FlexDouble::class) val vatRateSnake: Double? = null,
+    @Serializable(with = FlexBool::class) val lowest: Boolean? = null,
+    @Serializable(with = FlexBool::class) val off: Boolean? = null,
 ) {
     val seller_ get() = sellerId ?: sellerIdSnake
     val unit get() = unitPrice ?: unitPriceSnake
+    val rate get() = vatRate ?: vatRateSnake
     /** The pick's value on `award/` `selections`: `{seller_id, sku}` — keyed "sellerId|sku" on the page. */
     val key get() = (seller_ ?: "") + "|" + (sku ?: "")
 }
@@ -618,6 +631,80 @@ data class PLCarried(
     val until get() = validUntil ?: validUntilSnake
 }
 
+/** `proposal.matrix` (ledger 94, Django compare.py) — passed through as computed, so its keys are snake_case. */
+@Serializable
+data class PLMatrixMoney(val currency: String? = null, @Serializable(with = FlexDouble::class) val total: Double? = null)
+
+@Serializable
+data class PLMatrixQuote(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val number: String? = null,
+    @Serializable(with = FlexBool::class) val pdf: Boolean? = null,
+)
+
+/** One column: a QUOTE, widest first. `rows` = how many rows it quoted; `all` = the net of everything it quoted, per currency. */
+@Serializable
+data class PLMatrixSeller(
+    @SerialName("seller_id") @Serializable(with = FlexString::class) val sellerIdSnake: String? = null,
+    @Serializable(with = FlexString::class) val sellerId: String? = null,
+    val lbl: PLLabel? = null,
+    @Serializable(with = FlexInt::class) val rows: Int? = null,
+    val quote: PLMatrixQuote? = null,
+    val all: List<PLMatrixMoney>? = null,
+) {
+    val id get() = sellerIdSnake ?: sellerId ?: ""
+}
+
+/** One row of the request; `cells[i]` belongs to `sellers[i]`, [] = it did not quote. A row nobody quoted stays. */
+@Serializable
+data class PLMatrixRow(
+    @SerialName("item_id") @Serializable(with = FlexString::class) val itemIdSnake: String? = null,
+    @Serializable(with = FlexString::class) val itemId: String? = null,
+    @SerialName("item_name") val itemNameSnake: String? = null,
+    val itemName: String? = null,
+    @Serializable(with = FlexDouble::class) val qty: Double? = null,
+    val unit: String? = null,
+    @Serializable(with = FlexBool::class) val quoted: Boolean? = null,
+    val cells: List<List<PLProposalOption>>? = null,
+) {
+    val id get() = itemIdSnake ?: itemId ?: ""
+    val name get() = itemNameSnake ?: itemName
+    val isQuoted get() = quoted ?: cells.orEmpty().any { it.isNotEmpty() }
+}
+
+@Serializable
+data class PLMatrixTermCell(
+    @Serializable(with = FlexString::class) val text: String? = null,
+    @Serializable(with = FlexBool::class) val conflict: Boolean? = null,
+    @Serializable(with = FlexBool::class) val fromChat: Boolean? = null,
+    @SerialName("from_chat") @Serializable(with = FlexBool::class) val fromChatSnake: Boolean? = null,
+) {
+    val isFromChat get() = (fromChat ?: fromChatSnake) == true
+}
+
+/** One term as a row; `cells[i]` belongs to `sellers[i]`, null = that quote says nothing. */
+@Serializable
+data class PLMatrixTerm(val key: String? = null, val label: String? = null, val cells: List<PLMatrixTermCell?>? = null)
+
+/** `sellers` and `rows` are the matrix — without them it reads as "no matrix". */
+@Serializable
+data class PLMatrix(
+    val sellers: List<PLMatrixSeller>,
+    val rows: List<PLMatrixRow>,
+    val terms: List<PLMatrixTerm>? = null,
+)
+
+/** An odd matrix shape decodes as null ("no matrix" — the rows are `proposal.items`) and never sinks the list. */
+object PLMatrixTolerant : KSerializer<PLMatrix?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("PLMatrix", PrimitiveKind.STRING)
+    override fun deserialize(decoder: Decoder): PLMatrix? {
+        val json = decoder as? JsonDecoder ?: return null
+        val o = json.decodeJsonElement() as? JsonObject ?: return null
+        return runCatching { json.json.decodeFromJsonElement(PLMatrix.serializer(), o) }.getOrNull()
+    }
+    override fun serialize(encoder: Encoder, value: PLMatrix?) = encoder.encodeNull()
+}
+
 @Serializable
 data class PLProposal(
     val assignments: List<PLAssignment>? = null,
@@ -630,6 +717,11 @@ data class PLProposal(
     val reason: String? = null,
     /** Every item with every seller's option — the decision page's rows (2026-10-29). */
     val items: List<PLProposalItem>? = null,
+    /** Ledger 94 (2026-11-13): the currency the request named ("" = free) and the server's sentence about prices that came in another one — printed as it arrives. */
+    val askedCurrency: String? = null,
+    val currencyNote: String? = null,
+    /** Ledger 94 (2026-11-14): the comparison as a matrix — rows = the request, columns = the quotes. */
+    @Serializable(with = PLMatrixTolerant::class) val matrix: PLMatrix? = null,
 )
 
 @Serializable
@@ -716,6 +808,13 @@ data class PurchaseListDetail(
     val chatUnreadTotal: Int? = null,
     /** The buyer's "Satıcı yazışmaları" rows — one per invited seller. */
     val chatInvites: List<PLChatInvite>? = null,
+    /**
+     * The currency the request is quoted in (ledger 93, Django 6a6ec710) — at the TOP level, beside
+     * `rfqNote`: "TRY" | "USD" | "EUR" | "" = the seller is free; null = an older server.
+     * `quoteCurrencies` is the picker's one source; written on a draft only (`note/ {quoteCurrency}`).
+     */
+    val quoteCurrency: String? = null,
+    val quoteCurrencies: List<WorkisUnit>? = null,
     val rfqNote: String? = null,
     val rfqLetter: String? = null,
     val rfqLetterDefault: String? = null,
@@ -815,8 +914,9 @@ data class UseReply(val success: Boolean = false, val card: PLUseCard? = null, v
 @Serializable
 data class ListRenameBody(val title: String)
 
+/** `lists/{id}/note/`: the note and the letter, or ONLY `quoteCurrency` (ledger 93) — nulls are not sent. */
 @Serializable
-data class NoteBody(val note: String? = null, val letter: String? = null)
+data class NoteBody(val note: String? = null, val letter: String? = null, val quoteCurrency: String? = null)
 
 @Serializable
 data class RequestQuotesBody(val excluded: List<String>)

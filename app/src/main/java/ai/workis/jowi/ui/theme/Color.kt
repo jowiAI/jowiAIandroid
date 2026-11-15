@@ -74,6 +74,15 @@ data class WorkisColors(
     /** Status ink and its band — a STATUS colour, never an action colour. */
     val success: Color,
     val successBg: Color,
+    /** Accent-soft ground under accent TEXT (a quiet button, a notice band) — kiremit-100 / kiremit-900 (ledger 94). */
+    val accentSoft: Color,
+    /**
+     * The comparison's ground (ledger 94): in DARK the table stands off the cool page by HUE — a warm
+     * ground and its sub-total band; in light they are the page's own card.
+     */
+    val tableGround: Color,
+    val tableSub: Color,
+    val isDark: Boolean,
 )
 
 val WorkisLightColors = WorkisColors(
@@ -90,6 +99,10 @@ val WorkisLightColors = WorkisColors(
     beigeBg = Color(0xFFE2DBAC),
     success = Color(0xFF1E6417),
     successBg = Color(0xFFC4E2C1),
+    accentSoft = Color(0xFFF9DCCC),
+    tableGround = Color(0xFFFAF7F2),
+    tableSub = Color(0xFFFAF7F2),
+    isDark = false,
 )
 
 val WorkisDarkColors = WorkisColors(
@@ -106,6 +119,10 @@ val WorkisDarkColors = WorkisColors(
     beigeBg = Color(0xFF45412D),
     success = Color(0xFF6FBF73),
     successBg = Color(0xFF33432F),
+    accentSoft = Color(0xFF4F2412),
+    tableGround = Color(0xFF2F2C25),
+    tableSub = Color(0xFF37342B),
+    isDark = true,
 )
 
 val LocalWorkisColors = staticCompositionLocalOf { WorkisLightColors }

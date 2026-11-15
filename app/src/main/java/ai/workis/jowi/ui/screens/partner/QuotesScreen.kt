@@ -658,7 +658,7 @@ private fun QuoteSumRow(label: String, value: Double?, currency: String?, strong
 
 /** "KDV %20" / "VAT 20%" — the rate is a percentage as the server sends it (ledger 92). */
 @Composable
-private fun vatLine(rate: Double?): String {
+internal fun vatLine(rate: Double?): String {
     val r = WorkisMoney.pct(rate)
     return if (Graph.language.value == "en") stringResource(R.string.vat_word) + " $r%" else stringResource(R.string.vat_word) + " %$r"
 }

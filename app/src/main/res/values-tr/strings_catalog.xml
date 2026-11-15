@@ -420,6 +420,8 @@
     <string name="email_label">İş e-postası</string>
     <string name="email_placeholder">ornek@firma.com</string>
     <string name="email_section">İŞ E-POSTASI</string>
+    <string name="everything_quoted">Teklif verdiği her şey</string>
+    <string name="ex_vat_word">KDV hariç</string>
     <string name="exclude_seller">Atla</string>
     <string name="expert_affil_excluded">bağlantı beyanınız nedeniyle başka uzmanlara yönlendirildi</string>
     <string name="expert_affiliation">Üretici / satıcı bağlantısı beyanı</string>
@@ -587,9 +589,11 @@
     <string name="guide_share">PDF olarak paylaş</string>
     <string name="has_email_label">e-posta gidecek</string>
     <string name="held_tag">İncelemede</string>
+    <string name="hide_action">Gizle</string>
     <string name="hide_original">orijinali gizle</string>
     <string name="holder_field">Hesap sahibi</string>
     <string name="iban_field">IBAN (TR)</string>
+    <string name="inc_vat_word">KDV dâhil</string>
     <string name="ing_cancel">Durdur</string>
     <string name="ing_cancelled">Durduruldu</string>
     <string name="ing_created">Sırada</string>
@@ -617,6 +621,7 @@
     <string name="invoice_pay_confirm">Fatura Workis üzerinden ödenir; satıcıya ardından aktarılır.</string>
     <string name="item_name">Kalem adı</string>
     <string name="items_covered">kalem karşılandı</string>
+    <string name="items_no_quote_yet">%d kaleme henüz teklif gelmedi</string>
     <string name="items_word">kalem</string>
     <string name="jowi_answered_last">son</string>
     <string name="jowi_answered_title">Jowi yanıtladı</string>
@@ -689,6 +694,7 @@
     <string name="lists_unit">liste</string>
     <string name="live_empty">Henüz yayında teklif yok.</string>
     <string name="live_sub">Yayındaki teklifler — fiyat, ad, temin süresi, stok ve görünürlük düzenlenebilir; Geri Al bir ürün ailesini incelemeye geri götürür.</string>
+    <string name="lowest_unit_price">en düşük birim fiyat</string>
     <string name="lowest_word">en düşük</string>
     <string name="ls_checking">Kontrol ediliyor</string>
     <string name="ls_closed">Kapandı</string>
@@ -747,6 +753,7 @@
     <string name="no_email">e-posta yok</string>
     <string name="no_match">Eşleşme yok</string>
     <string name="no_profile_body">Bu hesabın henüz Workis üyeliği yok. Başvurunuz onaylandıysa, onay e-postanızdaki adresle girin. Yeni misin? Giriş ekranından başvurabilirsin.</string>
+    <string name="no_quote_yet">henüz teklif yok</string>
     <string name="not_urgent_action">Acele değil</string>
     <string name="note_kind_duplicate">mükerrer</string>
     <string name="note_kind_incompatible">uyumsuz</string>
@@ -757,6 +764,7 @@
     <string name="note_kind_standard">standart</string>
     <string name="note_placeholder">Teklif isteğiyle giden isteğe bağlı not…</string>
     <string name="note_title">Satıcılara not</string>
+    <string name="nothing_picked">Hiçbir kalem seçilmedi.</string>
     <string name="notifications_build_off">Bu sürümde bildirim kaydı kapalı</string>
     <string name="notifications_denied">Bildirim izni verilmedi — Ayarlar\'dan açabilirsiniz.</string>
     <string name="notifications_row">Bildirimler</string>
@@ -765,6 +773,7 @@
     <string name="object_placeholder">Neye itiraz ediyorsunuz? (en az 10 karakter)</string>
     <string name="object_sub">Sözleşme 5.5 — ekstreden itibaren 5 iş günü; koordinatör karar verir.</string>
     <string name="object_title">Ekstreye itiraz</string>
+    <string name="off_currency_hint">İstediğinizden başka bir para biriminde fiyatlandı — elle karşılaştırın</string>
     <string name="oldest_word">en eski</string>
     <string name="open_invitations">açık talep</string>
     <string name="open_list">Listeyi aç</string>
@@ -807,6 +816,7 @@
     <string name="order_terms_badge">koşul</string>
     <string name="order_terms_missing">eksik</string>
     <string name="order_terms_settled">koşul kesinleşti</string>
+    <string name="order_total_inc_vat">Sipariş toplamı (KDV dâhil)</string>
     <string name="order_tracking">Takip no</string>
     <string name="order_unread">okunmamış</string>
     <string name="order_who_buyer">Alıcıda</string>
@@ -816,6 +826,7 @@
     <string name="order_who_workis">Workis\'te</string>
     <string name="order_won">Sipariş kazanıldı</string>
     <string name="orders_empty">Henüz sipariş yok.</string>
+    <string name="orders_from_selection">Bu seçimle oluşacak siparişler</string>
     <string name="orders_quoting_title">Teklif aşaması</string>
     <string name="orders_screen_title">Siparişler</string>
     <string name="orders_title">Siparişler</string>
@@ -872,6 +883,9 @@
     <string name="permissions_title">Yetkiler</string>
     <string name="photo_add">Cihazdan fotoğraf ekle</string>
     <string name="photo_replace">Fotoğrafı değiştir</string>
+    <string name="pick_all_at_once">Toplu seçim</string>
+    <string name="pick_lowest_each">Her kalemde en düşük fiyat</string>
+    <string name="picked_items">Seçilen kalem</string>
     <string name="pinned_geocode">Adresten bulundu</string>
     <string name="pinned_manual">Sizin sabitlediğiniz</string>
     <string name="pipeline_approved">AKTİF PARTNERLER</string>
@@ -918,6 +932,9 @@
     <string name="qty_field">Miktar</string>
     <string name="question_unit">soru</string>
     <string name="questions_title">Sorular</string>
+    <string name="quote_awaited_from">Teklifi beklenen</string>
+    <string name="quote_currency_hint">Bütün satıcılar bu para biriminde teklif verir; teklifler karşılaştırılabilir. “Satıcı serbest” seçilirse bir teklif birden çok para biriminde gelebilir; her biri ayrı sipariş olur.</string>
+    <string name="quote_currency_label">Teklif para birimi</string>
     <string name="quote_doc">Teklif (PDF)</string>
     <string name="quote_draft_saved">kaydedildi</string>
     <string name="quote_list_word">liste</string>
@@ -1028,6 +1045,7 @@
     <string name="seller_note_hint">Yalnız bu satıcının sipariş yazısına alıcı notu olarak girer; satıcı aynı metni görür.</string>
     <string name="seller_note_label">Satıcıya not</string>
     <string name="seller_note_placeholder">Teslimat saati, kapı, irsaliye, fatura notu…</string>
+    <string name="sellers_not_quoted">Teklif göndermeyen satıcılar</string>
     <string name="send">Gönder</string>
     <string name="send_action">Gönder</string>
     <string name="send_preview_sub">Her satıcı YALNIZCA kendisiyle eşleşen kalemleri görür.</string>
@@ -1136,6 +1154,7 @@
     <string name="switch_account">Farklı hesapla gir</string>
     <string name="tab_account">Hesap</string>
     <string name="tab_cases">Talepler</string>
+    <string name="take_all_from_seller">%d kalemin hepsini bu satıcıdan al</string>
     <string name="tax_id_field">VKN / TCKN</string>
     <string name="tax_office_field">Vergi dairesi</string>
     <string name="tax_office_label">Vergi dairesi</string>

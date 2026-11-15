@@ -420,6 +420,8 @@
     <string name="email_label">Work email</string>
     <string name="email_placeholder">you@company.com</string>
     <string name="email_section">WORK EMAIL</string>
+    <string name="everything_quoted">Everything it quoted</string>
+    <string name="ex_vat_word">excl. VAT</string>
     <string name="exclude_seller">Skip</string>
     <string name="expert_affil_excluded">routed to other experts because of your affiliation declaration</string>
     <string name="expert_affiliation">Manufacturer / seller affiliation declaration</string>
@@ -587,9 +589,11 @@
     <string name="guide_share">Share as PDF</string>
     <string name="has_email_label">will be e-mailed</string>
     <string name="held_tag">Under review</string>
+    <string name="hide_action">Hide</string>
     <string name="hide_original">hide original</string>
     <string name="holder_field">Account holder</string>
     <string name="iban_field">IBAN (TR)</string>
+    <string name="inc_vat_word">incl. VAT</string>
     <string name="ing_cancel">Stop</string>
     <string name="ing_cancelled">Stopped</string>
     <string name="ing_created">Queued</string>
@@ -617,6 +621,7 @@
     <string name="invoice_pay_confirm">The invoice is paid through Workis; the seller is paid after it.</string>
     <string name="item_name">Item name</string>
     <string name="items_covered">items covered</string>
+    <string name="items_no_quote_yet">%d items have no quote yet</string>
     <string name="items_word">items</string>
     <string name="jowi_answered_last">last</string>
     <string name="jowi_answered_title">Jowi answered</string>
@@ -689,6 +694,7 @@
     <string name="lists_unit">lists</string>
     <string name="live_empty">No live offers yet.</string>
     <string name="live_sub">Live offers — price, name, lead time, stock and visibility are editable; Withdraw sends a family back to review.</string>
+    <string name="lowest_unit_price">lowest unit price</string>
     <string name="lowest_word">lowest</string>
     <string name="ls_checking">Checking</string>
     <string name="ls_closed">Closed</string>
@@ -747,6 +753,7 @@
     <string name="no_email">no e-mail</string>
     <string name="no_match">No match yet</string>
     <string name="no_profile_body">This account has no Workis membership yet. If your application was approved, sign in with the address from your approval e-mail. New here? Apply from the sign-in screen.</string>
+    <string name="no_quote_yet">no quote yet</string>
     <string name="not_urgent_action">Not urgent</string>
     <string name="note_kind_duplicate">duplicate</string>
     <string name="note_kind_incompatible">incompatible</string>
@@ -757,6 +764,7 @@
     <string name="note_kind_standard">standard</string>
     <string name="note_placeholder">Optional note sent with the RFQ…</string>
     <string name="note_title">Note to sellers</string>
+    <string name="nothing_picked">Nothing is picked.</string>
     <string name="notifications_build_off">Notification registration is off in this build</string>
     <string name="notifications_denied">Notification permission was not granted — you can allow it in Settings.</string>
     <string name="notifications_row">Notifications</string>
@@ -765,6 +773,7 @@
     <string name="object_placeholder">What do you object to? (at least 10 characters)</string>
     <string name="object_sub">Agreement 5.5 — within 5 business days of the statement; the coordinator decides.</string>
     <string name="object_title">Statement objection</string>
+    <string name="off_currency_hint">Priced in another currency than you asked for — compare it by hand</string>
     <string name="oldest_word">oldest</string>
     <string name="open_invitations">open requests</string>
     <string name="open_list">Open the list</string>
@@ -807,6 +816,7 @@
     <string name="order_terms_badge">terms</string>
     <string name="order_terms_missing">missing</string>
     <string name="order_terms_settled">terms settled</string>
+    <string name="order_total_inc_vat">Order total (incl. VAT)</string>
     <string name="order_tracking">Tracking no</string>
     <string name="order_unread">unread</string>
     <string name="order_who_buyer">With the buyer</string>
@@ -816,6 +826,7 @@
     <string name="order_who_workis">With Workis</string>
     <string name="order_won">Order won</string>
     <string name="orders_empty">No orders yet.</string>
+    <string name="orders_from_selection">Orders this selection creates</string>
     <string name="orders_quoting_title">Quote stage</string>
     <string name="orders_screen_title">Orders</string>
     <string name="orders_title">Orders</string>
@@ -872,6 +883,9 @@
     <string name="permissions_title">Permissions</string>
     <string name="photo_add">Add photo from device</string>
     <string name="photo_replace">Replace photo</string>
+    <string name="pick_all_at_once">Pick all at once</string>
+    <string name="pick_lowest_each">Lowest price on every item</string>
+    <string name="picked_items">Picked items</string>
     <string name="pinned_geocode">Located from the address</string>
     <string name="pinned_manual">Pinned by you</string>
     <string name="pipeline_approved">ACTIVE PARTNERS</string>
@@ -918,6 +932,9 @@
     <string name="qty_field">Quantity</string>
     <string name="question_unit">questions</string>
     <string name="questions_title">Questions</string>
+    <string name="quote_awaited_from">Quote awaited from</string>
+    <string name="quote_currency_hint">Every seller quotes in this currency, so the quotes compare. With “seller free” a quote may come in several currencies — each becomes its own order.</string>
+    <string name="quote_currency_label">Quote currency</string>
     <string name="quote_doc">Quote (PDF)</string>
     <string name="quote_draft_saved">saved</string>
     <string name="quote_list_word">list</string>
@@ -1028,6 +1045,7 @@
     <string name="seller_note_hint">Goes into this seller\'s order letter as the buyer\'s note; the seller reads the same text.</string>
     <string name="seller_note_label">Note to the seller</string>
     <string name="seller_note_placeholder">Delivery hours, gate, waybill or invoice remarks…</string>
+    <string name="sellers_not_quoted">Sellers that have not quoted</string>
     <string name="send">Send</string>
     <string name="send_action">Send</string>
     <string name="send_preview_sub">Each seller sees ONLY the items matched to them.</string>
@@ -1136,6 +1154,7 @@
     <string name="switch_account">Sign in with a different account</string>
     <string name="tab_account">Account</string>
     <string name="tab_cases">Cases</string>
+    <string name="take_all_from_seller">take all %d items from this seller</string>
     <string name="tax_id_field">VKN / TCKN</string>
     <string name="tax_office_field">Tax office</string>
     <string name="tax_office_label">Tax office</string>
