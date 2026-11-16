@@ -12,6 +12,7 @@ import ai.workis.jowi.ui.theme.readingStep
 import ai.workis.jowi.ui.theme.WorkisSans
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import ai.workis.jowi.data.CatalogChoices
 import ai.workis.jowi.data.CatalogSheetPage
 import ai.workis.jowi.data.decodeSheetPage
 import android.net.Uri
@@ -184,7 +185,11 @@ class CatalogViewModel : ViewModel() {
     fun load() {
         viewModelScope.launch {
             val (p, err) = partnerCall(lang) { Graph.api.catalog(seller) }
-            if (p != null) { page = p; loadError = null } else if (page == null) loadError = err
+            if (p != null) {
+                page = p; loadError = null
+                p.vatRates?.let { CatalogChoices.vatRates = it }
+                p.currencies?.let { CatalogChoices.currencies = it }
+            } else if (page == null) loadError = err
         }
     }
 
@@ -1142,6 +1147,8 @@ private fun LiveOfferRow(r: CatalogLiveRow, vm: CatalogViewModel, onEdit: (Catal
                     Text(
                         listOfNotNull(
                             r.sku,
+                            // the price beside it stays net: only the rate is said (ledger 96)
+                            r.vatRate?.let { "· " + vatLine(it) },
                             r.leadTimeDays?.let { "· $it " + stringResource(R.string.vade_days_word) + " " + stringResource(R.string.lead_time_short) },
                             r.stock?.takeIf { it.isNotEmpty() && it != "0" }?.let { "· " + stringResource(R.string.stock_label) + " $it" },
                             if (r.published == false) "· " + stringResource(R.string.published_label).lowercase() + ": ✗" else null,
@@ -1176,6 +1183,11 @@ private fun OfferEditSheet(row: CatalogLiveRow, vm: CatalogViewModel, onClose: (
     var unit by remember { mutableStateOf(row.unit.orEmpty()) }
     var unitContent by remember { mutableStateOf(row.unitContent.orEmpty()) }
     val units = vm.page?.units.orEmpty()
+    // the currency and the VAT rate come from the server's two lists (ledger 96), never from one
+    // the app keeps; without a list the cell only says its value
+    val currencies = vm.page?.currencies ?: CatalogChoices.currencies
+    val vatRates = vm.page?.vatRates ?: CatalogChoices.vatRates
+    var vatRate by remember { mutableStateOf(row.vatRate ?: 20.0) }
     var busy by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
     val id = row.offerId.orEmpty()
@@ -1211,7 +1223,28 @@ private fun OfferEditSheet(row: CatalogLiveRow, vm: CatalogViewModel, onClose: (
             FormSection(null) {
                 FormRow(stringResource(R.string.unit_price_field), price, { price = it }, {}, false, placeholder = "—", mono = true, keyboardType = KeyboardType.Decimal)
                 FormRow(stringResource(R.string.discount_pct_field), discount, { discount = it }, {}, false, placeholder = "—", mono = true, keyboardType = KeyboardType.Decimal)
-                PickerRowSimple("CUR", currency, listOf("TRY", "USD", "EUR")) { currency = it; if (it != row.currency) saveNow("currency", it) }
+                if (currencies.isEmpty()) {
+                    ValueRow("CUR", currency)
+                } else {
+                    // a value the row carries that is not on the list stays an extra choice
+                    PickerRowSimple("CUR", currency, (if (currency in currencies) emptyList() else listOf(currency)) + currencies) {
+                        if (it != currency) { currency = it; saveNow("currency", it) }
+                    }
+                }
+                val rateText: (Double) -> String = { v -> vatRates.firstOrNull { it.value?.toDoubleOrNull() == v }?.label?.takeIf { it.isNotEmpty() } ?: "%${WorkisMoney.pct(v)}" }
+                if (vatRates.isEmpty()) {
+                    row.vatRate?.let { ValueRow(stringResource(R.string.vat_word), rateText(it)) }
+                } else {
+                    val values = vatRates.mapNotNull { it.value?.toDoubleOrNull() }
+                    val all = (if (vatRate in values) emptyList() else listOf(vatRate)) + values
+                    PickerRowSimple(stringResource(R.string.vat_word), rateText(vatRate), all.map(rateText)) { picked ->
+                        val v = all.firstOrNull { rateText(it) == picked }
+                        if (v != null && v != vatRate) {
+                            vatRate = v
+                            saveNow("vatRate", if (v % 1.0 == 0.0) v.toInt() else v)
+                        }
+                    }
+                }
                 FormRow(stringResource(R.string.product_name), name, { name = it }, {}, false, stacked = true, maxLines = 3)
                 FormRow(stringResource(R.string.lead_time_field), leadTime, { leadTime = it }, {}, false, placeholder = "—", mono = true, keyboardType = KeyboardType.Number)
                 FormRow(stringResource(R.string.stock_label).replaceFirstChar { it.uppercase() }, stock, { stock = it }, {}, false, placeholder = "—", mono = true, keyboardType = KeyboardType.Number)
@@ -1260,6 +1293,20 @@ private fun UnitPickerRow(label: String, value: String, units: List<WorkisUnit>,
                     onClick = { open = false; onPick(u.value.orEmpty()) },
                 )
             }
+        }
+        Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border).align(Alignment.BottomStart))
+    }
+}
+
+/** A cell that only says its value — no list to pick from came. */
+@Composable
+private fun ValueRow(label: String, value: String) {
+    val colors = WorkisTheme.colors
+    Box {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, fontSize = 14.sp, color = colors.muted)
+            Spacer(Modifier.weight(1f))
+            Text(value.ifEmpty { "—" }, fontSize = 14.sp, color = colors.ink)
         }
         Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border).align(Alignment.BottomStart))
     }

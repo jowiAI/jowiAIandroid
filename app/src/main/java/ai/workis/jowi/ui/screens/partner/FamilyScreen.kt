@@ -70,6 +70,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
+import ai.workis.jowi.data.CatalogChoices
 import ai.workis.jowi.data.CatalogFamilyDetail
 import ai.workis.jowi.data.CatalogMedia
 import androidx.compose.material.icons.filled.CheckCircle
@@ -744,7 +745,8 @@ private fun VariantSheet(vm: FamilyViewModel, variant: CatalogVariant?, onClose:
                 FormRow(stringResource(R.string.code_field), code, { code = it }, {}, false, placeholder = stringResource(R.string.code_field), mono = true, locked = variant != null)
                 FormRow("", label, { label = it }, {}, false, placeholder = stringResource(R.string.label_field), stacked = true, maxLines = 3)
                 FormRow(stringResource(R.string.unit_price_field), price, { price = it }, {}, false, placeholder = stringResource(R.string.price_on_request), mono = true, keyboardType = KeyboardType.Decimal)
-                PickerRowSimple("CUR", currency, listOf("TRY", "USD", "EUR")) { currency = it }
+                // the server's list (ledger 96); the value the code carries stays a choice
+                PickerRowSimple("CUR", currency, (if (currency in CatalogChoices.currencies) emptyList() else listOf(currency)) + CatalogChoices.currencies) { currency = it }
             }
             errorText?.let { Text(it, fontSize = 13.sp, color = colors.danger) }
         }

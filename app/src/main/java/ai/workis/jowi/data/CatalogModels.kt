@@ -52,7 +52,35 @@ data class CatalogPage(
     /** The ONE unit list (Django 2026-11-11, ledger 84) — the live row editor's Birim picker; absent on
      *  an older answer = the unit is shown, not editable. */
     @Serializable(with = WorkisUnitsTolerant::class) val units: List<WorkisUnit>? = null,
+    /** The product's VAT rates (ledger 96): `value` a percent as a number, `label` in the reader's
+     *  language. The app keeps no rate list of its own. */
+    @Serializable(with = WorkisUnitsTolerant::class) val vatRates: List<WorkisUnit>? = null,
+    /** The currencies a product may be priced in (ledger 96) — the pickers' only source. */
+    @Serializable(with = StringsTolerant::class) val currencies: List<String>? = null,
 )
+
+/** A list of plain strings read leniently: blanks and non-strings dropped; any other shape = null. */
+object StringsTolerant : KSerializer<List<String>?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("StringsTolerant", PrimitiveKind.STRING)
+    override fun deserialize(decoder: Decoder): List<String>? {
+        val json = decoder as? JsonDecoder ?: return null
+        val arr = json.decodeJsonElement() as? kotlinx.serialization.json.JsonArray ?: return null
+        return arr.mapNotNull { e ->
+            (e as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content?.trim()?.takeIf { it.isNotEmpty() }
+        }
+    }
+    override fun serialize(encoder: Encoder, value: List<String>?) = encoder.encodeNull()
+}
+
+/**
+ * The two lists of the last `GET seller/catalog/` (ledger 96), kept for the sheets that open
+ * outside the catalogue screen (the family's code sheet). Empty until a catalogue answered —
+ * a picker then only offers the value the row already carries.
+ */
+object CatalogChoices {
+    @Volatile var vatRates: List<WorkisUnit> = emptyList()
+    @Volatile var currencies: List<String> = emptyList()
+}
 
 @Serializable
 data class CatalogWebFetch(
@@ -283,6 +311,8 @@ data class CatalogLiveRow(
      *  and what one unit holds when it is a package ("12 adet", "50 L"). */
     @Serializable(with = FlexString::class) val unit: String? = null,
     @Serializable(with = FlexString::class) val unitContent: String? = null,
+    /** The product's own VAT rate, a percent (ledger 96; 20 by default). The price stays net. */
+    @Serializable(with = FlexDouble::class) val vatRate: Double? = null,
     @Serializable(with = FlexString::class) val productId: String? = null,
     @Serializable(with = FlexString::class) val familyId: String? = null,
     val group: String? = null,
