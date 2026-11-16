@@ -241,11 +241,17 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
                 // deferred term closes the door: the server leaves those rows out,
                 // and a `canFund: false` that slips through is not drawn either.
                 val fundTitle = stringResource(R.string.order_fund)
-                val fundBody = stringResource(R.string.order_fund_confirm)
                 val fundable = d.fund.orEmpty().filter { it.canFund != false }
                 Section(stringResource(R.string.ap_fund), fundable.size) {
                     fundable.forEach { f ->
-                        ApCard(f.po.orEmpty(), "") {
+                        // PO and the blocked total on one line; the VAT and cargo sentences each
+                        // on a line of its own, never summed; the question is the server's
+                        val fundBody = fundQuestion(f.question, f.vatWords, f.cargoWords)
+                        ApCard(
+                            listOfNotNull(f.po?.takeIf { it.isNotEmpty() }, f.total?.let { WorkisMoney.text(it, f.currency) }).joinToString(" · "),
+                            "",
+                            words = listOfNotNull(f.vatWords, f.cargoWords).filter { it.isNotEmpty() }.joinToString("\n"),
+                        ) {
                             Action(fundTitle) {
                                 confirm = ApConfirm(fundTitle, fundBody, destructive = false) { f.orderId?.let { vm.fund(it) } }
                             }

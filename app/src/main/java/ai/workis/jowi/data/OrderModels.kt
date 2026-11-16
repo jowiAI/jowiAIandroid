@@ -133,6 +133,9 @@ data class PartnerOrder(
     /** The cargo fee blocked WITH the order, incl. VAT, in the tariff's own currency — as sent
      *  (buyer card only). Never added to `total`: the currencies may differ. */
     val cargoWords: String? = null,
+    /** The sentence asked before `fund/` (ledger 95) — the server's, printed as sent. Buyer card
+     *  only; "" on other seats, absent on an older server. The app composes no question. */
+    val fundQuestion: String? = null,
     /** One quote in several currencies = one order per currency: this card is part `part` of `of`. */
     val split: OrderSplit? = null,
     /** A non-member's one-off sale (ledger 90): comes with `virtual: true`; the buyer is shown no
@@ -651,6 +654,13 @@ data class ApFund(
     val po: String? = null,
     /** The server already leaves these out; a false row is never drawn either. */
     val canFund: Boolean? = null,
+    /** Ledger 95: the amount to be blocked (gross), the two ready sentences — never summed, the
+     *  cargo may be in another currency — and the question to ask, as sent. */
+    @Serializable(with = FlexDouble::class) val total: Double? = null,
+    val currency: String? = null,
+    val vatWords: String? = null,
+    val cargoWords: String? = null,
+    val question: String? = null,
 )
 
 @Serializable

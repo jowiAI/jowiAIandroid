@@ -789,7 +789,7 @@
     <string name="order_doc">Sipariş yazısı (PDF)</string>
     <string name="order_done_empty">Henüz tamamlanan sipariş yok.</string>
     <string name="order_fund">Ödemeyi blokla</string>
-    <string name="order_fund_confirm">Sipariş tutarı emanete alınır ve teslimden sonra satıcıya serbest bırakılır.</string>
+    <string name="order_fund_confirm">Sipariş toplamı bloke edilsin mi?</string>
     <string name="order_fund_confirm_cargo">Sipariş toplamı ve kargo bedeli birlikte, her biri kendi para biriminde bloke edilir. Sipariş toplamı teslimden sonra satıcıya serbest bırakılır.</string>
     <string name="order_letter_title">Sipariş yazısı</string>
     <string name="order_letters">Sipariş yazıları</string>

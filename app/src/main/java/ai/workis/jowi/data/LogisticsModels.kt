@@ -35,7 +35,11 @@ data class LedgerAccount(
     @Serializable(with = FlexString::class) val accountId: String? = null,
     val currency: String? = null,
     @Serializable(with = FlexDouble::class) val balance: Double? = null,
+    /** NOT a label (ledger 95): no word, badge or icon is drawn from it. */
     val virtual: Boolean? = null,
+    /** The buyer may record a payment by hand on this account — what a "paid" door binds to,
+     *  never `virtual`. This app has no such door on Cari yet. */
+    val buyerRecordsPayment: Boolean? = null,
     val orders: List<LedgerOrderGroup>? = null,
     val openInvoices: List<LedgerOpenInvoice>? = null,
 )

@@ -789,7 +789,7 @@
     <string name="order_doc">Order letter (PDF)</string>
     <string name="order_done_empty">No completed orders yet.</string>
     <string name="order_fund">Hold the payment</string>
-    <string name="order_fund_confirm">The order total moves into escrow and is released to the seller after delivery.</string>
+    <string name="order_fund_confirm">Block the order total?</string>
     <string name="order_fund_confirm_cargo">The order total and the cargo fee are blocked together, each in its own currency. The order total is released to the seller after delivery.</string>
     <string name="order_letter_title">Order letter</string>
     <string name="order_letters">Order letters</string>

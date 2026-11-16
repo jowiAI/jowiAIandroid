@@ -317,13 +317,19 @@ internal fun OrderMoneyWords(o: PartnerOrder) {
     o.cargoWords?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted) }
 }
 
-/** What the block confirmation says: the question (the cargo one when a cargo sentence came), then the server's two sentences. */
+/**
+ * What the block confirmation says (ledger 95): the server's sentence as sent and nothing else.
+ * Only when it is empty (an older server) the app's own short question, then the server's two
+ * sentences under it — never summed.
+ */
 @Composable
-internal fun fundQuestion(o: PartnerOrder?): String {
-    val cargo = o?.cargoWords?.takeIf { it.isNotEmpty() }
-    val question = stringResource(if (cargo == null) R.string.order_fund_confirm else R.string.order_fund_confirm_cargo)
-    return listOfNotNull(question, o?.vatWords, cargo).filter { it.isNotEmpty() }.joinToString("\n\n")
+internal fun fundQuestion(question: String?, vatWords: String?, cargoWords: String?): String {
+    question?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    return listOfNotNull(stringResource(R.string.order_fund_confirm), vatWords, cargoWords).filter { it.isNotEmpty() }.joinToString("\n\n")
 }
+
+@Composable
+internal fun fundQuestion(o: PartnerOrder?): String = fundQuestion(o?.fundQuestion, o?.vatWords, o?.cargoWords)
 
 // ---------- one step: its line, its note, its dated movements
 

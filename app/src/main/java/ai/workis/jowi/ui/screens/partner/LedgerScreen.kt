@@ -113,7 +113,6 @@ private fun AccountSection(a: LedgerAccount) {
                 Text(
                     listOfNotNull(
                         stringResource(if (a.role == "seller") R.string.cari_as_seller else R.string.cari_as_buyer),
-                        if (a.virtual == true) stringResource(R.string.cari_virtual) else null,
                         a.currency,
                     ).joinToString(" · "),
                     fontSize = 12.sp, color = colors.muted, modifier = Modifier.weight(1f),
