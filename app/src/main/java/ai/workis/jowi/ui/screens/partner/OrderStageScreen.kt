@@ -303,18 +303,24 @@ private fun StageHead(o: PartnerOrder) {
  * Two amounts, never summed; an empty sentence draws nothing.
  */
 @Composable
-internal fun OrderMoneyWords(o: PartnerOrder) {
+internal fun OrderMoneyWords(o: PartnerOrder, part: Boolean = true) {
     val colors = WorkisTheme.colors
-    val part = o.split?.part
-    val of = o.split?.of
-    if (part != null && of != null && of > 1) {
-        Text(
-            "${stringResource(R.string.order_part)} $part/$of" + (o.currency?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""),
-            fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.muted,
-        )
-    }
+    if (part) OrderPartLabel(o)
     o.vatWords?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted) }
     o.cargoWords?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted) }
+}
+
+/** "Bölüm 1/2 · EUR" — only on a part of a quote split by currency; nothing otherwise. */
+@Composable
+internal fun OrderPartLabel(o: PartnerOrder, modifier: Modifier = Modifier) {
+    val part = o.split?.part
+    val of = o.split?.of
+    if (part == null || of == null || of <= 1) return
+    Text(
+        "${stringResource(R.string.order_part)} $part/$of" + (o.currency?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""),
+        fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = WorkisTheme.colors.muted,
+        modifier = modifier,
+    )
 }
 
 /**

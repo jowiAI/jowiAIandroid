@@ -54,6 +54,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
+import ai.workis.jowi.data.splitsTogether
 import ai.workis.jowi.data.CarrierOption
 import ai.workis.jowi.data.CarrierOptions
 import ai.workis.jowi.data.DispatchBody
@@ -302,7 +303,8 @@ fun OrdersScreen(
                         }
                     }
                 }
-                val shown = orders.filter { (it.done == true) == (vm.segment == 1) }
+                // the parts of one quote split by currency stand together (`split.orderIds`)
+                val shown = splitsTogether(orders.filter { (it.done == true) == (vm.segment == 1) })
                 if (orders.isNotEmpty() && shown.isEmpty()) {
                     Text(
                         stringResource(if (vm.segment == 1) R.string.order_done_empty else R.string.order_active_empty),
@@ -310,6 +312,8 @@ fun OrdersScreen(
                     )
                 }
                 shown.forEach { o ->
+                    // "Bölüm 1/2 · EUR" over each part of a split quote
+                    OrderPartLabel(o, Modifier.padding(start = 4.dp, top = 4.dp))
                     OrderCard(
                         o, vm,
                         onStage = { onStage(o) },
@@ -428,7 +432,8 @@ private fun OrderCard(
             }
         }
         // the server's VAT and cargo sentences under the total (ledger 91) — never on a carrier card
-        if (!o.isCarrier) OrderMoneyWords(o)
+        // the part label stands over the card here (the parts of one quote are neighbours)
+        if (!o.isCarrier) OrderMoneyWords(o, part = false)
         // the payment word is a legal fact and is NEVER cut: it takes its own
         // line under the amount rather than an ellipsis beside it (seen on a
         // narrow screen as "Güvenceli ödeme yok (açık hes…", 2026-09-19)

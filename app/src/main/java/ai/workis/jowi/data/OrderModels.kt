@@ -106,7 +106,32 @@ data class OrderStep(
 data class OrderSplit(
     @Serializable(with = FlexInt::class) val part: Int? = null,
     @Serializable(with = FlexInt::class) val of: Int? = null,
+    /** Every part's order id, this card's own among them (ledger 97) — numbers or strings; an odd
+     *  shape reads as "no ids". The cards stand together by it. */
+    @Serializable(with = StringsTolerant::class) val orderIds: List<String>? = null,
 )
+
+/**
+ * The list's order with the parts of one quote split by currency brought TOGETHER (ledger 97):
+ * where the first part of a split stands, its sibling parts follow it by part number; every
+ * other card keeps the server's order. A sibling that is not in the list (the other segment)
+ * is simply absent.
+ */
+fun splitsTogether(orders: List<PartnerOrder>): List<PartnerOrder> {
+    val out = ArrayList<PartnerOrder>(orders.size)
+    // by identity: two cards are never the same card because they read the same
+    val placed: MutableSet<PartnerOrder> = java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
+    for (o in orders) {
+        if (o in placed) continue
+        val ids = o.split?.orderIds.orEmpty()
+        val group = if (ids.size > 1 && o.id != null) orders.filter { it.id != null && it.id in ids && it !in placed } else emptyList()
+        if (group.size > 1 && o in group) {
+            val sorted = group.sortedBy { it.split?.part ?: 0 }
+            out += sorted; placed += sorted
+        } else { out += o; placed += o }
+    }
+    return out
+}
 
 @Serializable
 data class OrderContractBadge(val version: Int? = null, val status: String? = null) // draft | accepted
