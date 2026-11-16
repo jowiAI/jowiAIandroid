@@ -104,6 +104,9 @@ import ai.workis.jowi.ui.theme.PaperWhite
 import ai.workis.jowi.ui.theme.PaperInk
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
+import ai.workis.jowi.ui.theme.BeigeBg
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.graphics.compositeOver
 import ai.workis.jowi.data.CatalogFamilyRow
 import ai.workis.jowi.data.CatalogAttr
 import ai.workis.jowi.data.CatalogIngestion
@@ -1051,10 +1054,18 @@ private fun BandSections(vm: CatalogViewModel, onEdit: (CatalogLiveRow) -> Unit,
         SurfaceCard {
             list.forEachIndexed { i, b ->
                 val open = b.key in vm.openBands
-                BandRow(b, open, vm.seller) { vm.toggleBand(b) }
+                // an OPEN family stands on the band ground and its products on the table ground
+                // under it — the comparison's pair (ledger 98); a closed family keeps the card's row
+                val bandGround = BeigeBg.copy(alpha = if (colors.isDark) 1f else 0.5f)
+                val rowsGround = if (colors.isDark) colors.tableGround else BeigeBg.copy(alpha = 0.16f).compositeOver(colors.surface)
+                Column {
+                BandRow(
+                    b, open, vm.seller,
+                    if (open) Modifier.openGround(bandGround, RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp)) else Modifier,
+                ) { vm.toggleBand(b) }
                 if (open) {
                     val rows = vm.bandRows[b.key]
-                    Column(Modifier.padding(start = 50.dp)) {
+                    Column(Modifier.openGround(rowsGround, RoundedCornerShape(bottomStart = 10.dp, bottomEnd = 10.dp)).padding(start = 50.dp)) {
                         when {
                             rows == null && b.key in vm.rowsBusy -> Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = colors.faint)
@@ -1062,10 +1073,11 @@ private fun BandSections(vm: CatalogViewModel, onEdit: (CatalogLiveRow) -> Unit,
                             rows != null && rows.isEmpty() -> Text(stringResource(R.string.live_empty), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(vertical = 6.dp))
                             rows != null -> rows.forEach { r ->
                                 Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
-                                LiveOfferRow(r, vm, onEdit, onWithdraw)
+                                LiveOfferRow(r, vm, onEdit, onWithdraw, ground = rowsGround)
                             }
                         }
                     }
+                }
                 }
                 if (i < list.lastIndex) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
             }
@@ -1084,13 +1096,27 @@ private fun BandSections(vm: CatalogViewModel, onEdit: (CatalogLiveRow) -> Unit,
     }
 }
 
+/**
+ * The ground of an opened row / of what it opened: drawn [OPEN_BLEED] wider than the content on
+ * both sides (inside the card's own padding), so the texts keep their place.
+ */
+private val OPEN_BLEED = 8.dp
+private fun Modifier.openGround(color: Color, shape: androidx.compose.ui.graphics.Shape): Modifier = this
+    .layout { m, c ->
+        val px = OPEN_BLEED.roundToPx()
+        val p = m.measure(if (c.hasBoundedWidth) c.copy(maxWidth = c.maxWidth + 2 * px) else c)
+        layout((p.width - 2 * px).coerceAtLeast(0), p.height) { p.place(-px, 0) }
+    }
+    .background(color, shape)
+    .padding(horizontal = OPEN_BLEED)
+
 /** One band: thumb, family name, brand · n products · n families; tap opens / closes. */
 @Composable
-private fun BandRow(b: CatalogBand, open: Boolean, seller: String?, onTap: () -> Unit) {
+private fun BandRow(b: CatalogBand, open: Boolean, seller: String?, modifier: Modifier = Modifier, onTap: () -> Unit) {
     val colors = WorkisTheme.colors
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onTap).padding(vertical = 8.dp)
+        modifier = modifier.fillMaxWidth().clickable(onClick = onTap).padding(vertical = 8.dp)
             .semantics { if (open) selected = true },
     ) {
         AuthImage(catalogImageUrl(b.img, "thumb", seller), Modifier.size(40.dp))
@@ -1120,13 +1146,13 @@ private fun BandRow(b: CatalogBand, open: Boolean, seller: String?, onTap: () ->
  * name and price go, no stock/lead line, and opens nothing — withdrawing is its one action.
  */
 @Composable
-private fun LiveOfferRow(r: CatalogLiveRow, vm: CatalogViewModel, onEdit: (CatalogLiveRow) -> Unit, onWithdraw: (CatalogLiveRow) -> Unit) {
+private fun LiveOfferRow(r: CatalogLiveRow, vm: CatalogViewModel, onEdit: (CatalogLiveRow) -> Unit, onWithdraw: (CatalogLiveRow) -> Unit, ground: Color? = null) {
     val colors = WorkisTheme.colors
     val placeholder = r.placeholder == true
     val row: @Composable () -> Unit = {
         Row(
             verticalAlignment = Alignment.Top,
-            modifier = Modifier.fillMaxWidth().background(colors.surface)
+            modifier = Modifier.fillMaxWidth().background(ground ?: colors.surface)
                 .then(if (placeholder) Modifier else Modifier.clickable { onEdit(r) })
                 .padding(vertical = 8.dp),
         ) {
