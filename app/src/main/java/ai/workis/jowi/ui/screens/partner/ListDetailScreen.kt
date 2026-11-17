@@ -381,7 +381,7 @@ class ListDetailViewModel : ViewModel() {
 
     /**
      * The order letters' "Siparişleri ver": `selections` ({itemId: {seller_id, sku}} | {skip: true}),
-     * `decisionNote` (trimmed, omitted when empty), `sellerNotes` ({sellerId: text}, empty ones
+     * `decisionNote` (trimmed, always sent — "" when the field is empty), `sellerNotes` ({sellerId: text}, empty ones
      * dropped). The server's sentence is the note; orders back = the sheet closes, the picks reset
      * and the page re-reads onto Sipariş.
      */
@@ -392,7 +392,10 @@ class ListDetailViewModel : ViewModel() {
         val notes = sellerNotes.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() }
         val body = jsonBody(
             "selections" to selections,
-            "decisionNote" to decision.trim().takeIf { it.isNotEmpty() },
+            // ALWAYS the field's words as they stand (Django 2026-11-16): "" = the buyer emptied it —
+            // the order is born without a note and the saved one is cleared; a missing key would
+            // keep the saved note instead
+            "decisionNote" to decision.trim(),
             "sellerNotes" to notes.takeIf { it.isNotEmpty() }?.let { m -> JsonObject(m.mapValues { JsonPrimitive(it.value) }) },
         )
         viewModelScope.launch {
