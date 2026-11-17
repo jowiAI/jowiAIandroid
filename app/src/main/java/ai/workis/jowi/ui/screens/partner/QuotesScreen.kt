@@ -729,11 +729,11 @@ private val HUNDRED = BigDecimal(100)
 
 /** Moving the discount sets the unit price: list × (1 − pct/100), 2 decimals (BigDecimal, never Double). */
 private fun unitFromDiscount(list: BigDecimal, pct: BigDecimal): String =
-    WorkisMoney.plain(list.multiply(BigDecimal.ONE - pct.divide(HUNDRED)).setScale(2, RoundingMode.HALF_UP))
+    WorkisMoney.shown(list.multiply(BigDecimal.ONE - pct.divide(HUNDRED)).setScale(2, RoundingMode.HALF_UP))
 
 /** Typing a unit price writes the discount it implies: (1 − unit/list) × 100, 1 decimal, never below 0. */
 private fun discountFromUnit(list: BigDecimal, unit: BigDecimal): String =
-    WorkisMoney.plain((BigDecimal.ONE - unit.divide(list, 10, RoundingMode.HALF_UP)).multiply(HUNDRED).max(BigDecimal.ZERO).setScale(1, RoundingMode.HALF_UP))
+    WorkisMoney.shown((BigDecimal.ONE - unit.divide(list, 10, RoundingMode.HALF_UP)).multiply(HUNDRED).max(BigDecimal.ZERO).setScale(1, RoundingMode.HALF_UP))
 
 /**
  * The catalogue price pre-fills an EMPTY unit price on a single-candidate item only — on
@@ -744,7 +744,7 @@ private fun prefillOf(r: PriceRow): Pair<String, String?>? {
     if (!r.single) return null
     val list = r.list ?: return null
     val pct = r.discountPct?.takeIf { it > 0 }?.let { BigDecimal.valueOf(it) }
-    return if (pct != null) unitFromDiscount(list, pct) to WorkisMoney.plain(pct) else WorkisMoney.plain(list) to null
+    return if (pct != null) unitFromDiscount(list, pct) to WorkisMoney.shown(pct) else WorkisMoney.shown(list) to null
 }
 
 /** A draft value as text — numbers and strings alike, the first spelling present; JSON null and "" are absent. */
@@ -781,7 +781,7 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
     val prices = remember { mutableStateMapOf<String, String>().apply { rows.forEach { r -> prefillOf(r)?.let { put(r.sku, it.first) } } } }
     // sku → discount % text (rows with a list price)
     val discounts = remember { mutableStateMapOf<String, String>().apply { rows.forEach { r -> prefillOf(r)?.second?.let { put(r.sku, it) } } } }
-    val qtys = remember { mutableStateMapOf<String, String>().apply { rows.forEach { put(it.sku, WorkisMoney.qty(it.qty)) } } }
+    val qtys = remember { mutableStateMapOf<String, String>().apply { rows.forEach { put(it.sku, WorkisMoney.field(it.qty)) } } }
     // ledger 92: the request names ONE currency for every seller, or ("" / absent) the seller is free
     // and each line says its own — a picker over the server's list, sku → currency
     val fixedCurrency = inv.quoteCurrency?.takeIf { it.isNotEmpty() }
@@ -826,7 +826,8 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
 
     fun pricedLines(): JsonArray = JsonArray(rows.mapNotNull { r ->
         val p = prices[r.sku].orEmpty().trim(); if (p.isEmpty()) return@mapNotNull null
-        val q = qtys[r.sku].orEmpty().trim().ifEmpty { WorkisMoney.qty(r.qty).ifEmpty { "1" } }
+        // the three typed numbers go as wire numbers ("865.25"), whatever mark was typed (ledger 101)
+        val q = apiNumber(qtys[r.sku].orEmpty().trim()).ifEmpty { WorkisMoney.qty(r.qty).ifEmpty { "1" } }
         buildJsonObject {
             put("sku", JsonPrimitive(r.sku)); put("qty", JsonPrimitive(q)); put("unitPrice", JsonPrimitive(apiNumber(p)))
             // the reference the price came from rides beside it (2026-10-01)
@@ -879,8 +880,9 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
             val l = el as? JsonObject ?: return@forEach
             val sku = l.text("sku")?.takeIf { s -> rows.any { it.sku == s } } ?: return@forEach
             val p = l.text("unit_price", "unitPrice")
-            if (p != null) { prices[sku] = p; discounts[sku] = l.text("discount_pct", "discountPct").orEmpty() }
-            l.text("qty")?.let { qtys[sku] = it }
+            // the draft holds wire numbers; the fields show the app language's decimal mark
+            if (p != null) { prices[sku] = WorkisMoney.shownWire(p); discounts[sku] = l.text("discount_pct", "discountPct")?.let(WorkisMoney::shownWire).orEmpty() }
+            l.text("qty")?.let { qtys[sku] = WorkisMoney.shownWire(it) }
             l.text("currency")?.takeIf { it in pickable }?.let { currencies[sku] = it }
         }
         d.text("lead_time_days", "leadTimeDays")?.let { leadTime = it }

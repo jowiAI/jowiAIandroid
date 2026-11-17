@@ -1198,21 +1198,17 @@ object WorkisMoney {
     }
 
     /**
-     * A typed amount with either decimal mark ("1.234,50", "1234.5", "12,5") → BigDecimal;
-     * the last mark is the decimal one, the other is a thousands separator. Null when not a number.
+     * A typed amount with either decimal mark ("1.234,50", "1234.5", "12,5") → BigDecimal, read
+     * by [wire]'s rule (both marks → the last is the decimal; one mark once → decimal; repeated →
+     * grouping). Null when not a number.
      */
-    fun parse(text: String?): java.math.BigDecimal? {
-        var s = text.orEmpty().trim().replace(" ", "")
-        if (s.isEmpty()) return null
-        val lastDot = s.lastIndexOf('.')
-        val lastComma = s.lastIndexOf(',')
-        s = when {
-            lastDot >= 0 && lastComma >= 0 ->
-                if (lastComma > lastDot) s.replace(".", "").replace(',', '.') else s.replace(",", "")
-            else -> s.replace(',', '.')
-        }
-        return s.toBigDecimalOrNull()
-    }
+    fun parse(text: String?): java.math.BigDecimal? = wire(text.orEmpty()).takeIf { it.isNotEmpty() }?.toBigDecimalOrNull()
+
+    /** A BigDecimal as an EDITABLE field shows it (ledgers 99/101): [plain], with the app language's decimal mark. */
+    fun shown(value: java.math.BigDecimal): String = plain(value).let { if (appLocale() == Locale.US) it else it.replace('.', ',') }
+
+    /** A wire number text (a saved draft's "865.25") as the field shows it; anything else as it is. */
+    fun shownWire(text: String): String = text.toBigDecimalOrNull()?.let { shown(it) } ?: text
 
     /** A BigDecimal as the plain figure a field holds: "88.5", "100" (no exponent, no trailing zeros). */
     fun plain(value: java.math.BigDecimal): String =
