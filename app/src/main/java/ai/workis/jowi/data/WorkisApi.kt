@@ -696,6 +696,14 @@ interface WorkisApi {
     @POST("workis/lists/{id}/award/")
     suspend fun listAward(@Path("id") id: String): AwardResult
 
+    /** The buyer's reason, saved by its own door before the award and after it (ledger 100): `{decisionNote}` (≤ 1000; "" clears). */
+    @POST("workis/lists/{id}/decision-note/")
+    suspend fun listDecisionNote(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): DecisionNoteResult
+
+    /** The reason sentence for the picks AS THEY STAND (ledger 100): `{selections}` in the award's shape; reads only, quoting lists only. */
+    @POST("workis/lists/{id}/reason/")
+    suspend fun listReason(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): ReasonResult
+
     /** `{selections: {itemId: {skip: true}}}` leaves those items on the list (2026-10-01); at least one is ordered (400). */
     @POST("workis/lists/{id}/award/")
     suspend fun listAwardSelections(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): AwardResult

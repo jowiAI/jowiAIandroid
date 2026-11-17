@@ -387,6 +387,12 @@ data class SimpleResult(
 )
 
 @Serializable
+data class DecisionNoteResult(val success: Boolean = false, val decisionNote: String? = null, val message: String? = null, val error: String? = null)
+
+@Serializable
+data class ReasonResult(val success: Boolean = false, val reason: String? = null, val message: String? = null, val error: String? = null)
+
+@Serializable
 data class AnswerBody(val answer: String, val teach: Boolean = true)
 
 @Serializable

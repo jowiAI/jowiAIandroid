@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.workis.jowi.Graph
 import ai.workis.jowi.R
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.ui.focus.onFocusChanged
 import ai.workis.jowi.data.PLProposal
 import ai.workis.jowi.data.PLProposalOption
 import ai.workis.jowi.data.PurchaseListDetail
@@ -265,20 +267,8 @@ internal fun DecisionPage(d: PurchaseListDetail, vm: ListDetailViewModel, onAwar
         }, icon = WorkisIcons.Warning)
     }
 
-    // the buyer's own reason — prefilled once with Jowi's; their record, never a seller's
-    if (quoting) {
-        val fieldColors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue, focusedLabelColor = colors.muted, unfocusedLabelColor = colors.faint)
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            OutlinedTextField(
-                value = vm.decision, onValueChange = { vm.decision = it.take(1000) },
-                label = { Text(stringResource(R.string.decision_label), fontSize = 13.sp) },
-                minLines = 2, maxLines = 6, shape = RoundedCornerShape(14.dp), colors = fieldColors,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, color = colors.ink).readingStep(),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(stringResource(R.string.decision_hint), fontSize = 11.sp, lineHeight = 15.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
-        }
-    }
+    // the buyer's own reason — their record, never a seller's; it saves itself when it is left
+    if (quoting) DecisionField(vm, stringResource(R.string.decision_hint))
 
     CompareTable(rows, cols, picks, quoting, units, vm)
 
@@ -359,6 +349,7 @@ private fun CompareTable(rows: List<CmpRow>, cols: List<CmpCol>, picks: Map<Stri
     val colors = WorkisTheme.colors
     var colStart by rememberSaveable { mutableIntStateOf(0) }
     val shape = RoundedCornerShape(20.dp)
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
     BoxWithConstraints(Modifier.fillMaxWidth().clip(shape).background(colors.tableGround).border(1.dp, colors.border, shape)) {
         val wide = maxWidth >= 600.dp
         val k = minOf(cols.size, maxOf(2, ((maxWidth - (if (wide) NAME_WIDTH else 0.dp)) / 124.dp).toInt()))
@@ -403,7 +394,8 @@ private fun CompareTable(rows: List<CmpRow>, cols: List<CmpCol>, picks: Map<Stri
             }
             if (paged && !wide) Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) { pager() }
             rows.forEachIndexed { i, r ->
-                MatrixRow(r, i, window, known, wide, picks, quoting, units) { key -> vm.pick(r.id, key) }
+                // a tap on a pick ends the typing in the decision field (ledger 100)
+                MatrixRow(r, i, window, known, wide, picks, quoting, units) { key -> focus.clearFocus(); vm.pick(r.id, key) }
             }
         }
     }
@@ -603,5 +595,68 @@ private fun SellerBlock(c: CmpCol, parts: List<CmpPart>, quoting: Boolean, onQuo
                 Text(stringResource(R.string.quote_doc), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.muted)
             }
         }
+    }
+}
+
+/**
+ * "Karar gerekçeniz" (ledger 100) — the one field of the decision page and of the Sipariş stage.
+ * No button: when the field loses focus, or the screen is left, what the buyer typed saves
+ * itself. While it is not saved a faint dotted ring stands at the field's bottom-right corner;
+ * saved, the ring is a green filled check there for ~1.6 s, then nothing — no word on screen
+ * ("kaydedildi" is the check's accessibility label), no banner, no coloured border while editing.
+ * Leaving is reachable: the keyboard carries "Tamam", closing the keyboard leaves the field, and
+ * a tap on a pick does too.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+internal fun DecisionField(vm: ListDetailViewModel, hint: String) {
+    val colors = WorkisTheme.colors
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    var focused by remember { mutableStateOf(false) }
+    // the keyboard closed under a focused field (the back gesture) = the field is left
+    val ime = androidx.compose.foundation.layout.WindowInsets.isImeVisible
+    var imeWasUp by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(ime) {
+        if (imeWasUp && !ime && focused) focus.clearFocus()
+        imeWasUp = ime
+    }
+    // the screen (or the stage) is left with words not saved
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.leaveDecision() } }
+    val fieldColors = OutlinedTextFieldDefaults.colors(focusedBorderColor = colors.muted, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue, focusedLabelColor = colors.muted, unfocusedLabelColor = colors.faint)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box {
+            OutlinedTextField(
+                value = vm.decision, onValueChange = { vm.typeDecision(it) },
+                label = { Text(stringResource(R.string.decision_label), fontSize = 13.sp) },
+                minLines = 2, maxLines = 6, shape = RoundedCornerShape(14.dp), colors = fieldColors,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, color = colors.ink).readingStep(),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { focus.clearFocus() }),
+                modifier = Modifier.fillMaxWidth().onFocusChanged {
+                    if (focused && !it.isFocused) vm.leaveDecision()
+                    focused = it.isFocused
+                },
+            )
+            val mark = Modifier.align(Alignment.BottomEnd).padding(end = 10.dp, bottom = 8.dp).size(14.dp)
+            if (vm.decisionTick) {
+                Icon(Icons.Filled.CheckCircle, contentDescription = stringResource(R.string.detail_saved), tint = SuccessGreen, modifier = mark)
+            } else if (vm.decisionUnsaved) {
+                val ring = colors.faint
+                androidx.compose.foundation.Canvas(mark) {
+                    val w = 1.5.dp.toPx()
+                    drawCircle(
+                        ring, radius = (size.minDimension - w) / 2,
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = w, cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(0.1f, 3.dp.toPx())),
+                        ),
+                    )
+                }
+            }
+        }
+        Text(hint, fontSize = 11.sp, lineHeight = 15.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
     }
 }

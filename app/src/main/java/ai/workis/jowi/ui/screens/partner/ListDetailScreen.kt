@@ -265,9 +265,68 @@ class ListDetailViewModel : ViewModel() {
     /** The decision page's picks: itemId → "sellerId|sku", "-" = left out; absent = Jowi's pick. */
     var picks by mutableStateOf<Map<String, String>>(emptyMap())
         private set
-    /** The buyer's reason — prefilled ONCE with Jowi's while empty (quoting lists only). */
+    /**
+     * The buyer's reason (ledger 100). Opens with the note the server holds; else, while quoting,
+     * with Jowi's sentence (once) and then FOLLOWS the selection — until the buyer types or a
+     * saved note exists: from then on the words are the buyer's. A re-read never overwrites typing.
+     */
     var decision by mutableStateOf("")
+        private set
     private var decisionPrefilled = false
+    /** The buyer typed in the field and it has not been saved as it stands. */
+    private var decisionTyped by mutableStateOf(false)
+    /** `list.decisionNote` as the server holds it; "" when none. */
+    private var decisionServer by mutableStateOf("")
+    private var decisionSaving = false
+    /** What was typed is not saved yet → the dotted ring at the field's corner. */
+    val decisionUnsaved get() = decisionTyped && decision.trim() != decisionServer
+    /** The green check where the ring stood, ~1.6 s after a save. */
+    var decisionTick by mutableStateOf(false)
+        private set
+    private var decisionTickJob: Job? = null
+    private var reasonJob: Job? = null
+    private var reasonSeq = 0
+
+    fun typeDecision(text: String) { decision = text.take(1000); decisionTyped = true; reasonJob?.cancel() }
+
+    /**
+     * The field (or the screen) is left: what the buyer TYPED goes to `decision-note/` when it
+     * differs from the server's note. Jowi's sentence is never saved by itself. Words typed
+     * while a save is on its way stay and go with the next leave. Outlives the screen.
+     */
+    fun leaveDecision() {
+        val listId = id ?: return
+        val sent = decision.trim()
+        if (!decisionTyped || decisionSaving) return
+        if (sent == decisionServer) { decisionTyped = false; return }
+        decisionSaving = true
+        viewModelScope.launch(kotlinx.coroutines.NonCancellable) {
+            val (r, err) = partnerCall(lang) { Graph.api.listDecisionNote(listId, jsonBody("decisionNote" to sent)) }
+            decisionSaving = false
+            if (r?.success == true) {
+                decisionServer = r.decisionNote?.trim() ?: sent
+                if (decision.trim() == sent) decisionTyped = false
+                decisionTickJob?.cancel(); decisionTick = true
+                decisionTickJob = viewModelScope.launch { delay(1600); decisionTick = false }
+            } else note = r?.error ?: r?.message ?: err
+        }
+    }
+
+    /** A pick changed (quoting): after 350 ms ask for the sentence of the picks as they stand; only the LAST call writes. */
+    private fun followSelection() {
+        val listId = id ?: return
+        val d = detail ?: return
+        if (!d.isQuoting || decisionTyped || decisionServer.isNotEmpty()) return
+        val items = d.proposal?.items.orEmpty()
+        if (items.isEmpty()) return
+        reasonJob?.cancel()
+        val seq = ++reasonSeq
+        reasonJob = viewModelScope.launch {
+            delay(350)
+            val (r, _) = partnerCall(lang) { Graph.api.listReason(listId, jsonBody("selections" to selectionsBody(items, picks))) }
+            if (r?.success == true && seq == reasonSeq && !decisionTyped && decisionServer.isEmpty()) decision = r.reason.orEmpty()
+        }
+    }
     /** The note per winning seller, typed on the order letters sheet (keyed as the proposal names the seller). */
     var sellerNotes by mutableStateOf<Map<String, String>>(emptyMap())
     var placing by mutableStateOf(false)
@@ -286,14 +345,21 @@ class ListDetailViewModel : ViewModel() {
         }
         lastCurrent = cur; lastStatus = status
         detail = r; error = null
-        if (!decisionPrefilled && r.isQuoting) {
-            r.proposal?.reason?.takeIf { it.isNotBlank() }?.let { if (decision.isEmpty()) decision = it; decisionPrefilled = true }
+        // the field: the server's note when there is one; else, while quoting, Jowi's sentence once
+        // (then it follows the selection); never over what the buyer is typing or a save on its way
+        if (!decisionTyped && !decisionSaving) {
+            decisionServer = r.list?.decisionNote?.trim().orEmpty()
+            if (decisionServer.isNotEmpty()) decision = decisionServer
+            else if (!r.isQuoting) decision = ""
+            else if (!decisionPrefilled) {
+                r.proposal?.reason?.takeIf { it.isNotBlank() }?.let { decision = it; decisionPrefilled = true }
+            }
         }
     }
 
-    fun pick(itemId: String, key: String) { picks = picks + (itemId to key) }
+    fun pick(itemId: String, key: String) { picks = picks + (itemId to key); followSelection() }
     /** "Toplu seçim" and "hepsini bu satıcıdan al" (ledger 94): the whole selection at once; empty = Jowi's. */
-    fun pickAll(all: Map<String, String>) { picks = all }
+    fun pickAll(all: Map<String, String>) { picks = all; followSelection() }
 
     /** The currency choice on its way to the server (ledger 93) — a re-read never overwrites it. */
     var currencyPending by mutableStateOf<String?>(null)
@@ -335,6 +401,8 @@ class ListDetailViewModel : ViewModel() {
             note = r?.message ?: r?.error ?: err
             if (r != null && r.success != false && !r.orderIds.isNullOrEmpty()) {
                 picks = emptyMap(); sellerNotes = emptyMap(); shown = null
+                // the award carried the field's words: nothing is left to save, the re-read brings the note
+                decisionTyped = false; reasonJob?.cancel()
                 onPlaced()
             } else placeError = r?.error ?: r?.message ?: err
             load()
@@ -1867,13 +1935,10 @@ private fun OrderPage(d: PurchaseListDetail, vm: ListDetailViewModel, onRequote:
             }
         }
     }
-    // the buyer's own reason, as recorded at the award — never edited, never a seller's to read
-    d.list?.decisionNote?.takeIf { it.isNotBlank() }?.let { dn ->
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Eyebrow(stringResource(R.string.decision_note_label).uppercase())
-            SurfaceCard { Text(dn, fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted) }
-            Text(stringResource(R.string.decision_stays_hint), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
-        }
+    // the buyer's own reason — the SAME field as on the decision page, editable after the award
+    // too and saved the same way (ledger 100); never a seller's to read
+    if (d.list?.status == "ordered" || d.list?.status == "closed") {
+        DecisionField(vm, stringResource(R.string.decision_stays_hint))
     }
     // the one door on: the items the award left out become their own request (bordered — the
     // page's fill stays with the award)
