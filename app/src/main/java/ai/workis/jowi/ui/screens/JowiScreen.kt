@@ -40,6 +40,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -407,9 +408,19 @@ class JowiViewModel : ViewModel() {
         return out
     }
 
+    var refreshing by mutableStateOf(false)
+        private set
+
+    /** The pull (ledger 103): the same re-read, the thread stays where the reader pulled it. */
+    fun refresh() {
+        if (hasPending || refreshing) return
+        refreshing = true
+        reload(pulled = true)
+    }
+
     /** The server's thread replaces the local one — except mid-turn. */
-    fun reload() {
-        if (hasPending) return
+    fun reload(pulled: Boolean = false) {
+        if (hasPending) { refreshing = false; return }
         viewModelScope.launch {
             when (val r = safeCall(lang) { Graph.api.askHistory() }) {
                 is ApiResult.Ok -> {
@@ -430,11 +441,12 @@ class JowiViewModel : ViewModel() {
                     // (a need card's list is its own, built from the card — never a resend's)
                     lines.forEach { l -> if (l.who != "user" && l.need == null) l.listId?.let { collected[l.question.orEmpty()] = it } }
                     foldResends(collected)
-                    scrollTick++
+                    if (!pulled) scrollTick++
                 }
                 is ApiResult.Err -> Unit // an unreachable history is not an error screen
             }
             loaded = true
+            refreshing = false
         }
     }
 
@@ -954,7 +966,7 @@ class JowiViewModel : ViewModel() {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun JowiScreen(vm: JowiViewModel = viewModel()) {
     val colors = WorkisTheme.colors
@@ -1038,74 +1050,77 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
         Spacer(Modifier.height(10.dp))
         NoteBand(vm.note ?: vm.noteRes?.let { stringResource(it) })
 
-        LazyColumn(state = listState, modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // the top of the history: the archive door and the way back into it —
-            // nothing is deleted, the record moves and can be read again
-            if (vm.loaded) {
-                item(key = "history-top") {
-                  Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    // Jowi's letterhead over a running thread (the empty tab draws it
-                    // large): still, never a background; nothing until the image lands
-                    if (vm.lines.isNotEmpty()) JowiWordmark(40.dp, Modifier.padding(top = 6.dp, bottom = 6.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                        when {
-                            vm.loadingOlder -> CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 1.5.dp, color = colors.faint)
-                            vm.noOlder -> Text(stringResource(R.string.jowi_no_older), fontSize = 12.sp, color = colors.faint)
-                            else -> Text(
-                                stringResource(R.string.jowi_load_older), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText,
-                                modifier = Modifier.clickable { vm.loadOlder() }.padding(vertical = 4.dp),
-                            )
-                        }
-                        Spacer(Modifier.weight(1f))
-                        if (vm.lines.any { !it.pending }) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.clickable { askArchive = true }.padding(vertical = 4.dp),
-                            ) {
-                                Icon(WorkisIcons.Archive, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
-                                Spacer(Modifier.width(5.dp))
-                                Text(stringResource(R.string.jowi_clear), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.muted)
+        // ledger 103: the system pull re-reads the server's thread (never while a reply is on its way)
+        PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = vm::refresh, modifier = Modifier.weight(1f)) {
+            LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // the top of the history: the archive door and the way back into it —
+                // nothing is deleted, the record moves and can be read again
+                if (vm.loaded) {
+                    item(key = "history-top") {
+                      Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        // Jowi's letterhead over a running thread (the empty tab draws it
+                        // large): still, never a background; nothing until the image lands
+                        if (vm.lines.isNotEmpty()) JowiWordmark(40.dp, Modifier.padding(top = 6.dp, bottom = 6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                            when {
+                                vm.loadingOlder -> CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 1.5.dp, color = colors.faint)
+                                vm.noOlder -> Text(stringResource(R.string.jowi_no_older), fontSize = 12.sp, color = colors.faint)
+                                else -> Text(
+                                    stringResource(R.string.jowi_load_older), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText,
+                                    modifier = Modifier.clickable { vm.loadOlder() }.padding(vertical = 4.dp),
+                                )
+                            }
+                            Spacer(Modifier.weight(1f))
+                            if (vm.lines.any { !it.pending }) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.clickable { askArchive = true }.padding(vertical = 4.dp),
+                                ) {
+                                    Icon(WorkisIcons.Archive, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(5.dp))
+                                    Text(stringResource(R.string.jowi_clear), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.muted)
+                                }
                             }
                         }
+                      }
                     }
-                  }
                 }
-            }
-            if (vm.lines.isEmpty() && vm.clarify == null && !vm.previewing && vm.loaded) {
-                item(key = "empty") {
-                    JowiEmptyState { example -> putQuestion(example); askFocus.requestFocus() }
-                }
-            }
-            itemsIndexed(vm.lines, key = { _, l -> l.id }) { i, line ->
-                // a faint date line whenever the day turns over
-                val day = dayOf(line.at)
-                val prevDay = vm.lines.getOrNull(i - 1)?.let { dayOf(it.at) }
-                if (day.isNotEmpty() && day != prevDay) {
-                    Text(
-                        day, fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                    )
-                }
-                when {
-                    line.hidden -> WithdrawnStub(line, vm)
-                    line.who == "user" -> UserBubble(line, vm)
-                    // the need card is re-drawn IN PLACE on each answer: the buyer's
-                    // answers stand as their bubbles above the card's latest reading
-                    line.needAnswers.isNotEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        line.needAnswers.forEach { NeedAnswerBubble(it) }
-                        ReplyBubble(line, vm) { askFocus.requestFocus() }
+                if (vm.lines.isEmpty() && vm.clarify == null && !vm.previewing && vm.loaded) {
+                    item(key = "empty") {
+                        JowiEmptyState { example -> putQuestion(example); askFocus.requestFocus() }
                     }
-                    else -> ReplyBubble(line, vm) { askFocus.requestFocus() }
                 }
+                itemsIndexed(vm.lines, key = { _, l -> l.id }) { i, line ->
+                    // a faint date line whenever the day turns over
+                    val day = dayOf(line.at)
+                    val prevDay = vm.lines.getOrNull(i - 1)?.let { dayOf(it.at) }
+                    if (day.isNotEmpty() && day != prevDay) {
+                        Text(
+                            day, fontFamily = WorkisMono, fontSize = 10.sp, color = colors.faint,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        )
+                    }
+                    when {
+                        line.hidden -> WithdrawnStub(line, vm)
+                        line.who == "user" -> UserBubble(line, vm)
+                        // the need card is re-drawn IN PLACE on each answer: the buyer's
+                        // answers stand as their bubbles above the card's latest reading
+                        line.needAnswers.isNotEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            line.needAnswers.forEach { NeedAnswerBubble(it) }
+                            ReplyBubble(line, vm) { askFocus.requestFocus() }
+                        }
+                        else -> ReplyBubble(line, vm) { askFocus.requestFocus() }
+                    }
+                }
+                vm.clarify?.let { (typed, reading) ->
+                    item { ClarifyCard(typed, reading, vm) { back -> putQuestion(back); askFocus.requestFocus() } }
+                }
+                if (vm.previewing || (!vm.loaded && vm.lines.isEmpty())) {
+                    item { Box(Modifier.fillMaxWidth().padding(vertical = 10.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Kiremit500) } }
+                }
+                item { Spacer(Modifier.height(8.dp)) }
             }
-            vm.clarify?.let { (typed, reading) ->
-                item { ClarifyCard(typed, reading, vm) { back -> putQuestion(back); askFocus.requestFocus() } }
-            }
-            if (vm.previewing || (!vm.loaded && vm.lines.isEmpty())) {
-                item { Box(Modifier.fillMaxWidth().padding(vertical = 10.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Kiremit500) } }
-            }
-            item { Spacer(Modifier.height(8.dp)) }
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
