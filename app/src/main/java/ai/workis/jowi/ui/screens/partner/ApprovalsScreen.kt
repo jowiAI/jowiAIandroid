@@ -222,7 +222,6 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
                         ApCard(a.title.orEmpty(), listOfNotNull(
                             a.nQuotes?.let { "$it " + stringResource(R.string.ap_quotes) },
                             a.uncovered?.takeIf { it > 0 }?.let { "$it " + stringResource(R.string.ap_uncovered) },
-                            a.total?.let { WorkisMoney.text(it, a.currency) },
                         ).joinToString(" · ")) {
                             Action(stringResource(R.string.ap_award_open)) { a.listId?.let(onList) }
                         }

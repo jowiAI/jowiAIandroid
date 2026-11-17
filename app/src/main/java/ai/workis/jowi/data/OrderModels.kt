@@ -658,9 +658,11 @@ data class ApAward(
     val title: String? = null,
     val nQuotes: Int? = null,
     val uncovered: Int? = null,
-    val total: Double? = null,
+    /** Both are the server's WORDS ("1,234.00 TRY + 80.00 EUR", "A, B") — never a number; read as
+     *  strings so an award row can never fail the whole inbox. Not drawn (iOS draws neither). */
+    @Serializable(with = FlexString::class) val total: String? = null,
     val currency: String? = null,
-    val sellers: Int? = null,
+    @Serializable(with = FlexString::class) val sellers: String? = null,
     val totals: List<ApprovalTotal>? = null,
 )
 
