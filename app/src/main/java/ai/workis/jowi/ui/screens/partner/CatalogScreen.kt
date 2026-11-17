@@ -740,7 +740,7 @@ private fun PublishCatalogContext(vm: CatalogViewModel, segment: Int) {
 private fun CountTile(n: Int, label: String, modifier: Modifier) {
     val colors = WorkisTheme.colors
     Column(modifier.heightIn(min = 78.dp).fillMaxHeight().background(colors.ink.copy(alpha = 0.06f), RoundedCornerShape(12.dp)).padding(10.dp)) {
-        Text("$n", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = colors.ink)
+        Text(WorkisMoney.count(n), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = colors.ink)
         Text(label, fontSize = 11.sp, lineHeight = 14.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -1195,7 +1195,8 @@ private fun LiveOfferRow(r: CatalogLiveRow, vm: CatalogViewModel, onEdit: (Catal
 private fun OfferEditSheet(row: CatalogLiveRow, vm: CatalogViewModel, onClose: () -> Unit) {
     val colors = WorkisTheme.colors
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var price by remember { mutableStateOf(WorkisMoney.qty(row.price)) }
+    // shown with the app language's decimal mark, sent with the wire's (ledger 99)
+    var price by remember { mutableStateOf(WorkisMoney.field(row.price)) }
     // the seller's usual rate (2026-10-01, `field: discountPct`): the live row does not
     // carry it, so the field starts empty and an empty field is never sent — it would clear the rate
     var discount by remember { mutableStateOf("") }
@@ -1231,8 +1232,8 @@ private fun OfferEditSheet(row: CatalogLiveRow, vm: CatalogViewModel, onClose: (
                     scope.launch {
                         busy = true
                         val pending = buildList<Pair<String, Any>> {
-                            if (price != WorkisMoney.qty(row.price)) add("price" to price.replace(',', '.'))
-                            discount.trim().takeIf { it.isNotEmpty() }?.let { add("discountPct" to it.replace(',', '.')) }
+                            if (WorkisMoney.changed(price, row.price)) add("price" to WorkisMoney.wire(price))
+                            discount.trim().takeIf { it.isNotEmpty() }?.let { add("discountPct" to WorkisMoney.wire(it)) }
                             if (name != row.name.orEmpty()) add("displayName" to name)
                             if (leadTime != row.leadTimeDays?.toString().orEmpty()) add("leadTimeDays" to leadTime)
                             if (stock != row.stock.orEmpty()) add("stock" to stock)

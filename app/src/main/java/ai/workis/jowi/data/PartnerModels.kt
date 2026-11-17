@@ -1143,6 +1143,51 @@ object WorkisMoney {
         return if (value == Math.rint(value)) value.toLong().toString() else value.toString()
     }
 
+    private fun appLocale(): Locale = if (ai.workis.jowi.Graph.language.value == "en") Locale.US else Locale("tr", "TR")
+
+    /**
+     * A number pre-filled into an EDITABLE field (ledger 99): the in-app language's decimal mark
+     * ("865,25" tr · "865.25" en), no grouping, only the decimals it has (four at most).
+     */
+    fun field(value: Double?): String {
+        if (value == null) return ""
+        val f = NumberFormat.getNumberInstance(appLocale()).apply { isGroupingUsed = false; minimumFractionDigits = 0; maximumFractionDigits = 4 }
+        return f.format(value)
+    }
+
+    /**
+     * What was typed in a number field, as the wire's number text ("865.25"). The decimal key of
+     * the pad follows the DEVICE's region, so both marks are read: with both in the text the LAST
+     * one is the decimal mark and the other grouping; one mark once is the decimal mark; one mark
+     * repeated is grouping. Anything else goes as typed — the server refuses it in its own words.
+     */
+    fun wire(typed: String): String {
+        var s = typed.filterNot { it.isWhitespace() }
+        val commas = s.count { it == ',' }
+        val dots = s.count { it == '.' }
+        when {
+            commas > 0 && dots > 0 -> {
+                val decimal = if (s.lastIndexOf(',') > s.lastIndexOf('.')) ',' else '.'
+                s = s.filterNot { it == (if (decimal == ',') '.' else ',') }.replace(decimal, '.')
+            }
+            commas == 1 -> s = s.replace(',', '.')
+            commas > 1 -> s = s.filterNot { it == ',' }
+            dots > 1 -> s = s.filterNot { it == '.' }
+        }
+        return s
+    }
+    fun number(typed: String): Double? = wire(typed).takeIf { t -> t.isNotEmpty() && t.all { it.isDigit() || it == '.' || it == '-' } }?.toDoubleOrNull()
+
+    /** An untouched field is not a change: compared as numbers, not as text. */
+    fun changed(typed: String, original: Double?): Boolean {
+        if (typed.trim() == field(original)) return false
+        val n = number(typed)
+        return n == null || n != original
+    }
+
+    /** A count with the app language's grouping: "25.315" in Turkish, "25,315" in English. */
+    fun count(n: Int): String = NumberFormat.getIntegerInstance(appLocale()).format(n)
+
     /** A percentage figure (12.5 = 12,5 %) in the app locale, one decimal at most: "12", "5,5". */
     fun pct(value: Double?): String {
         if (value == null) return ""

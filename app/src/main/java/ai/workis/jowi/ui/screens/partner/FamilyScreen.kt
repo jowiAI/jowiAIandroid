@@ -710,7 +710,8 @@ private fun VariantSheet(vm: FamilyViewModel, variant: CatalogVariant?, onClose:
     val scope = rememberCoroutineScope()
     var code by remember { mutableStateOf(variant?.code.orEmpty()) }
     var label by remember { mutableStateOf(variant?.label.orEmpty()) }
-    var price by remember { mutableStateOf(WorkisMoney.qty(variant?.price)) }
+    // shown with the app language's decimal mark, sent with the wire's (ledger 99)
+    var price by remember { mutableStateOf(WorkisMoney.field(variant?.price)) }
     var currency by remember { mutableStateOf(variant?.currency ?: "TRY") }
     var busy by remember { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
@@ -723,13 +724,13 @@ private fun VariantSheet(vm: FamilyViewModel, variant: CatalogVariant?, onClose:
                     scope.launch {
                         busy = true; errorText = null
                         val c = code.trim()
-                        val p = price.replace(',', '.')
+                        val p = WorkisMoney.wire(price)
                         val err: String? = if (variant == null) {
                             vm.cell(jsonBody("field" to "variantAdd", "code" to c, "label" to label, "price" to p, "currency" to currency))
                         } else {
                             val steps = buildList {
                                 if (label != variant.label.orEmpty()) add(jsonBody("field" to "label", "code" to c, "value" to label))
-                                if (price != WorkisMoney.qty(variant.price)) add(jsonBody("field" to "price", "code" to c, "value" to p))
+                                if (WorkisMoney.changed(price, variant.price)) add(jsonBody("field" to "price", "code" to c, "value" to p))
                                 if (currency != (variant.currency ?: "TRY")) add(jsonBody("field" to "currency", "code" to c, "value" to currency))
                             }
                             var first: String? = null
