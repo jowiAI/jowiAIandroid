@@ -245,7 +245,13 @@ internal fun DecisionPage(d: PurchaseListDetail, vm: ListDetailViewModel, onAwar
 
     // Jowi's reason for the recommended coverage — the server's sentence. No amount beside it:
     // the recommendation may span currencies, and the totals stand below per currency.
-    p?.reason?.takeIf { it.isNotBlank() }?.let { reason ->
+    // ONE block while quoting (ledger 100, item 6): Jowi's reason IS the decision until the buyer
+    // changes it — while the field still holds Jowi's own sentence the block is Jowi's (its
+    // heading, its beige ground); once the words differ it is "Karar gerekçeniz" on the plain ground.
+    if (quoting) {
+        val r = p?.reason?.trim().orEmpty()
+        DecisionField(vm, stringResource(R.string.decision_hint), jowis = r.isNotEmpty() && vm.decision.trim() == r, inset = 10.dp)
+    } else p?.reason?.takeIf { it.isNotBlank() }?.let { reason ->
         SurfaceCard(border = Beige.copy(alpha = 0.6f), fill = BeigeBg.copy(alpha = 0.35f)) {
             Text(stringResource(R.string.jowi_pick).uppercase(locale), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 10.sp, letterSpacing = 1.sp, color = Beige, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(reason, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
@@ -267,8 +273,6 @@ internal fun DecisionPage(d: PurchaseListDetail, vm: ListDetailViewModel, onAwar
         }, icon = WorkisIcons.Warning)
     }
 
-    // the buyer's own reason — their record, never a seller's; it saves itself when it is left
-    if (quoting) DecisionField(vm, stringResource(R.string.decision_hint))
 
     CompareTable(rows, cols, picks, quoting, units, vm)
 
@@ -609,7 +613,7 @@ private fun SellerBlock(c: CmpCol, parts: List<CmpPart>, quoting: Boolean, onQuo
  */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-internal fun DecisionField(vm: ListDetailViewModel, hint: String) {
+internal fun DecisionField(vm: ListDetailViewModel, hint: String, jowis: Boolean = false, inset: androidx.compose.ui.unit.Dp = 0.dp) {
     val colors = WorkisTheme.colors
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     var focused by remember { mutableStateOf(false) }
@@ -622,12 +626,19 @@ internal fun DecisionField(vm: ListDetailViewModel, hint: String) {
     }
     // the screen (or the stage) is left with words not saved
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { vm.leaveDecision() } }
-    val fieldColors = OutlinedTextFieldDefaults.colors(focusedBorderColor = colors.muted, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue, focusedLabelColor = colors.muted, unfocusedLabelColor = colors.faint)
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    val fieldColors = OutlinedTextFieldDefaults.colors(focusedBorderColor = colors.muted, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue, focusedLabelColor = if (jowis) Beige else colors.muted, unfocusedLabelColor = if (jowis) Beige else colors.faint)
+    // Jowi's block: the beige ground behind the same field (half strength in light, as the comparison's band)
+    val ground by androidx.compose.animation.animateColorAsState(
+        if (jowis) BeigeBg.copy(alpha = if (colors.isDark) 1f else 0.5f) else BeigeBg.copy(alpha = 0f), label = "decisionGround",
+    )
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.background(ground, RoundedCornerShape(16.dp)).padding(inset), // the same room in both states: the field does not jump at the first keystroke
+    ) {
         Box {
             OutlinedTextField(
                 value = vm.decision, onValueChange = { vm.typeDecision(it) },
-                label = { Text(stringResource(R.string.decision_label), fontSize = 13.sp) },
+                label = { Text(stringResource(if (jowis) R.string.jowi_pick else R.string.decision_label), fontSize = 13.sp) },
                 minLines = 2, maxLines = 6, shape = RoundedCornerShape(14.dp), colors = fieldColors,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, color = colors.ink).readingStep(),
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
