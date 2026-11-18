@@ -338,14 +338,16 @@ private fun InvitationHeader(inv: SellerInvitation) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             // the buyer's own words — never recased; shrinks to 80 % before it truncates
             BasicText(
-                inv.caseTitle ?: inv.request ?: "—",
+                inv.caseTitle?.takeIf { it.isNotEmpty() } ?: inv.request?.takeIf { it.isNotEmpty() } ?: "—",
                 style = LocalTextStyle.current.merge(TextStyle(fontFamily = WorkisSans, fontWeight = FontWeight.Medium, fontSize = 16.sp, color = colors.ink)),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 autoSize = TextAutoSize.StepBased(minFontSize = 12.8.sp, maxFontSize = 16.sp, stepSize = 0.4.sp),
                 modifier = Modifier.weight(1f),
             )
-            inv.createdAt?.let {
+            // ledger 107: a request born from a list is titled "Teklif talebi · 10.11.2026" by the
+            // server (the list's name never reaches the seller) — the day would stand twice
+            inv.createdAt?.takeIf { inv.isListRfq != true && it.isNotEmpty() }?.let {
                 Spacer(Modifier.width(10.dp))
                 Text(WorkisClock.day(it), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint, softWrap = false, maxLines = 1)
             }
@@ -937,7 +939,7 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
         },
     ) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(inv.caseTitle ?: inv.request.orEmpty(), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
+            Text(inv.caseTitle?.takeIf { it.isNotEmpty() } ?: inv.request.orEmpty(), fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
             Text(inv.buyer?.short.orEmpty() + (inv.buyer?.city?.let { " ($it)" } ?: ""), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
             // the request's own term, above the price grid
             DeliveryPlaceLine(inv.deliveryPlace)
