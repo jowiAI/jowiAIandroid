@@ -864,6 +864,10 @@ interface WorkisApi {
 
     // a written record is never deleted (2026-09-18): a turn is WITHDRAWN into a
     // stub in its place, and can come back
+    /** Ledger 105: a full match run against today's catalogue (seconds); empty body. */
+    @POST("workis/ask/history/{id}/rematch/")
+    suspend fun askRematch(@Path("id") id: String): AskRematchResult
+
     @POST("workis/ask/history/{id}/hide/")
     suspend fun askHide(@Path("id") id: String): AskHideResult
 

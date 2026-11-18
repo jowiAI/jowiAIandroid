@@ -695,6 +695,10 @@ data class AskLine(
      */
     @SerialName("need") val needRaw: JsonElement? = null,
     @Serializable(with = FlexString::class) val builtListId: String? = null,
+    /** Ledger 105: the server's word that this match row may be matched again (never derived), and —
+     *  once it was — its sentence, printed as it came (Türkiye time). `refreshedAt` is not drawn. */
+    val canRematch: Boolean? = null,
+    val refreshedWords: String? = null,
 ) {
     val question: String? get() = askQuestionText(questionRaw)
 
@@ -737,6 +741,10 @@ data class AskNeedPayload(
 data class AskHistory(val success: Boolean? = null, val lines: List<AskLine>? = null, val nextBefore: String? = null)
 
 /** `hide/` → draw `stub` where the turn stood, no reload. */
+/** `POST ask/history/{rowId}/rematch/` — the row is updated in place; the thread is re-read after. */
+@Serializable
+data class AskRematchResult(val success: Boolean = false, val error: String? = null, val message: String? = null)
+
 @Serializable
 data class AskHideResult(
     val success: Boolean = false,

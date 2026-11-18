@@ -105,6 +105,7 @@ import androidx.compose.ui.text.TextRange
 import ai.workis.jowi.data.absoluteWorkisUrl
 import ai.workis.jowi.data.messageFromBody
 import ai.workis.jowi.data.safeCall
+import ai.workis.jowi.data.partnerCall
 import ai.workis.jowi.data.statusMessage
 import ai.workis.jowi.ui.components.openInApp
 import ai.workis.jowi.ui.theme.Beige
@@ -166,6 +167,8 @@ data class AskMatch(
     val destination: AskDestination? = null,
     /** The firm's own record with the product (ledger 54) — live answers only, like `destination`. */
     val memory: AskMemory? = null,
+    /** Ledger 105: the server's "… itibarıyla yeniden eşleştirildi", as it came. */
+    val refreshedWords: String? = null,
 ) {
     /** "100 metre · yeşil emici spiral hortum" — `item` no longer carries the quantity. */
     val title: String
@@ -241,6 +244,8 @@ data class JowiLine(
     // whether this turn can still be WITHDRAWN into a stub in its place
     val serverId: String? = null,
     val canHide: Boolean = false,
+    /** Ledger 105: the server marks the match rows the pull may match again. */
+    val canRematch: Boolean = false,
     /** A withdrawn turn's stub: dashed trace where the question stood; "Geri getir" while `canUnhide`. */
     val hidden: Boolean = false,
     val trace: String? = null,
@@ -358,6 +363,7 @@ class JowiViewModel : ViewModel() {
             val match = if (l.kind == "match") AskMatch(
                 l.item.orEmpty(), l.qty, l.unit, l.nProducts, l.approximate == true, l.listStage, l.sellers.orEmpty(),
                 products = l.products.orEmpty(), question = l.question, options = l.options.orEmpty(),
+                refreshedWords = l.refreshedWords?.takeIf { it.isNotBlank() },
             ) else null
             val isUser = l.who == "user"
             var line = JowiLine(
@@ -369,6 +375,7 @@ class JowiViewModel : ViewModel() {
                 scene = l.scene, nextScene = l.nextScene?.takeIf { it.isNotEmpty() }, accent = l.accent,
                 question = if (isUser) null else lastQ,
                 at = l.at, serverId = l.id, canHide = l.canHide == true,
+                canRematch = match != null && l.canRematch == true,
             )
             if (!isUser) {
                 val key = lastQ.orEmpty() + "\u001F" + l.text.orEmpty()
@@ -378,7 +385,7 @@ class JowiViewModel : ViewModel() {
                 // the match's product rows are not in the history either: this
                 // session's pick list stays on the card it came with
                 if (match != null) keptMatch[key]?.let { (m, picked) ->
-                    line = if (match.products.isEmpty()) line.copy(match = m, optionPicked = picked)
+                    line = if (match.products.isEmpty()) line.copy(match = m.copy(refreshedWords = match.refreshedWords), optionPicked = picked)
                     // a live answer's destination / memory are not in the history row
                     else line.copy(match = match.copy(destination = match.destination ?: m.destination, memory = match.memory ?: m.memory))
                 }
@@ -411,43 +418,59 @@ class JowiViewModel : ViewModel() {
     var refreshing by mutableStateOf(false)
         private set
 
-    /** The pull (ledger 103): the same re-read, the thread stays where the reader pulled it. */
+    /**
+     * The pull (ledgers 103 / 105): the history is re-read; then the LAST row the server marks
+     * `canRematch` is matched again against today's catalogue — one card a pull, a full match run,
+     * the indicator stays until it ends — and the thread is read once more, since the row was
+     * updated in place. A refusal is the server's sentence as the thread's note; the card stays.
+     * The thread stays where the reader pulled it.
+     */
     fun refresh() {
         if (hasPending || refreshing) return
         refreshing = true
-        reload(pulled = true)
+        viewModelScope.launch {
+            readHistory(pulled = true)
+            val row = lines.lastOrNull { it.canRematch && !it.serverId.isNullOrEmpty() }?.serverId
+            if (row != null && !hasPending) {
+                val (r, err) = partnerCall(lang) { Graph.api.askRematch(row) }
+                if (r?.success == true) { if (!hasPending) readHistory(pulled = true) }
+                else note = r?.error ?: r?.message ?: err
+            }
+            refreshing = false
+        }
     }
 
     /** The server's thread replaces the local one — except mid-turn. */
-    fun reload(pulled: Boolean = false) {
-        if (hasPending) { refreshing = false; return }
-        viewModelScope.launch {
-            when (val r = safeCall(lang) { Graph.api.askHistory() }) {
-                is ApiResult.Ok -> {
-                    // options are not in history rows: keep the ones this session
-                    // received on the reply they belong to. The clarify sentence
-                    // repeats, so the key carries the question it answers too.
-                    val kept = lines.filter { it.who != "user" && it.options != null }
-                        .associate { cardKey(it) to (it.options!! to it.optionPicked) }
-                    val keptMatch = lines.filter { l -> l.who != "user" && l.match?.let { it.products.isNotEmpty() || it.destination != null || it.memory != null } == true }
-                        .associate { cardKey(it) to (it.match!! to it.optionPicked) }
-                    lines.clear()
-                    nextBefore = null; noOlder = false
-                    lines += fromServer(r.value.lines.orEmpty(), kept, keptMatch)
-                    // the server keeps a "Teklif topla" resend as its own question +
-                    // answer pair; the card that bore the match carries the listId,
-                    // so the repeat pair is folded away
-                    val collected = HashMap<String, String>() // question → listId
-                    // (a need card's list is its own, built from the card — never a resend's)
-                    lines.forEach { l -> if (l.who != "user" && l.need == null) l.listId?.let { collected[l.question.orEmpty()] = it } }
-                    foldResends(collected)
-                    if (!pulled) scrollTick++
-                }
-                is ApiResult.Err -> Unit // an unreachable history is not an error screen
+    fun reload() {
+        if (hasPending) return
+        viewModelScope.launch { readHistory(pulled = false) }
+    }
+
+    private suspend fun readHistory(pulled: Boolean) {
+        when (val r = safeCall(lang) { Graph.api.askHistory() }) {
+            is ApiResult.Ok -> {
+                // options are not in history rows: keep the ones this session
+                // received on the reply they belong to. The clarify sentence
+                // repeats, so the key carries the question it answers too.
+                val kept = lines.filter { it.who != "user" && it.options != null }
+                    .associate { cardKey(it) to (it.options!! to it.optionPicked) }
+                val keptMatch = lines.filter { l -> l.who != "user" && l.match?.let { it.products.isNotEmpty() || it.destination != null || it.memory != null } == true }
+                    .associate { cardKey(it) to (it.match!! to it.optionPicked) }
+                lines.clear()
+                nextBefore = null; noOlder = false
+                lines += fromServer(r.value.lines.orEmpty(), kept, keptMatch)
+                // the server keeps a "Teklif topla" resend as its own question +
+                // answer pair; the card that bore the match carries the listId,
+                // so the repeat pair is folded away
+                val collected = HashMap<String, String>() // question → listId
+                // (a need card's list is its own, built from the card — never a resend's)
+                lines.forEach { l -> if (l.who != "user" && l.need == null) l.listId?.let { collected[l.question.orEmpty()] = it } }
+                foldResends(collected)
+                if (!pulled) scrollTick++
             }
-            loaded = true
-            refreshing = false
+            is ApiResult.Err -> Unit // an unreachable history is not an error screen
         }
+        loaded = true
     }
 
     /** One archive page older than what is on screen, prepended; the scroll stays put. */
@@ -1782,6 +1805,8 @@ private fun MatchCard(m: AskMatch, line: JowiLine, vm: JowiViewModel) {
             Text(stringResource(R.string.match_header).uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.faint)
         }
         Text(m.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp, color = colors.ink)
+        // ledger 105: the server's sentence, as it came — the app re-formats nothing
+        m.refreshedWords?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint) }
         if (m.products.isNotEmpty()) PickList(m, line, vm)
         else m.sellers.take(5).forEach { s ->
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
