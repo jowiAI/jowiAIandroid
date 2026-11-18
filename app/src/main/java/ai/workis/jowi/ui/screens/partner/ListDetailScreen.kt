@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.partner
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1046,14 +1047,8 @@ private fun Header(d: PurchaseListDetail) {
     }
 }
 
-/** "2026-10-19T01:55:12…" → "19.10.2026 01:55" — the web's `d.m.Y H:i` (string slicing, as iOS). */
-private fun metaDate(iso: String?): String? {
-    if (iso == null) return null
-    if (iso.length < 16) return iso.take(10)
-    val p = iso.take(10).split("-")
-    if (p.size != 3) return iso.take(10)
-    return "${p[2]}.${p[1]}.${p[0]} " + iso.substring(11, 16)
-}
+/** "2026-10-19T01:55:12+00:00" → "19.10.2026 04:55" in Istanbul — the reader's clock (ledger 104). */
+private fun metaDate(iso: String?): String? = iso?.let(WorkisClock::stamp)
 
 /** The web's source display ("Chat", "PDF"): the server's word with a capital, nothing else. */
 private fun sourceWord(source: String?, lang: String): String? {
@@ -1365,7 +1360,7 @@ private fun JowiNoteCard(d: PurchaseListDetail, onPick: (PLItem) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // the web's title carries `at[:16]`
         val at = note.at
-        val head = stringResource(R.string.jowi_note_title) + if (at != null && at.length >= 16) " · " + at.take(16).replace('T', ' ') else ""
+        val head = stringResource(R.string.jowi_note_title) + if (!at.isNullOrEmpty()) " · " + WorkisClock.stamp(at) else ""
         Eyebrow(head.uppercase())
         // the web's card (ledger 64): a note has a beige frame — colour says what the block IS (information)
         SurfaceCard(border = Beige.copy(alpha = 0.6f), fill = BeigeBg.copy(alpha = 0.35f)) {

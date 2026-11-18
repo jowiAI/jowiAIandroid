@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.expert
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -139,7 +140,7 @@ fun ExpertReviewsScreen(vm: ExpertViewModel) {
 }
 
 private fun stamp(at: String?): String =
-    if (at != null && at.length >= 16) at.take(16).replace("T", " ") else at.orEmpty()
+    WorkisClock.stamp(at)
 
 @Composable
 private fun SessionCard(

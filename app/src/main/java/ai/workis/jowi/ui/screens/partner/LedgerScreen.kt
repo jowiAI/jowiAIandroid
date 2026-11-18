@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.partner
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -170,7 +171,7 @@ private fun OrderGroupRow(g: LedgerOrderGroup, currency: String?) {
                     }
                     Row(verticalAlignment = Alignment.Top) {
                         Text(
-                            listOfNotNull(r.at?.take(10), r.note, r.extra).filter { it.isNotEmpty() }.joinToString(" · "),
+                            listOfNotNull(r.at?.let(WorkisClock::day), r.note, r.extra).filter { it.isNotEmpty() }.joinToString(" · "),
                             fontSize = 11.sp, color = colors.muted, maxLines = 3, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                         )
                         Spacer(Modifier.width(6.dp))
@@ -201,7 +202,7 @@ private fun InvoiceRow(i: LedgerOpenInvoice) {
             Text(WorkisMoney.text(i.total, i.currency), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            i.dueDate?.let { Text(stringResource(R.string.cari_due) + " " + it.take(10), fontSize = 11.sp, color = colors.muted) }
+            i.dueDate?.let { Text(stringResource(R.string.cari_due) + " " + WorkisClock.day(it), fontSize = 11.sp, color = colors.muted) }
             if (i.overdue == true) Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(WorkisIcons.Warning, contentDescription = null, tint = colors.danger, modifier = Modifier.size(12.dp))
                 Spacer(Modifier.width(3.dp))

@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens
 
+import ai.workis.jowi.data.WorkisClock
 import ai.workis.jowi.R
 import ai.workis.jowi.data.AskDestination
 import ai.workis.jowi.data.AskDraft
@@ -75,7 +76,7 @@ private fun draftWords(dr: AskDraft): String =
 
 /** "21 Eki 14:05" from the draft's ISO stamp; null when unreadable. */
 private fun draftWhen(iso: String?): String? {
-    val s = iso?.take(16) ?: return null
+    val s = (WorkisClock.zoned(iso)?.toLocalDateTime()?.toString() ?: iso)?.take(16) ?: return null
     if (s.length < 16) return null
     val d = runCatching { java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm", java.util.Locale.ROOT).parse(s) }.getOrNull() ?: return null
     val locale = if (ai.workis.jowi.Graph.language.value == "en") java.util.Locale.UK else java.util.Locale.forLanguageTag("tr-TR")

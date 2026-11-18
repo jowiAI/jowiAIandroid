@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -349,7 +350,7 @@ private fun InvitationRow(inv: TeamInvitation, canManage: Boolean, busy: Boolean
         Text(
             listOfNotNull(
                 inv.scopeLabel?.takeIf { it.isNotBlank() },
-                inv.expiresAt?.let { stringResource(R.string.team_expires) + " " + shortDate(it) }?.takeIf { it.isNotBlank() },
+                inv.expiresAt?.let { stringResource(R.string.team_expires) + " " + WorkisClock.day(it) }?.takeIf { it.isNotBlank() },
             ).joinToString(" · "),
             fontFamily = WorkisMono, fontSize = 11.sp, lineHeight = 15.sp, color = colors.faint,
         )

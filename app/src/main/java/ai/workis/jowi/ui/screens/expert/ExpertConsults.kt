@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.expert
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -110,7 +111,7 @@ private fun ConsultRow(c: ExpertConsult, onClick: () -> Unit) {
                 )
             }
             Spacer(Modifier.weight(1f))
-            Text((c.lastAt ?: c.updatedAt).orEmpty().take(10), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+            Text(WorkisClock.day(c.lastAt ?: c.updatedAt), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
         }
         c.lastText?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, color = colors.muted, maxLines = 2) }
     }
@@ -233,7 +234,7 @@ private fun Bubble(m: ConsultMessage) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(who.uppercase(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = if (mine) colors.blue else colors.faint)
             Spacer(Modifier.weight(1f))
-            m.at?.let { Text(it.take(16).replace("T", " "), fontFamily = WorkisMono, fontSize = 9.sp, color = colors.faint) }
+            m.at?.let { Text(WorkisClock.stamp(it), fontFamily = WorkisMono, fontSize = 9.sp, color = colors.faint) }
         }
         Text(
             if (translated) m.textLocalized.orEmpty() else m.text.orEmpty(),

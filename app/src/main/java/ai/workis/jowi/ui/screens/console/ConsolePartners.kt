@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.console
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -137,7 +138,7 @@ fun ConsolePartnersScreen(vm: ConsoleViewModel, initialSeat: String = "partner")
                             Icon(WorkisIcons.PersonKey, contentDescription = null, tint = colors.faint, modifier = Modifier.size(12.dp))
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                stringResource(R.string.catalog_helper_tag) + ": $lead" + (p.catalogHelper.since?.take(10)?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""),
+                                stringResource(R.string.catalog_helper_tag) + ": $lead" + (p.catalogHelper.since?.let(WorkisClock::day)?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""),
                                 fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp, color = colors.faint, maxLines = 2,
                             )
                         }

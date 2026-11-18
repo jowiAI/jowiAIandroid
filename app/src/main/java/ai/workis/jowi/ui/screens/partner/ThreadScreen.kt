@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.partner
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1090,7 +1091,7 @@ private fun InspectionStrip(p: ThreadPayload) {
                     listOfNotNull(
                         row.name?.takeIf { it.isNotEmpty() },
                         stringResource(R.string.inspection_open),
-                        row.due?.takeIf { it.isNotEmpty() }?.take(16)?.replace("T", " "),
+                        row.due?.takeIf { it.isNotEmpty() }?.let(WorkisClock::stamp),
                     ).joinToString(" · "),
                     fontSize = 12.sp, lineHeight = 17.sp, color = Beige,
                 )
@@ -1367,7 +1368,7 @@ private fun TermChoiceSheet(term: OrderTerm, choices: TermChoices?, vm: ThreadVi
                             Icon(WorkisIcons.Calendar, contentDescription = null, tint = colors.muted, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.stage_delivery_date), fontSize = 14.sp, color = colors.ink, modifier = Modifier.weight(1f))
-                            Text(shortDate(day.toString()), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.accentText)
+                            Text(WorkisClock.day(day.toString()), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.accentText)
                         }
                         // the hand-over day the server computed holds for the date in force only
                         val h = dc?.handover?.takeIf { it.isNotEmpty() }
@@ -1501,7 +1502,7 @@ private fun HandoverRow(iso: String, ok: Boolean?) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(stringResource(R.string.stage_handover), fontSize = 13.sp, color = colors.muted, modifier = Modifier.weight(1f))
-            Text(shortDate(iso), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink)
+            Text(WorkisClock.day(iso), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink)
         }
         if (ok == false) {
             Row(verticalAlignment = Alignment.Top) {

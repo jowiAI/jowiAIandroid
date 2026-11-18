@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.console
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -236,7 +237,7 @@ private fun MessageBubble(m: ConsoleMessage) {
                 )
             }
             Spacer(Modifier.weight(1f))
-            m.at?.take(10)?.let { Text(it, color = colors.faint, fontSize = 10.sp) }
+            m.at?.let(WorkisClock::day)?.let { Text(it, color = colors.faint, fontSize = 10.sp) }
         }
         Spacer(Modifier.height(6.dp))
 

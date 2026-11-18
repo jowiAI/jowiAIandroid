@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.partner
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -415,7 +416,7 @@ private fun OrderCard(
                                 "carrier" -> R.string.order_role_carrier
                                 else -> R.string.order_role_buyer
                             },
-                        ) + (o.at?.take(10)?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""),
+                        ) + (o.at?.let(WorkisClock::day)?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""),
                         fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint,
                     )
                 }
@@ -482,7 +483,7 @@ private fun OrderCard(
             Text(
                 listOfNotNull(
                     s.statusLabel?.takeIf { it.isNotEmpty() },
-                    s.promised?.take(10)?.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.order_promised) + " $it" },
+                    s.promised?.let(WorkisClock::day)?.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.order_promised) + " $it" },
                     s.trackingNo?.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.order_tracking) + " $it" },
                 ).joinToString(" · "),
                 fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp, color = colors.faint,
@@ -733,13 +734,13 @@ internal fun ReadySheet(
                     Icon(WorkisIcons.Calendar, contentDescription = null, tint = colors.muted, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(stringResource(R.string.order_ready_date), fontSize = 14.sp, color = colors.ink, modifier = Modifier.weight(1f))
-                    Text(shortDate(day.toString()), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.accentText)
+                    Text(WorkisClock.day(day.toString()), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.accentText)
                 }
                 deliveryDate?.takeIf { it.isNotEmpty() }?.let {
-                    StageFact(stringResource(R.string.stage_delivery_date), shortDate(it), Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+                    StageFact(stringResource(R.string.stage_delivery_date), WorkisClock.day(it), Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
                 }
                 handover?.takeIf { it.isNotEmpty() }?.let {
-                    StageFact(stringResource(R.string.stage_handover), shortDate(it), Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+                    StageFact(stringResource(R.string.stage_handover), WorkisClock.day(it), Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
                 }
             }
             if (!handover.isNullOrEmpty() && handoverOk == false) HandoverLate()

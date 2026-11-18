@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.console
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -315,7 +316,7 @@ private fun Header(row: ApplicationRow, detail: ApplicationDetail?) {
             (detail?.role ?: row.role)?.takeIf { it.isNotEmpty() }?.let { Chip(it.uppercase(), colors.accentText) }
             detail?.status?.takeIf { it.isNotEmpty() }?.let { Chip(it.uppercase(), Beige) }
             (detail?.resolvedAppliedAt ?: row.appliedAt)?.let {
-                Text(it.take(10), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+                Text(WorkisClock.day(it), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
             }
             Spacer(Modifier.weight(1f))
             (detail?.confidence ?: row.confidence)?.let {
@@ -408,7 +409,7 @@ private fun AgreementCard(vm: AppDetailViewModel, detail: ApplicationDetail) {
             ag.version?.let { Chip("${(ag.kind ?: "supplier").uppercase()} V$it", SuccessGreen) }
             ag.acceptedAt?.let {
                 Text(
-                    it.take(16).replace("T", " "),
+                    WorkisClock.stamp(it),
                     fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.muted,
                 )
             }
@@ -450,7 +451,7 @@ private fun PriorQuestionsCard(detail: ApplicationDetail) {
         questions.forEach { q ->
             Row(verticalAlignment = Alignment.Top) {
                 q.at?.let {
-                    Text(it.take(10), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+                    Text(WorkisClock.day(it), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
                     Spacer(Modifier.width(8.dp))
                 }
                 Text("“${q.q}”", fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, modifier = Modifier.weight(1f))

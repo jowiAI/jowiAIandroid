@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.partner
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -328,7 +329,7 @@ fun ApprovalsScreen(vm: ApprovalsViewModel, onBack: () -> Unit, onList: (String)
                 // 8 · warranty claims
                 Section(stringResource(R.string.ap_warranty), d.warranty.orEmpty().size) {
                     d.warranty.orEmpty().forEach { l ->
-                        ApCard(l.name.orEmpty(), listOfNotNull(l.po, l.description, l.discoveredOn?.take(10)).joinToString(" · ")) {
+                        ApCard(l.name.orEmpty(), listOfNotNull(l.po, l.description, l.discoveredOn?.let(WorkisClock::day)).joinToString(" · ")) {
                             Action(resolveTitle) { l.lineId?.let { form = ApForm(resolveTitle, it, "warranty") } }
                         }
                     }
@@ -366,10 +367,10 @@ private fun lineSub(l: ApLine): String = listOfNotNull(
     l.daysLeft?.let { "$it " + stringResource(R.string.ap_days_left) },
     // "serbest kalır" is an escrow word: on open account no money is held and
     // what the clock ends is the right to object
-    l.releaseDue?.take(16)?.takeIf { it.isNotEmpty() }?.let {
+    l.releaseDue?.let(WorkisClock::stamp)?.takeIf { it.isNotEmpty() }?.let {
         stringResource(if (l.moneyPath == "open_account") R.string.ap_window_ends else R.string.ap_release_due) + " $it"
     },
-    l.due?.take(16)?.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.ap_with_coordinator) + " $it" },
+    l.due?.let(WorkisClock::stamp)?.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.ap_with_coordinator) + " $it" },
 ).joinToString(" · ")
 
 /** The money's fate in the server's own words, with the invoice it hangs on. */

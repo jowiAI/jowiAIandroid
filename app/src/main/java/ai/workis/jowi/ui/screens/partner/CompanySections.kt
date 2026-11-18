@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.partner
 
+import ai.workis.jowi.data.WorkisClock
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -296,7 +297,7 @@ fun CompanySections(mode: CompanyMode = CompanyMode.Company, vm: CompanyViewMode
                                 Column(Modifier.weight(1f)) {
                                     Text(stringResource(R.string.catalog_helper_toggle), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink)
                                     Text(
-                                        if (granted) stringResource(R.string.catalog_helper_on) + (h.grantedAt?.take(10)?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: "")
+                                        if (granted) stringResource(R.string.catalog_helper_on) + (h.grantedAt?.let(WorkisClock::day)?.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: "")
                                         else stringResource(R.string.catalog_helper_off),
                                         fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp,
                                         color = if (granted) SuccessGreen else colors.faint,

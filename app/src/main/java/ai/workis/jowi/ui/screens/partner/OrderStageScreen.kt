@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.partner
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -401,9 +402,9 @@ private fun JobView(
         ) { Text(stringResource(R.string.order_fund), fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
         "ready" -> {
             if (job.sellerDelivers == true) Text(stringResource(R.string.delivery_seller), fontSize = 13.sp, color = colors.muted)
-            job.deliveryDate?.takeIf { it.isNotEmpty() }?.let { StageFact(stringResource(R.string.stage_delivery_date), shortDate(it)) }
+            job.deliveryDate?.takeIf { it.isNotEmpty() }?.let { StageFact(stringResource(R.string.stage_delivery_date), WorkisClock.day(it)) }
             job.handover?.takeIf { it.isNotEmpty() }?.let {
-                StageFact(stringResource(R.string.stage_handover), shortDate(it))
+                StageFact(stringResource(R.string.stage_handover), WorkisClock.day(it))
                 if (job.handoverOk == false) HandoverLate()
             }
             OrderDoorRow(WorkisIcons.ShippingBox, stringResource(R.string.order_ready_action), enabled = !busy, onClick = onReady)
@@ -415,7 +416,7 @@ private fun JobView(
         "collect", "pay" -> {
             job.number?.takeIf { it.isNotEmpty() }?.let { StageFact(stringResource(R.string.stage_invoice), it) }
             job.total?.let { StageFact(stringResource(R.string.total_label), WorkisMoney.text(it, job.currency)) }
-            job.due?.takeIf { it.isNotEmpty() }?.let { StageFact(stringResource(R.string.cari_due), shortDate(it)) }
+            job.due?.takeIf { it.isNotEmpty() }?.let { StageFact(stringResource(R.string.cari_due), WorkisClock.day(it)) }
             if (job.suspended == true) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(WorkisIcons.Clock, contentDescription = null, tint = Beige, modifier = Modifier.size(14.dp))
@@ -669,5 +670,5 @@ private fun stageWhen(iso: String?): String {
                 .format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"))
         }
     }
-    return shortDate(iso)
+    return WorkisClock.day(iso)
 }

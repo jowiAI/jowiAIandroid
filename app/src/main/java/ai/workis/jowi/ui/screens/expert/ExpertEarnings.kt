@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.expert
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -244,7 +245,7 @@ private fun StatementRow(st: Statement, onObject: () -> Unit) {
                 Modifier.fillMaxWidth().background(BeigeBg.copy(alpha = 0.5f), RoundedCornerShape(10.dp)).padding(10.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                Text(stringResource(R.string.object_title) + (st.objectedAt?.let { " · " + it.take(10) } ?: ""), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = Beige)
+                Text(stringResource(R.string.object_title) + (st.objectedAt?.let { " · " + WorkisClock.day(it) } ?: ""), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = Beige)
                 Text(obj, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
                 st.resolutionNote?.takeIf { it.isNotEmpty() }?.let { Text("→ $it", fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted) }
             }

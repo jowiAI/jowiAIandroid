@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.partner
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Canvas
@@ -346,7 +347,7 @@ private fun InvitationHeader(inv: SellerInvitation) {
             )
             inv.createdAt?.let {
                 Spacer(Modifier.width(10.dp))
-                Text(it.take(10), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint, softWrap = false, maxLines = 1)
+                Text(WorkisClock.day(it), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint, softWrap = false, maxLines = 1)
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -626,7 +627,7 @@ private fun QuoteBlock(q: SellerQuote, inv: SellerInvitation, onRevise: () -> Un
         // the terms as one flowing text (wraps as text, never as columns)
         val days = listOfNotNull(
             q.leadTimeDays?.let { "$it " + stringResource(R.string.vade_days_word) + " " + stringResource(R.string.lead_time_label) },
-            q.validUntil?.let { stringResource(R.string.valid_until_label) + " " + it.take(10) },
+            q.validUntil?.let { stringResource(R.string.valid_until_label) + " " + WorkisClock.day(it) },
             q.vadeDays?.let { if (it == 0) stringResource(R.string.vade_advance) else "$it " + stringResource(R.string.vade_days_word) },
         )
         if (days.isNotEmpty()) Text(days.joinToString(" · "), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp, color = colors.faint)

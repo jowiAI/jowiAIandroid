@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.partner
 
+import ai.workis.jowi.data.WorkisClock
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -357,7 +358,7 @@ private fun ListRow(row: PurchaseListRow, vm: ListsViewModel, onClick: () -> Uni
                 }
                 else -> {
                     Text("${row.nMatched ?: 0}/${row.nItems ?: 0} " + stringResource(R.string.matched_word), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
-                    row.createdAt?.let { Text("· " + it.take(10), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
+                    row.createdAt?.let { Text("· " + WorkisClock.day(it), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint) }
                 }
             }
             if (row.canRetry == true) {

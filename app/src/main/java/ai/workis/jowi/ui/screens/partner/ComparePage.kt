@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.partner
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -534,7 +535,7 @@ private fun PriceCell(o: PLProposalOption, seller: String, on: Boolean, quoting:
         o.rate?.let { Text(vatLine(it), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1) }
         if (o.off == true) Text(stringResource(R.string.off_currency_hint), fontSize = 10.5.sp, lineHeight = 14.sp, color = colors.accentText, maxLines = 4, overflow = TextOverflow.Ellipsis)
         o.carried?.quote?.takeIf { it.isNotEmpty() }?.let { q ->
-            val until = o.carried.until?.takeIf { it.isNotEmpty() }?.let { " · " + stringResource(R.string.valid_until_label) + " " + it.take(10) }.orEmpty()
+            val until = o.carried.until?.takeIf { it.isNotEmpty() }?.let { " · " + stringResource(R.string.valid_until_label) + " " + WorkisClock.day(it) }.orEmpty()
             Text(stringResource(R.string.carried_from) + " " + q + until, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 13.sp, color = colors.faint, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         o.fails?.takeIf { it > 0 }?.let { f ->

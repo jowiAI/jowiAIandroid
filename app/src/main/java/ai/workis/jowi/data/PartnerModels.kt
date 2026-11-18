@@ -1224,3 +1224,49 @@ fun htmlToPlain(html: String): String =
         .trim()
 
 typealias JsonBody = JsonObject
+
+/**
+ * Ledger 104: every stamp is printed on the READER's clock. An ISO stamp is parsed to an instant
+ * and formatted in the device's time zone — never cut out of the string (that prints UTC digits).
+ * A bare date (`2026-11-20`: a validity, a due date, a promised day) has no clock and keeps its
+ * day. What will not parse is printed as it came. A SENTENCE the server wrote is never re-formatted.
+ */
+object WorkisClock {
+    private val stampFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+    private val dayFmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy")
+
+    /** The instant on the device's clock; null for a bare date, a stamp without an offset, or junk. */
+    fun zoned(iso: String?): java.time.ZonedDateTime? {
+        if (iso == null || iso.length <= 10) return null
+        return runCatching {
+            java.time.OffsetDateTime.parse(iso.trim()).atZoneSameInstant(java.time.ZoneId.systemDefault())
+        }.getOrNull()
+    }
+
+    private fun bare(iso: String): String? =
+        runCatching { java.time.LocalDate.parse(iso.trim().take(10)).format(dayFmt) }.getOrNull()
+
+    /** "17.11.2026 11:59" — a stamp with a time; a bare date prints its day. */
+    fun stamp(iso: String?): String {
+        if (iso.isNullOrEmpty()) return ""
+        zoned(iso)?.let { return it.format(stampFmt) }
+        // no offset: the digits are all there is — the same day and clock, in the house grammar
+        runCatching { return java.time.LocalDateTime.parse(iso.trim()).format(stampFmt) }
+        return if (iso.trim().length == 10) bare(iso) ?: iso else iso
+    }
+
+    /** "17.11.2026" — the day on the device's clock (near midnight the UTC day is another day). */
+    fun day(iso: String?): String {
+        if (iso.isNullOrEmpty()) return ""
+        zoned(iso)?.let { return it.format(dayFmt) }
+        return bare(iso) ?: iso
+    }
+
+    /** "11:59" on the device's clock; "" when the stamp carries no readable time. */
+    fun clock(iso: String?): String {
+        zoned(iso)?.let { return it.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")) }
+        val t = iso.orEmpty()
+        val i = t.indexOf('T')
+        return if (i > 0 && t.length >= i + 6) t.substring(i + 1, i + 6) else ""
+    }
+}

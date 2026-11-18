@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -192,15 +193,12 @@ private fun nowStamp(): String =
     java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.ROOT).format(java.util.Date())
 
 /** "HH:mm" under a turn; empty when the stamp is unreadable. */
-fun clockOf(at: String?): String {
-    val t = at.orEmpty()
-    val i = t.indexOf('T')
-    return if (i > 0 && t.length >= i + 6) t.substring(i + 1, i + 6) else ""
-}
+fun clockOf(at: String?): String = WorkisClock.clock(at) // the reader's clock (ledger 104)
 
 /** "18 Eylül 2026" — the faint separator when the day turns over. */
 fun dayOf(at: String?): String {
-    val d = at.orEmpty().take(10)
+    // the day on the reader's clock (ledger 104); a stamp without an offset keeps its own day
+    val d = WorkisClock.zoned(at)?.toLocalDate()?.toString() ?: at.orEmpty().take(10)
     if (d.length != 10) return ""
     val parsed = runCatching {
         java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).parse(d)

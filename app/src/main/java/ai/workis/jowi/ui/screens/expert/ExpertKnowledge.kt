@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.expert
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -227,7 +228,7 @@ private fun NoteSection(note: KnowledgeNote, vm: KnowledgeViewModel, query: Stri
         Text(note.textPreview.orEmpty(), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted, maxLines = 2)
         Text(
             listOfNotNull(
-                note.createdAt?.take(10),
+                note.createdAt?.let(WorkisClock::day),
                 if (console) (note.author?.name?.takeIf { it.isNotEmpty() } ?: roleTag(note.author?.role)) else null,
                 note.unitTotal?.let { "$it " + stringResource(R.string.expert_units_short) },
                 note.useTotal?.let { "$it " + stringResource(R.string.expert_uses_short) },

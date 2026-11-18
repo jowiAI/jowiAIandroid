@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens.partner
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -204,7 +205,7 @@ private fun InvitationCard(inv: MyInvitation, onAccept: () -> Unit) {
         }
         inv.expiresAt?.takeIf { it.isNotBlank() }?.let {
             Text(
-                stringResource(R.string.team_expires) + " " + shortDate(it),
+                stringResource(R.string.team_expires) + " " + WorkisClock.day(it),
                 fontFamily = WorkisMono, fontSize = 11.sp, color = colors.faint,
             )
         }
@@ -324,7 +325,7 @@ private fun StageView(app: SeatApplication, onApply: () -> Unit) {
         "closed" -> Triple(stringResource(R.string.seatless_closed), Icons.Filled.Close, colors.faint)
         else -> Triple(stringResource(R.string.seatless_review), Icons.Filled.Info, Beige)
     }
-    val meta = listOfNotNull(app.company, app.role, app.createdAt?.take(10)).filter { it.isNotEmpty() }.joinToString(" · ")
+    val meta = listOfNotNull(app.company, app.role, app.createdAt?.let(WorkisClock::day)).filter { it.isNotEmpty() }.joinToString(" · ")
     // filed with another address: the seat and the sign-in link go there
     val mine = Graph.auth.email().orEmpty().lowercase()
     val other = app.filedWith.orEmpty().lowercase()

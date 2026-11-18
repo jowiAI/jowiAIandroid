@@ -1,5 +1,6 @@
 package ai.workis.jowi.ui.screens
 
+import ai.workis.jowi.data.WorkisClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -328,8 +329,8 @@ private fun PasskeyRow(key: Passkey, canRemove: Boolean, busy: Boolean, onRemove
             Text(
                 listOfNotNull(
                     stringResource(if (key.synced == true) R.string.passkey_synced else R.string.passkey_device_only),
-                    shortDate(key.createdAt).takeIf { it.isNotEmpty() }?.let { stringResource(R.string.passkey_created_at) + " " + it },
-                    shortDate(key.lastUsedAt).takeIf { it.isNotEmpty() }?.let { stringResource(R.string.passkey_last_used) + " " + it },
+                    WorkisClock.day(key.createdAt).takeIf { it.isNotEmpty() }?.let { stringResource(R.string.passkey_created_at) + " " + it },
+                    WorkisClock.day(key.lastUsedAt).takeIf { it.isNotEmpty() }?.let { stringResource(R.string.passkey_last_used) + " " + it },
                 ).joinToString(" · "),
                 fontFamily = WorkisMono, fontSize = 10.sp, lineHeight = 15.sp, color = colors.faint,
             )
@@ -445,7 +446,7 @@ private fun EventDetail(e: SignInEvent) {
     val colors = WorkisTheme.colors
     Text(
         listOfNotNull(
-            listOf(shortDate(e.at), clockOf(e.at)).filter { it.isNotEmpty() }.joinToString(" ").takeIf { it.isNotEmpty() },
+            listOf(WorkisClock.day(e.at), clockOf(e.at)).filter { it.isNotEmpty() }.joinToString(" ").takeIf { it.isNotEmpty() },
             stringResource(if (e.door == "web") R.string.sign_in_door_web else R.string.sign_in_door_app),
             e.device?.takeIf { it.isNotEmpty() },
         ).joinToString(" · "),
