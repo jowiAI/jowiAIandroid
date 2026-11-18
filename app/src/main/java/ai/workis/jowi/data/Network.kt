@@ -42,6 +42,9 @@ fun buildApi(
                 // names the device in the sign-in history; the stock User-Agent
                 // makes a poor label for a person reading "who opened this account"
                 .header("X-Workis-Client", clientProvider())
+                // ledger 106: the server writes the clock times inside ITS sentences on the reader's
+                // clock. Read per request, so a changed device zone travels with the next call.
+                .header("X-Workis-Timezone", java.util.TimeZone.getDefault().id)
             tokenProvider()?.let { builder.header("Authorization", "Token $it") }
             chain.proceed(builder.build())
         }

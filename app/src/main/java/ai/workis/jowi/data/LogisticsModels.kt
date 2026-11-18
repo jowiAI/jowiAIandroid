@@ -258,6 +258,8 @@ data class CargoStop(
     val serviceLevel: String? = null,
     /** "HH:MM" or "" */
     val deadline: String? = null,
+    /** Ledger 106: "14:00" | "14:00 (Türkiye saati)" — the PLACE's clock, never converted. */
+    val deadlineWords: String? = null,
     val late: Boolean? = null,
     val packages: Int? = null,
     /** ISO when ticked, null otherwise */

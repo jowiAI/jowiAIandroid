@@ -424,18 +424,42 @@ class JowiViewModel : ViewModel() {
      * The thread stays where the reader pulled it.
      */
     fun refresh() {
-        if (hasPending || refreshing) return
+        if (hasPending || refreshing || rematching) return
         refreshing = true
         viewModelScope.launch {
-            readHistory(pulled = true)
+            rematchRun(pulled = true, quiet = false)
+            refreshing = false
+        }
+    }
+
+    /** Never two runs at once — the pull's and the tab's share this. */
+    private var rematching = false
+    private var lastAutoRun = 0L
+
+    private suspend fun rematchRun(pulled: Boolean, quiet: Boolean) {
+        rematching = true
+        try {
+            readHistory(pulled)
             val row = lines.lastOrNull { it.canRematch && !it.serverId.isNullOrEmpty() }?.serverId
             if (row != null && !hasPending) {
                 val (r, err) = partnerCall(lang) { Graph.api.askRematch(row) }
-                if (r?.success == true) { if (!hasPending) readHistory(pulled = true) }
-                else note = r?.error ?: r?.message ?: err
+                if (r?.success == true) { if (!hasPending) readHistory(pulled) }
+                // nobody asked for the tab's own run: its refusal is not printed, the card stays
+                else if (!quiet) note = r?.error ?: r?.message ?: err
             }
-            refreshing = false
-        }
+        } finally { rematching = false }
+    }
+
+    /**
+     * The tab appears (ledger 106): the pull's run by itself, quietly — at most one automatic run
+     * a minute (the pull is not limited); inside the minute, or while a run is on, only the re-read.
+     */
+    fun appear() {
+        if (hasPending) return
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (rematching || (lastAutoRun != 0L && now - lastAutoRun < 60_000)) { if (!rematching) reload(); return }
+        lastAutoRun = now
+        viewModelScope.launch { rematchRun(pulled = false, quiet = true) }
     }
 
     /** The server's thread replaces the local one — except mid-turn. */
@@ -1002,7 +1026,7 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
     val askFocus = remember { FocusRequester() }
     var askArchive by remember { mutableStateOf(false) }
     val listState: LazyListState = rememberLazyListState()
-    LaunchedEffect(Unit) { vm.reload() }
+    LaunchedEffect(Unit) { vm.appear() }
     // keep the newest turn in view: a new line, the clarify card, or the answer
     // replacing the spinner — every one bumps the tick; an older page prepends
     // and leaves the scroll alone. The target is the trailing spacer, which

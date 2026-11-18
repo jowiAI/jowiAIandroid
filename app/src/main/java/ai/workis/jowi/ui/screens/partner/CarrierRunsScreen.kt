@@ -349,7 +349,7 @@ private fun StopRow(run: CargoRun, stop: CargoStop, vm: CargoRunsViewModel) {
             val where = listOfNotNull(stop.district, stop.street).filter { it.isNotEmpty() }
             if (where.isNotEmpty()) Text(where.joinToString(" · "), fontSize = 12.sp, color = colors.muted)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                stop.deadline?.takeIf { it.isNotEmpty() }?.let { d ->
+                (stop.deadlineWords?.takeIf { it.isNotEmpty() } ?: stop.deadline?.takeIf { it.isNotEmpty() })?.let { d ->
                     val late = stop.late == true
                     val tint = if (late) colors.danger else colors.muted
                     Row(verticalAlignment = Alignment.CenterVertically) {
