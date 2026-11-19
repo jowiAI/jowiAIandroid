@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Icon
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -174,6 +175,13 @@ fun MainScreen() {
         // of it and the composer floats a tab-bar's height above the keyboard.
         // Consuming it lets the inset modifiers below subtract what is spent.
         Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
+            // Android's back on a tab that is not the first door returns to the first
+            // door (Panel / Pazar) instead of leaving the app; from there it leaves.
+            // Declared BEFORE the tab's content, so a screen's own BackHandler (an open
+            // page inside the tab) still wins and closes that page first.
+            BackHandler(enabled = current != tabs.first()) {
+                selected = tabs.first().name; userPicked = true
+            }
             when (current) {
                 MainTab.Panel -> if (isExpert) ExpertRoot() else ai.workis.jowi.ui.screens.console.ConsoleRoot()
                 MainTab.Market -> MarketRoot(onAskJowi = { selected = MainTab.Jowi.name; userPicked = true })
