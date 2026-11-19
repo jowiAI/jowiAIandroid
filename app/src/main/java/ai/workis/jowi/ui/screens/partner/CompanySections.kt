@@ -1,5 +1,9 @@
 package ai.workis.jowi.ui.screens.partner
 
+import ai.workis.jowi.data.SellerSetup
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
 import ai.workis.jowi.data.WorkisClock
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -25,6 +29,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -190,14 +195,86 @@ class CompanyViewModel : ViewModel() {
         }
     }
 
-    fun uploadTax(bytes: ByteArray, name: String, mime: String) {
+    /** A plate the server could not read as one: its sentence, and the file kept for "Yine de yükle". */
+    class Doubted(val bytes: ByteArray, val name: String, val mime: String, val words: String)
+    var doubted by mutableStateOf<Doubted?>(null)
+
+    /**
+     * The server reads the plate while it takes it (seconds — the spinner stands). A file it doubts
+     * (400, `doubt: true`) comes back with its sentence and may be sent once more as it is
+     * (`keep=1`); a plate with another firm's tax number is only refused.
+     */
+    fun uploadTax(bytes: ByteArray, name: String, mime: String, keep: Boolean = false) {
         if (bytes.size > 5 * 1024 * 1024) { note = ai.workis.jowi.data.applyErrorMessage("bad_file", lang); return }
-        busyTax = true
+        busyTax = true; note = null
         viewModelScope.launch {
             val part = MultipartBody.Part.createFormData("file", name, bytes.toRequestBody(mime.toMediaType()))
-            val (r, err) = partnerCall(lang) { Graph.api.companyTaxFileUpload(part) }
+            val keepPart = if (keep) MultipartBody.Part.createFormData("keep", "1") else null
+            var doubt = false
+            val (r, err) = try {
+                Graph.api.companyTaxFileUpload(part, keepPart) to null
+            } catch (e: retrofit2.HttpException) {
+                val body = runCatching { e.response()?.errorBody()?.string() }.getOrNull().orEmpty()
+                val obj = runCatching { ai.workis.jowi.data.WorkisJson.decodeFromString<kotlinx.serialization.json.JsonObject>(body) }.getOrNull()
+                fun word(k: String) = (obj?.get(k) as? kotlinx.serialization.json.JsonPrimitive)?.content?.takeIf { it.isNotBlank() }
+                doubt = word("doubt") == "true"
+                null to (word("error") ?: word("message") ?: ai.workis.jowi.data.statusMessage(e.code(), lang))
+            } catch (e: java.io.IOException) {
+                null to ai.workis.jowi.data.statusMessage(null, lang)
+            } catch (e: Exception) {
+                null to ai.workis.jowi.data.statusMessage(-1, lang)
+            }
             busyTax = false
-            if (r != null && r.success) { flash("tax"); Graph.partner.refresh() } else note = r?.error ?: r?.message ?: err
+            if (r != null && r.success) { flash("tax"); Graph.partner.refresh() }
+            else {
+                val words = r?.error ?: r?.message ?: err
+                if (doubt && !keep && words != null) doubted = Doubted(bytes, name, mime, words) else note = words
+            }
+        }
+    }
+
+    // ---- Workis'te satış (ledger 108): the tariff saves on the pick; the account and the plate
+    // facts go by their own button, never on leaving a field. The fields follow the server's row.
+    var tariff by mutableStateOf("")
+        private set
+    var iban by mutableStateOf("")
+    var holder by mutableStateOf("")
+    var plateOffice by mutableStateOf("")
+    var plateCode by mutableStateOf("")
+    var setupNote by mutableStateOf<String?>(null)
+        private set
+    var busySetup by mutableStateOf<String?>(null)
+        private set
+
+    fun seedSetup(c: PartnerCompany) {
+        val s = c.sellerSetup ?: return
+        tariff = s.tariff.orEmpty()
+        if (holder.isEmpty()) holder = s.holder?.takeIf { it.isNotEmpty() } ?: c.company?.name.orEmpty()
+        plateOffice = s.plateFacts?.office.orEmpty()
+        plateCode = s.plateFacts?.code.orEmpty()
+    }
+
+    fun pickTariff(key: String, server: String) {
+        if (key.isEmpty() || key == server || busySetup != null) return
+        tariff = key
+        saveSetup("tariff", jsonBody("tariff" to key)) { tariff = server } // a refused pick goes back
+    }
+    fun savePayout() = saveSetup("payout", jsonBody("iban" to iban, "holder" to holder), onOk = { iban = "" })
+    fun saveFacts() = saveSetup("facts", jsonBody("plateOffice" to plateOffice, "plateCode" to plateCode))
+
+    private fun saveSetup(key: String, body: kotlinx.serialization.json.JsonObject, onOk: () -> Unit = {}, onRefused: () -> Unit = {}) {
+        if (busySetup != null) return
+        setupNote = null; busySetup = key
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.companySellerSetup(body) }
+            if (r != null && r.success) {
+                onOk(); flash(key)
+                Graph.partner.refresh() // the fields follow the re-read (seedSetup on the new row)
+            } else {
+                setupNote = r?.error ?: r?.message ?: err
+                onRefused()
+            }
+            busySetup = null
         }
     }
 }
@@ -213,6 +290,7 @@ fun CompanySections(mode: CompanyMode = CompanyMode.Company, vm: CompanyViewMode
     val seat by Graph.partner.seat.collectAsState()
     val c = (seat as? PartnerSeatState.Seat)?.company ?: return
     LaunchedEffect(c.company?.id) { vm.seed(c) }
+    LaunchedEffect(c.sellerSetup) { vm.seedSetup(c) }
     val f by vm.fields
     var showTax by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -342,6 +420,8 @@ fun CompanySections(mode: CompanyMode = CompanyMode.Company, vm: CompanyViewMode
             }
             Text(stringResource(R.string.company_legal_note), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
         }
+        // Workis'te satış — right under the identity block; nothing for a firm that does not sell
+        c.sellerSetup?.let { SellingSection(it, vm) }
         // address — cell-exit autosave
         Column {
             FormSection(stringResource(R.string.company_title).uppercase()) {
@@ -375,6 +455,16 @@ fun CompanySections(mode: CompanyMode = CompanyMode.Company, vm: CompanyViewMode
                 }
             }
         }
+    }
+
+    vm.doubted?.let { d ->
+        AlertDialog(
+            onDismissRequest = { vm.doubted = null },
+            text = { Text(d.words, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink) },
+            confirmButton = { TextButton(onClick = { vm.doubted = null; vm.uploadTax(d.bytes, d.name, d.mime, keep = true) }) { Text(stringResource(R.string.tax_plate_keep), color = colors.accentText) } },
+            dismissButton = { TextButton(onClick = { vm.doubted = null }) { Text(stringResource(R.string.cancel), color = colors.muted) } },
+            containerColor = colors.surface,
+        )
     }
 
     if (showTax) {
@@ -418,4 +508,114 @@ private fun PickerFormRow(label: String, value: String, options: List<String>, t
         }
     }
     Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
+}
+
+/**
+ * What a seller's first order waits for (ledger 108): the tariff, the payout account, the plate's
+ * three facts. Every sentence about a tariff is the server's (`options[].words`). Buttons here are
+ * bordered words — the page has no fill of its own.
+ */
+@Composable
+private fun SellingSection(setup: SellerSetup, vm: CompanyViewModel) {
+    val colors = WorkisTheme.colors
+    val server = setup.tariff.orEmpty()
+    val options = setup.options.orEmpty().filter { !it.key.isNullOrEmpty() }
+    Column {
+        FormSection(stringResource(R.string.selling_title).uppercase()) {
+            if (setup.owed.orEmpty().isNotEmpty()) {
+                Text(stringResource(R.string.selling_owed), fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp))
+                Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
+            }
+            // tariff — the pick saves at once; "seçilmedi" stands only while none is chosen
+            var open by remember { mutableStateOf(false) }
+            Box {
+                Row(Modifier.fillMaxWidth().clickable(enabled = options.isNotEmpty() && vm.busySetup == null) { open = true }.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.tariff_label), fontSize = 14.sp, color = colors.muted)
+                    Spacer(Modifier.weight(1f))
+                    if (vm.busySetup == "tariff") CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = colors.accentText)
+                    else if (vm.tick == "tariff") Text("✓ ", color = SuccessGreen, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(6.dp))
+                    val chosen = options.firstOrNull { it.key == vm.tariff }
+                    Text(chosen?.let { it.title ?: it.key.orEmpty() } ?: stringResource(R.string.tariff_not_chosen), fontSize = 14.sp, color = if (chosen != null) colors.ink else colors.faint)
+                    Text(" ⌄", color = colors.faint)
+                }
+                DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    options.forEach { o ->
+                        DropdownMenuItem(
+                            text = { Text(o.title ?: o.key.orEmpty(), color = if (o.key == vm.tariff) colors.accentText else colors.ink, fontSize = 14.sp) },
+                            onClick = { open = false; vm.pickTariff(o.key.orEmpty(), server) },
+                        )
+                    }
+                }
+            }
+            options.filter { !it.words.isNullOrEmpty() && (vm.tariff.isEmpty() || vm.tariff == it.key) }.forEach { o ->
+                Column(Modifier.padding(horizontal = 14.dp).padding(bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (vm.tariff.isEmpty()) o.title?.let { Text(it, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.ink) }
+                    Text(o.words.orEmpty(), fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
+                }
+            }
+            Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
+            // payout account — masked as it comes
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.payout_label), fontSize = 14.sp, color = colors.muted)
+                Spacer(Modifier.weight(1f))
+                val saved = setup.iban?.takeIf { it.isNotEmpty() }
+                if (saved != null) Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(saved, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink)
+                    setup.holder?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, color = colors.muted) }
+                } else Text(stringResource(R.string.payout_not_written), fontSize = 14.sp, color = colors.faint)
+            }
+            Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
+            FormRow("IBAN", vm.iban, { vm.iban = it.uppercase() }, {}, false, placeholder = "TR00 0000 0000 0000 0000 0000 00", mono = true, stacked = true, maxLines = 1)
+            FormRow(stringResource(R.string.payout_holder), vm.holder, { vm.holder = it }, {}, false, stacked = true, maxLines = 2)
+            SetupButton(
+                stringResource(if (setup.iban.isNullOrEmpty()) R.string.payout_save else R.string.payout_change),
+                enabled = vm.iban.isNotBlank() && vm.busySetup == null, busy = vm.busySetup == "payout", tick = vm.tick == "payout", onClick = vm::savePayout,
+            )
+            // the plate's three facts — the firm writes what the file did not give
+            val pf = setup.plateFacts
+            if (setup.plate == true && pf != null) {
+                Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
+                if (pf.missing.orEmpty().isNotEmpty()) {
+                    Text(stringResource(R.string.plate_facts_missing), fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
+                }
+                FormRow(stringResource(R.string.tax_office_label), vm.plateOffice, { vm.plateOffice = it.uppercase() }, {}, false, placeholder = "—")
+                FormRow(stringResource(R.string.vkn_label), pf.vkn?.takeIf { it.isNotEmpty() } ?: "—", {}, {}, false, mono = true, locked = true)
+                FormRow(stringResource(R.string.plate_code_label), vm.plateCode, { vm.plateCode = it.uppercase() }, {}, false, placeholder = "—", mono = true)
+                if (pf.verified == true) {
+                    Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(androidx.compose.material.icons.Icons.Filled.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.plate_verified), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = SuccessGreen)
+                    }
+                }
+                if (vm.plateOffice != pf.office.orEmpty() || vm.plateCode != pf.code.orEmpty()) {
+                    SetupButton(stringResource(R.string.plate_facts_save), enabled = vm.busySetup == null, busy = vm.busySetup == "facts", tick = false, onClick = vm::saveFacts)
+                } else if (vm.tick == "facts") {
+                    Text("✓", color = SuccessGreen, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
+                }
+            } else if (setup.plate != true) {
+                Box(Modifier.fillMaxWidth().padding(start = 14.dp).height(1.dp).background(colors.border))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp)) {
+                    Text(stringResource(R.string.tax_plate_title), fontSize = 14.sp, color = colors.muted)
+                    Spacer(Modifier.weight(1f))
+                    Text(stringResource(R.string.tax_plate_missing), fontSize = 14.sp, color = colors.faint)
+                }
+            }
+        }
+        vm.setupNote?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.danger, modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) }
+    }
+}
+
+@Composable
+private fun SetupButton(title: String, enabled: Boolean, busy: Boolean, tick: Boolean, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        OutlinedButton(onClick = onClick, enabled = enabled) {
+            Text(title, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (enabled) colors.accentText else colors.faint)
+        }
+        Spacer(Modifier.weight(1f))
+        if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = colors.accentText)
+        else if (tick) Text("✓", color = SuccessGreen, fontWeight = FontWeight.Bold)
+    }
 }

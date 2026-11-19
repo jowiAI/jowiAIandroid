@@ -86,12 +86,43 @@ data class PartnerCompany(
     val autonomy: CompanyAutonomy? = null,
     /** `available:false` = no seller seat or no lead covers the firm. */
     val catalogHelper: CatalogHelper? = null,
+    /** Ledger 108: what a seller's first order waits for; null = not a seller, nothing is drawn. */
+    val sellerSetup: SellerSetup? = null,
 ) {
     val isBuyer get() = seats?.buyer == true
     val isSeller get() = seats?.seller == true
     val isCarrier get() = seats?.carrier == true
     val shortLabel get() = company?.displayShort ?: company?.shortName ?: company?.name ?: ""
 }
+
+/** One tariff: `words` is the server's sentence — no rate or fee is ever written in the app. */
+@Serializable
+data class TariffOption(val key: String? = null, val title: String? = null, val words: String? = null)
+
+/** The plate's three facts, read from the file; `missing` = what the firm writes itself. `verified` is display only. */
+@Serializable
+data class PlateFacts(
+    val office: String? = null,
+    @Serializable(with = FlexString::class) val vkn: String? = null,
+    @Serializable(with = FlexString::class) val code: String? = null,
+    val missing: List<String>? = null,
+    val verified: Boolean? = null,
+)
+
+/** `company/ → sellerSetup` (ledger 108). `iban` comes masked — the full number never returns. */
+@Serializable
+data class SellerSetup(
+    val tariff: String? = null,
+    val options: List<TariffOption>? = null,
+    val iban: String? = null,
+    val holder: String? = null,
+    val plate: Boolean? = null,
+    val plateFacts: PlateFacts? = null,
+    val owed: List<String>? = null,
+)
+
+@Serializable
+data class SellerSetupResult(val success: Boolean = false, val sellerSetup: SellerSetup? = null, val error: String? = null, val message: String? = null)
 
 /** The 403 body of every partner route names the next door (seat_status). */
 @Serializable

@@ -300,7 +300,11 @@ interface WorkisApi {
 
     @Multipart
     @POST("workis/company/tax-file/")
-    suspend fun companyTaxFileUpload(@Part file: okhttp3.MultipartBody.Part): SimpleResult
+    suspend fun companyTaxFileUpload(@Part file: okhttp3.MultipartBody.Part, @Part keep: okhttp3.MultipartBody.Part? = null): SimpleResult
+
+    /** Ledger 108: `{tariff}` and/or `{iban, holder}` and/or `{plateOffice, plateCode}` → `{success, sellerSetup}`; 400 + sentence. */
+    @POST("workis/company/seller-setup/")
+    suspend fun companySellerSetup(@Body body: kotlinx.serialization.json.JsonObject): SellerSetupResult
 
     /** The seller opens its catalogue to its field lead — `{enabled}` (2026-09-15). */
     @POST("workis/company/catalog-helper/")

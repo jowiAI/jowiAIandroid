@@ -875,9 +875,14 @@
     <string name="pay_days_term">gün vade (teslimden itibaren)</string>
     <string name="pay_open_account">Açık hesap</string>
     <string name="pay_page_title">Ödeme sayfası</string>
+    <string name="payout_change">Hesabı değiştir</string>
+    <string name="payout_holder">Hesap sahibi</string>
+    <string name="payout_label">Ödeme hesabı</string>
     <string name="payout_missing">EKSİK — PAYLAR BİRİKİR AMA ÖDENEMEZ</string>
+    <string name="payout_not_written">yazılmadı</string>
     <string name="payout_note">Yalnızca platform kayıtlarında tutulur; stopaj oranı gider pusulası ödemelerine uygulanır. Ödeme, ödeme altyapısı devreye girince başlar (sözleşme §6).</string>
     <string name="payout_ready_tag">TAMAM</string>
+    <string name="payout_save">Hesabı kaydet</string>
     <string name="payout_title">Ödeme hesabı ve vergi durumu</string>
     <string name="pdf_too_big">PDF 5 MB\'ı aşıyor — daha küçük bir dosya seçin.</string>
     <string name="permissions_title">Yetkiler</string>
@@ -894,6 +899,10 @@
     <string name="pipeline_pending">ONAY BEKLEYEN</string>
     <string name="place_order">Siparişi ver</string>
     <string name="place_orders">Siparişleri ver</string>
+    <string name="plate_code_label">Onay kodu</string>
+    <string name="plate_facts_missing">Vergi levhanızdaki bilgilerin tümü okunamadı. Eksik olanı levhada yazdığı gibi yazın — onay kodu sağ alttaki barkodun altında yazar. Yüklediğiniz dosya levhanın kendisi değil de sorgu sonucu ise levhanın kendisini yükleyin.</string>
+    <string name="plate_facts_save">Levha bilgilerini kaydet</string>
+    <string name="plate_verified">Workis doğruladı</string>
     <string name="po_pdf">Sipariş PDF</string>
     <string name="polish_action">Jowi ile düzelt</string>
     <string name="polish_apply">Uygula</string>
@@ -1046,6 +1055,8 @@
     <string name="seller_note_label">Satıcıya not</string>
     <string name="seller_note_placeholder">Teslimat saati, kapı, irsaliye, fatura notu…</string>
     <string name="sellers_not_quoted">Teklif göndermeyen satıcılar</string>
+    <string name="selling_owed">İlk siparişiniz aşağıdaki eksikleri bekliyor. Tamamlayın, sonra siparişin sözleşmesini imzalayın.</string>
+    <string name="selling_title">Workis\'te satış</string>
     <string name="send">Gönder</string>
     <string name="send_action">Gönder</string>
     <string name="send_preview_sub">Her satıcı YALNIZCA kendisiyle eşleşen kalemleri görür.</string>
@@ -1155,9 +1166,12 @@
     <string name="tab_account">Hesap</string>
     <string name="tab_cases">Talepler</string>
     <string name="take_all_from_seller">%d kalemin hepsini bu satıcıdan al</string>
+    <string name="tariff_label">Tarife</string>
+    <string name="tariff_not_chosen">seçilmedi</string>
     <string name="tax_id_field">VKN / TCKN</string>
     <string name="tax_office_field">Vergi dairesi</string>
     <string name="tax_office_label">Vergi dairesi</string>
+    <string name="tax_plate_keep">Yine de yükle</string>
     <string name="tax_plate_missing">Levha yüklü değil</string>
     <string name="tax_plate_title">Vergi levhası</string>
     <string name="tax_plate_upload">Yeni yükle</string>

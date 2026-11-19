@@ -875,9 +875,14 @@
     <string name="pay_days_term">days after delivery</string>
     <string name="pay_open_account">Open account</string>
     <string name="pay_page_title">Payment page</string>
+    <string name="payout_change">Change the account</string>
+    <string name="payout_holder">Account holder</string>
+    <string name="payout_label">Payout account</string>
     <string name="payout_missing">MISSING — SHARES ACCRUE BUT CANNOT BE PAID</string>
+    <string name="payout_not_written">not written yet</string>
     <string name="payout_note">Kept only in platform records; the withholding rate applies to expense-voucher payments. Payment starts when the payout rails go live (agreement §6).</string>
     <string name="payout_ready_tag">READY</string>
+    <string name="payout_save">Save the account</string>
     <string name="payout_title">Payout account and tax status</string>
     <string name="pdf_too_big">The PDF exceeds 5 MB — choose a smaller file.</string>
     <string name="permissions_title">Permissions</string>
@@ -894,6 +899,10 @@
     <string name="pipeline_pending">AWAITING APPROVAL</string>
     <string name="place_order">Place the order</string>
     <string name="place_orders">Place the orders</string>
+    <string name="plate_code_label">Approval code</string>
+    <string name="plate_facts_missing">Not every detail could be read from your tax plate. Write the missing one as it is printed on the plate — the approval code stands under the barcode at the bottom right. If the file you uploaded is a query result and not the plate itself, upload the plate.</string>
+    <string name="plate_facts_save">Save the plate details</string>
+    <string name="plate_verified">Verified by Workis</string>
     <string name="po_pdf">PO PDF</string>
     <string name="polish_action">Polish with Jowi</string>
     <string name="polish_apply">Apply</string>
@@ -1046,6 +1055,8 @@
     <string name="seller_note_label">Note to the seller</string>
     <string name="seller_note_placeholder">Delivery hours, gate, waybill or invoice remarks…</string>
     <string name="sellers_not_quoted">Sellers that have not quoted</string>
+    <string name="selling_owed">Your first order waits for what is missing below. Complete it, then sign the order\'s contract.</string>
+    <string name="selling_title">Selling on Workis</string>
     <string name="send">Send</string>
     <string name="send_action">Send</string>
     <string name="send_preview_sub">Each seller sees ONLY the items matched to them.</string>
@@ -1155,9 +1166,12 @@
     <string name="tab_account">Account</string>
     <string name="tab_cases">Cases</string>
     <string name="take_all_from_seller">take all %d items from this seller</string>
+    <string name="tariff_label">Tariff</string>
+    <string name="tariff_not_chosen">not chosen yet</string>
     <string name="tax_id_field">VKN / TCKN</string>
     <string name="tax_office_field">Tax office</string>
     <string name="tax_office_label">Tax office</string>
+    <string name="tax_plate_keep">Upload anyway</string>
     <string name="tax_plate_missing">No tax plate on file</string>
     <string name="tax_plate_title">Tax plate</string>
     <string name="tax_plate_upload">Upload new</string>
