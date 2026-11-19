@@ -200,7 +200,7 @@ class QuotesViewModel : ViewModel() {
 
 /** Teklifler — one card per invitation, ONE stage at a time (request · quote · order). */
 @Composable
-fun QuotesScreen(vm: QuotesViewModel, onCompose: (String) -> Unit, onThread: (String) -> Unit = {}) {
+fun QuotesScreen(vm: QuotesViewModel, onCompose: (String) -> Unit, onThread: (String) -> Unit = {}, onCari: (String) -> Unit = {}) {
     val colors = WorkisTheme.colors
     LaunchedEffect(Unit) { ai.workis.jowi.data.ScreenContext.setPage("quotes"); vm.load() } // Jowi's page (2026-09-19)
     var pdf by remember { mutableStateOf<Pair<String, String>?>(null) } // url to title
@@ -221,6 +221,7 @@ fun QuotesScreen(vm: QuotesViewModel, onCompose: (String) -> Unit, onThread: (St
                         onPdf = { url, title -> pdf = url to title },
                         onRevise = { reviseFor = inv },
                         onThread = { inv.id?.let(onThread) },
+                        onCari = onCari,
                     )
                 }
             }
@@ -282,7 +283,7 @@ private fun invSteps(inv: SellerInvitation): List<InvStep> {
  * bekliyor" — the seller's own move (the rule on `WorkisColors.blue`).
  */
 @Composable
-private fun InvitationCard(inv: SellerInvitation, loadGen: Int, onCompose: () -> Unit, onPdf: (String, String) -> Unit, onRevise: () -> Unit, onThread: () -> Unit) {
+private fun InvitationCard(inv: SellerInvitation, loadGen: Int, onCompose: () -> Unit, onPdf: (String, String) -> Unit, onRevise: () -> Unit, onThread: () -> Unit, onCari: (String) -> Unit) {
     val steps = invSteps(inv)
     // forgotten on every answered reload: a request that just moved on opens on its new stage
     var shown by remember(inv.id, loadGen) { mutableStateOf<InvStage?>(null) }
@@ -322,7 +323,7 @@ private fun InvitationCard(inv: SellerInvitation, loadGen: Int, onCompose: () ->
                 }
             }
         }
-        InvitationActions(inv, onCompose, onPdf, onThread)
+        InvitationActions(inv, onCompose, onPdf, onThread, onCari)
     }
 }
 
@@ -474,7 +475,7 @@ private fun RequestPage(inv: SellerInvitation) {
  * muted text, faint icon; kiremit stays on "Teklif gönder" alone — then the table's door.
  */
 @Composable
-private fun InvitationActions(inv: SellerInvitation, onCompose: () -> Unit, onPdf: (String, String) -> Unit, onThread: () -> Unit) {
+private fun InvitationActions(inv: SellerInvitation, onCompose: () -> Unit, onPdf: (String, String) -> Unit, onThread: () -> Unit, onCari: (String) -> Unit) {
     val colors = WorkisTheme.colors
     Column(Modifier.padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (inv.quote == null && inv.isOpen) {
@@ -485,6 +486,8 @@ private fun InvitationActions(inv: SellerInvitation, onCompose: () -> Unit, onPd
         inv.rfqPdfUrl?.takeIf { it.isNotEmpty() }?.let { url -> DocRow(stringResource(R.string.rfq_doc)) { t -> onPdf(url, t) } }
         inv.quote?.let(::quotePdfUrl)?.let { url -> DocRow(stringResource(R.string.quote_doc)) { t -> onPdf(url, t) } }
         inv.order?.poPdfUrl?.takeIf { it.isNotEmpty() }?.let { url -> DocRow(stringResource(R.string.order_doc)) { t -> onPdf(url, t) } }
+        // the seller's current account with this buyer (`cariFirm`, ledger 112)
+        inv.cariFirm?.takeIf { it.isNotEmpty() }?.let { firm -> DocRow(stringResource(R.string.cari_title), WorkisIcons.CreditCard) { onCari(firm) } }
         // every invitation carries its own table (slice 2 part 2)
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(onClick = onThread).padding(vertical = 4.dp)) {
             Icon(WorkisIcons.Bubble, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp))
@@ -496,10 +499,10 @@ private fun InvitationActions(inv: SellerInvitation, onCompose: () -> Unit, onPd
 
 /** A document as a quiet row: faint icon, muted words — never a link colour. */
 @Composable
-private fun DocRow(title: String, onOpen: (String) -> Unit) {
+private fun DocRow(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector = WorkisIcons.DocText, onOpen: (String) -> Unit) {
     val colors = WorkisTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onOpen(title) }.padding(vertical = 4.dp)) {
-        Icon(WorkisIcons.DocText, contentDescription = null, tint = colors.faint, modifier = Modifier.size(15.dp))
+        Icon(icon, contentDescription = null, tint = colors.faint, modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(10.dp))
         Text(title, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.muted)
     }

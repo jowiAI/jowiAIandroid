@@ -717,7 +717,7 @@ private fun sendGroups(d: PurchaseListDetail): List<SendGroup> {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> Unit = {}, canWithdraw: Boolean = false, onOpenList: (String) -> Unit = {}) {
+fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> Unit = {}, canWithdraw: Boolean = false, onOpenList: (String) -> Unit = {}, onCari: ((String) -> Unit)? = null) {
     val vm: ListDetailViewModel = viewModel(key = "list-$listId")
     val colors = WorkisTheme.colors
     LaunchedEffect(listId) { vm.bind(listId) }
@@ -840,6 +840,7 @@ fun ListDetailScreen(listId: String, onBack: () -> Unit, onThread: (String) -> U
                                 // under every stage once the request is out: the letters, then the tables
                                 if (!d.isDraft) {
                                     RfqDocRows(d) { sellerId -> pdf = rfqTitle to vm.rfqPdfUrl(sellerId) }
+                                    onCari?.let { CariRows(d, it) }
                                     ChatInvitesSection(d, onThread)
                                 }
                             }
@@ -1010,6 +1011,38 @@ private fun RfqDocRows(d: PurchaseListDetail, onOpen: (String?) -> Unit) {
                 Text(
                     " · " + (doc.lbl?.short ?: doc.number).orEmpty(),
                     fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The buyer's current account with each quoting firm (`proposal.quotes[].cariFirm`, ledger 112):
+ * one quiet row per firm the server names an account with; the key goes back as it came. No
+ * account yet → no row, and nothing at all when no quote carries one.
+ */
+@Composable
+private fun CariRows(d: PurchaseListDetail, onOpen: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    val rows = buildList<Pair<String, String>> {
+        d.proposal?.quotes.orEmpty().forEach { q ->
+            val f = q.cariFirm?.takeIf { it.isNotEmpty() } ?: return@forEach
+            if (any { it.first == f }) return@forEach
+            val name = d.proposal?.sellerTotals?.firstOrNull { it.sellerId != null && it.sellerId == q.seller }?.lbl?.short
+            add(f to (name ?: q.number).orEmpty())
+        }
+    }
+    if (rows.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        rows.forEach { (firm, name) ->
+            Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { onOpen(firm) }.padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(WorkisIcons.CreditCard, contentDescription = null, tint = colors.faint, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(stringResource(R.string.cari_title), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.muted, maxLines = 1, softWrap = false)
+                if (name.isNotEmpty()) Text(
+                    " · $name", fontSize = 14.sp, color = colors.muted,
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
                 )
             }

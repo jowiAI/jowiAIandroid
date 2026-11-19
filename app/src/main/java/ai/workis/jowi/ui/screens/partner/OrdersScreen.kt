@@ -257,6 +257,8 @@ fun OrdersScreen(
     onStage: (PartnerOrder) -> Unit,
     /** A quote-stage row opens its list (the compare and "Onayla" stay there). */
     onList: (String) -> Unit = {},
+    /** The card's "Cari" row: the order's `cariFirm` key as it came (ledger 112). */
+    onCari: (String) -> Unit = {},
 ) {
     val colors = WorkisTheme.colors
     var reviewFor by remember { mutableStateOf<PartnerOrder?>(null) }
@@ -320,6 +322,7 @@ fun OrdersScreen(
                         onStage = { onStage(o) },
                         onThread = { onThread(o) },
                         onContract = { onContract(o) },
+                        onCari = onCari,
                         onFund = { confirmFund = o },
                         onReview = { reviewFor = o },
                         onReady = { readyFor = o },
@@ -393,6 +396,7 @@ private fun OrderCard(
     onStage: () -> Unit,
     onThread: () -> Unit,
     onContract: () -> Unit,
+    onCari: (String) -> Unit,
     onFund: () -> Unit,
     onReview: () -> Unit,
     onReady: () -> Unit,
@@ -573,6 +577,23 @@ private fun OrderCard(
                     color = if (c?.status == "accepted") SuccessGreen else colors.faint,
                     modifier = Modifier.padding(start = 20.dp),
                 )
+            }
+        }
+        // this firm's current account with the other firm of the order (`cariFirm`,
+        // ledger 112) — drawn only when the server names one; the key goes back as it came
+        o.cariFirm?.takeIf { it.isNotEmpty() }?.let { firm ->
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onCari(firm) }) {
+                    Icon(WorkisIcons.CreditCard, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.cari_title), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.accentText)
+                }
+                (if (o.role == "buyer") o.seller?.short else o.buyer?.short)?.takeIf { it.isNotEmpty() }?.let {
+                    Text(
+                        it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 20.dp),
+                    )
+                }
             }
         }
         // Seller: "Kargoya teslim" opens the job to the carrier pool — ONLY on the

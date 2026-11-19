@@ -66,9 +66,21 @@ class LedgerViewModel : ViewModel() {
     var refreshing by mutableStateOf(false)
         private set
 
+    /** A `cariFirm` key as the server sent it: the accounts with that one firm. null = every account. */
+    private var firm: String? = null
+
+    /** The screen opens for `key`; another firm's rows never stand in while the new ones are read. */
+    fun open(key: String?) {
+        val k = key?.takeIf { it.isNotEmpty() }
+        if (k != firm) { firm = k; accounts = null; loadError = null }
+        load()
+    }
+
     fun load() {
+        val asked = firm
         viewModelScope.launch {
-            val (r, err) = partnerCall(Graph.language.value) { Graph.api.ledger() }
+            val (r, err) = partnerCall(Graph.language.value) { Graph.api.ledger(asked) }
+            if (asked != firm) return@launch
             refreshing = false
             if (r != null) { accounts = r.accounts.orEmpty(); loadError = null } else if (accounts == null) loadError = err
         }
@@ -79,9 +91,9 @@ class LedgerViewModel : ViewModel() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LedgerScreen(vm: LedgerViewModel, onBack: () -> Unit) {
+fun LedgerScreen(vm: LedgerViewModel, firm: String? = null, onBack: () -> Unit) {
     val colors = WorkisTheme.colors
-    LaunchedEffect(Unit) { vm.load() }
+    LaunchedEffect(firm) { vm.open(firm) }
     ConsoleSub(stringResource(R.string.cari_title), onBack) {
         val accounts = vm.accounts
         ai.workis.jowi.ui.components.ChangesWatch("orders") { vm.load() } // changes/ (ledger 86)

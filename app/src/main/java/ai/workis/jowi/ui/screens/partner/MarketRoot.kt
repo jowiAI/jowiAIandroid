@@ -63,7 +63,8 @@ sealed interface MarketDest {
     data class Thread(val door: ThreadDoor, val back: MarketDest) : MarketDest
     /** `seat` comes from the door that opened the paper — the reader's own acceptance card. */
     data class Contract(val orderId: String, val back: MarketDest, val seat: String? = null) : MarketDest
-    data object Ledger : MarketDest
+    /** `firm` = a `cariFirm` key (ledger 112): that one firm's accounts, back to the door that opened it. */
+    data class Ledger(val firm: String? = null, val back: MarketDest = Home) : MarketDest
     data object Calendar : MarketDest
     /** The carrier seat's board. */
     data object Cargo : MarketDest
@@ -124,13 +125,14 @@ fun MarketRoot(onAskJowi: () -> Unit = {}) {
             is MarketDest.Thread -> d.back
             is MarketDest.Contract -> d.back
             is MarketDest.Stage -> d.back
+            is MarketDest.Ledger -> d.back
             MarketDest.CargoRuns -> MarketDest.Cargo
             else -> MarketDest.Home
         }
     }
     when (val d = dest) {
         MarketDest.Home -> MarketHome(listsVm, quotesVm, catalogVm, ordersVm, approvalsVm, badgesVm, cargoVm, deskVm, onAskJowi) { dest = it }
-        MarketDest.Ledger -> LedgerScreen(ledgerVm, onBack = { dest = MarketDest.Home })
+        is MarketDest.Ledger -> LedgerScreen(ledgerVm, d.firm, onBack = { dest = d.back })
         MarketDest.Calendar -> CalendarScreen(calendarVm, onBack = { dest = MarketDest.Home })
         MarketDest.Cargo -> CarrierScreen(cargoVm, onBack = { dest = MarketDest.Home }, onRuns = { dest = MarketDest.CargoRuns })
         MarketDest.CargoRuns -> CarrierRunsScreen(onBack = { dest = MarketDest.Cargo })
@@ -141,6 +143,7 @@ fun MarketRoot(onAskJowi: () -> Unit = {}) {
             onContract = { o -> o.id?.let { dest = MarketDest.Contract(it, MarketDest.Orders, o.role) } },
             onStage = { o -> o.id?.let { dest = MarketDest.Stage(it, MarketDest.Orders) } },
             onList = { dest = MarketDest.ListDetail(it, back = MarketDest.Orders) },
+            onCari = { dest = MarketDest.Ledger(it, MarketDest.Orders) },
         )
         is MarketDest.Stage -> OrderStageScreen(
             d.orderId,
@@ -149,6 +152,7 @@ fun MarketRoot(onAskJowi: () -> Unit = {}) {
             // the stage's yazışma / contract doors come back to the stage
             onThread = { o -> o.id?.let { dest = MarketDest.Thread(ThreadDoor.Order(it), d) } },
             onContract = { o -> o.id?.let { dest = MarketDest.Contract(it, d, o.role) } },
+            onCari = { dest = MarketDest.Ledger(it, d) },
         )
         MarketDest.Approvals -> ApprovalsScreen(
             approvalsVm,
@@ -174,12 +178,14 @@ fun MarketRoot(onAskJowi: () -> Unit = {}) {
             onThread = { invId -> dest = MarketDest.Thread(ThreadDoor.Invitation(invId), d) },
             // "Kaynak liste" / "Devamı" (ledger 79): the linked list, back = this one
             onOpenList = { id -> dest = MarketDest.ListDetail(id, back = d) },
+            onCari = { dest = MarketDest.Ledger(it, d) },
         )
         MarketDest.Quotes -> ConsoleSub(stringResource(R.string.quotes_title), { dest = MarketDest.Home }) {
             QuotesScreen(
                 quotesVm,
                 onCompose = { dest = MarketDest.Compose(it) },
                 onThread = { invId -> dest = MarketDest.Thread(ThreadDoor.Invitation(invId), MarketDest.Quotes) },
+                onCari = { dest = MarketDest.Ledger(it, MarketDest.Quotes) },
             )
         }
         is MarketDest.Compose -> QuoteComposerScreen(quotesVm, d.invitationId) { dest = MarketDest.Quotes }
@@ -303,7 +309,7 @@ private fun MarketHome(
                 if (c.isBuyer) add(DeskDoor(stringResource(R.string.panel_lists_door), WorkisIcons.Tray, lists?.size, newLine(badgesVm.page("lists")), MarketDest.Lists))
                 if (c.isSeller) add(DeskDoor(stringResource(R.string.catalog_title), WorkisIcons.ShippingBox, catalogVm.page?.counts?.proposed, null, MarketDest.Catalog))
                 // every partner seat: the money it owes / is owed, and its commitments by day
-                add(DeskDoor(stringResource(R.string.cari_title), WorkisIcons.CreditCard, null, null, MarketDest.Ledger))
+                add(DeskDoor(stringResource(R.string.cari_title), WorkisIcons.CreditCard, null, null, MarketDest.Ledger()))
                 add(DeskDoor(stringResource(R.string.calendar_title), WorkisIcons.Calendar, null, null, MarketDest.Calendar))
             }
             DoorRow(doors, onOpen)

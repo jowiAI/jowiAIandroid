@@ -144,6 +144,12 @@ data class PartnerOrder(
     val role: String? = null, // buyer | seller | carrier
     val buyer: OrderParty? = null,
     val seller: OrderParty? = null,
+    /**
+     * 2026-11-19 (ledger 112): the key of this firm's current account with the OTHER firm —
+     * sent back as it came (`GET ledger/?firm=`), never parsed or built. null = no account yet
+     * (always for a carrier): nothing is drawn.
+     */
+    @Serializable(with = FlexString::class) val cariFirm: String? = null,
     val virtual: Boolean? = null,
     val vlines: List<OrderVLine>? = null,
     /**

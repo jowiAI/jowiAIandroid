@@ -577,6 +577,12 @@ data class PLQuoteSheet(
     @Serializable(with = FlexString::class) val sellerId: String? = null,
     @SerialName("seller_id") @Serializable(with = FlexString::class) val sellerIdSnake: String? = null,
     val number: String? = null,
+    /**
+     * 2026-11-19 (ledger 112): the key of this firm's current account with the OTHER firm —
+     * sent back as it came (`GET ledger/?firm=`), never parsed or built. null = no account yet
+     * (always for a carrier): nothing is drawn.
+     */
+    @Serializable(with = FlexString::class) val cariFirm: String? = null,
     /** The server sends a BOOLEAN (coverage.py `bool(pdf_key)`) — a String here failed the whole list decode. */
     @Serializable(with = FlexBool::class) val pdf: Boolean? = null,
     val terms: List<PLQuoteTerm>? = null,
@@ -1122,6 +1128,12 @@ data class SellerInvitation(
     val caseTitle: String? = null,
     val request: String? = null,
     val buyer: InvBuyer? = null,
+    /**
+     * 2026-11-19 (ledger 112): the key of this firm's current account with the OTHER firm —
+     * sent back as it came (`GET ledger/?firm=`), never parsed or built. null = no account yet
+     * (always for a carrier): nothing is drawn.
+     */
+    @Serializable(with = FlexString::class) val cariFirm: String? = null,
     @Serializable(with = FlexDouble::class) val qty: Double? = null,
     val interpreted: String? = null,
     val imageUrl: String? = null,

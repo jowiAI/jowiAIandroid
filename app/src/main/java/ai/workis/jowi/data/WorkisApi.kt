@@ -775,7 +775,7 @@ interface WorkisApi {
     suspend fun badges(): PartnerBadges
 
     @GET("workis/ledger/")
-    suspend fun ledger(): LedgerReply
+    suspend fun ledger(@Query("firm") firm: String? = null): LedgerReply
 
     @GET("workis/calendar/")
     suspend fun calendar(): CalendarBoard

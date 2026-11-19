@@ -124,6 +124,7 @@ fun OrderStageScreen(
     onBack: () -> Unit,
     onThread: (PartnerOrder) -> Unit,
     onContract: (PartnerOrder) -> Unit,
+    onCari: (String) -> Unit = {},
 ) {
     val vm: OrderStageViewModel = viewModel(key = "stage-$orderId")
     val colors = WorkisTheme.colors
@@ -213,6 +214,10 @@ fun OrderStageScreen(
                     }
                     // a carrier signs nothing
                     if (!o.isCarrier) OrderDoorRow(WorkisIcons.DocText, stringResource(R.string.contract_open)) { onContract(o) }
+                    // the account with the other firm of the order (`cariFirm`, ledger 112)
+                    o.cariFirm?.takeIf { it.isNotEmpty() }?.let { firm ->
+                        OrderDoorRow(WorkisIcons.CreditCard, stringResource(R.string.cari_title)) { onCari(firm) }
+                    }
                 }
                 Spacer(Modifier.height(30.dp))
             }
