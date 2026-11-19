@@ -879,7 +879,7 @@
     <string name="payout_holder">Hesap sahibi</string>
     <string name="payout_label">Ödeme hesabı</string>
     <string name="payout_missing">EKSİK — PAYLAR BİRİKİR AMA ÖDENEMEZ</string>
-    <string name="payout_not_written">yazılmadı</string>
+    <string name="payout_not_written">henüz yazılmadı</string>
     <string name="payout_note">Yalnızca platform kayıtlarında tutulur; stopaj oranı gider pusulası ödemelerine uygulanır. Ödeme, ödeme altyapısı devreye girince başlar (sözleşme §6).</string>
     <string name="payout_ready_tag">TAMAM</string>
     <string name="payout_save">Hesabı kaydet</string>
@@ -1055,7 +1055,7 @@
     <string name="seller_note_label">Satıcıya not</string>
     <string name="seller_note_placeholder">Teslimat saati, kapı, irsaliye, fatura notu…</string>
     <string name="sellers_not_quoted">Teklif göndermeyen satıcılar</string>
-    <string name="selling_owed">İlk siparişiniz aşağıdaki eksikleri bekliyor. Tamamlayın, sonra siparişin sözleşmesini imzalayın.</string>
+    <string name="selling_owed">İlk siparişiniz aşağıdaki eksikleri bekliyor. Tamamlayın, ardından siparişin sözleşmesini imzalayın.</string>
     <string name="selling_title">Workis\'te satış</string>
     <string name="send">Gönder</string>
     <string name="send_action">Gönder</string>
@@ -1167,7 +1167,7 @@
     <string name="tab_cases">Talepler</string>
     <string name="take_all_from_seller">%d kalemin hepsini bu satıcıdan al</string>
     <string name="tariff_label">Tarife</string>
-    <string name="tariff_not_chosen">seçilmedi</string>
+    <string name="tariff_not_chosen">henüz seçilmedi</string>
     <string name="tax_id_field">VKN / TCKN</string>
     <string name="tax_office_field">Vergi dairesi</string>
     <string name="tax_office_label">Vergi dairesi</string>

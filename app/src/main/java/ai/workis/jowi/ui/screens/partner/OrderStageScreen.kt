@@ -72,6 +72,8 @@ import ai.workis.jowi.ui.components.PaymentWebView
 import ai.workis.jowi.ui.screens.console.ConsoleSub
 import ai.workis.jowi.ui.screens.expert.NoteBand
 import ai.workis.jowi.ui.theme.Beige
+import ai.workis.jowi.ui.theme.BeigeBg
+import androidx.compose.foundation.shape.RoundedCornerShape
 import ai.workis.jowi.ui.theme.Kiremit400
 import ai.workis.jowi.ui.theme.Kiremit500
 import ai.workis.jowi.ui.theme.OnKiremitFill
@@ -598,7 +600,9 @@ internal fun StepGlyph(state: String?, size: Dp = 12.dp, cut: Color = WorkisThem
 
 /**
  * THE one sentence under an order — the server's `next.text`, prefixed with
- * whose move it is. Ink when it is the reader's own move, muted otherwise.
+ * whose move it is, on a band so it is not lost among the card's rows (ledger 111): the reader's
+ * own move on blue at 14 % with "Sizde" in blue (blue's one meaning), anyone else's on the beige
+ * band with the word in beige. Never green — green says "done".
  */
 @Composable
 internal fun OrderNextLine(next: OrderNext) {
@@ -613,15 +617,17 @@ internal fun OrderNextLine(next: OrderNext) {
         "workis" -> R.string.order_who_workis
         else -> null
     }
-    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    val tint = if (mine) colors.blue else Beige
+    Row(
+        verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth()
+            .background(if (mine) colors.blue.copy(alpha = 0.14f) else BeigeBg.copy(alpha = BeigeBg.alpha * 0.5f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+    ) {
         who?.let {
-            Text(
-                stringResource(it), fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
-                color = if (mine) colors.ink else colors.muted, maxLines = 1,
-                modifier = Modifier.padding(top = 1.dp).background(colors.ink.copy(alpha = 0.06f), CircleShape).padding(horizontal = 6.dp, vertical = 2.dp),
-            )
+            Text(stringResource(it), fontSize = 12.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold, color = tint, maxLines = 1)
         }
-        Text(text, fontSize = 13.sp, lineHeight = 18.sp, color = if (mine) colors.ink else colors.muted, modifier = Modifier.weight(1f))
+        Text(text, fontSize = 14.sp, lineHeight = 19.sp, fontWeight = if (mine) FontWeight.Medium else FontWeight.Normal, color = colors.ink, modifier = Modifier.weight(1f))
     }
 }
 
