@@ -978,6 +978,8 @@ data class SellerProduct(
     val otherPrice: String? = null,
     /** A percentage (20), null when the product carries none. Prices are always WITHOUT VAT. */
     @Serializable(with = FlexDouble::class) val vatRate: Double? = null,
+    /** Ledger 109: the product was born priceless from a request — the seller says its rate on this line. */
+    val askVat: Boolean? = null,
 )
 
 /**
@@ -1139,6 +1141,8 @@ data class SellerInvitation(
     val currencies: List<String>? = null,
     /** The server's sentence for the seller, printed above the prices as sent. */
     val currencyNote: String? = null,
+    /** Ledger 109: the rates an `askVat` line picks from — `[{value, label}]`; no fixed list in the app. */
+    @Serializable(with = WorkisUnitsTolerant::class) val vatRates: List<WorkisUnit>? = null,
 ) {
     /** `withdrawn` (2026-10-04, lists_seat.py:116 / quotes_seat.py:299): the buyer took the request
      *  back — closed, no quote form; a quote already given stays on the record. */

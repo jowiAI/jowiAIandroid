@@ -724,6 +724,8 @@ private data class PriceRow(
     val listPrice: Double? = null, val discountPct: Double? = null, val single: Boolean = false,
     // ledger 92: the row's currency as sent, the catalogue price in another currency (a reference only), the VAT percentage
     val currency: String? = null, val otherPrice: String? = null, val vatRate: Double? = null,
+    // ledger 109: the line asks the seller for its VAT rate
+    val askVat: Boolean = false,
 ) {
     val list: BigDecimal? get() = listPrice?.takeIf { it > 0 }?.let { BigDecimal.valueOf(it) }
 }
@@ -776,7 +778,7 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
         val li = inv.listItems.orEmpty()
         if (li.isNotEmpty()) li.flatMap { item ->
             val alts = item.alts.orEmpty()
-            alts.mapNotNull { a -> a.sku?.let { PriceRow(it, a.name ?: it, item.itemName, item.qty, item.unit, a.listPrice, a.discountPct, single = alts.size == 1, currency = a.currency, otherPrice = a.otherPrice, vatRate = a.vatRate) } }
+            alts.mapNotNull { a -> a.sku?.let { PriceRow(it, a.name ?: it, item.itemName, item.qty, item.unit, a.listPrice, a.discountPct, single = alts.size == 1, currency = a.currency, otherPrice = a.otherPrice, vatRate = a.vatRate, askVat = a.askVat == true) } }
         }
         else inv.shortlist.orEmpty().mapNotNull { p -> p.sku?.let { PriceRow(it, p.name ?: it, null, inv.qty, null) } }
     }
@@ -792,6 +794,12 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
     val currencies = remember { mutableStateMapOf<String, String>() }
     fun currencyOf(r: PriceRow): String? =
         fixedCurrency ?: currencies[r.sku]?.takeIf { it.isNotEmpty() } ?: r.currency?.takeIf { it.isNotEmpty() }
+    // ledger 109: a line that asks its VAT rate picks it from the server's list (sku → percent);
+    // until a pick it starts at the product's own rate — "—" while that is null
+    val vatChoices = remember(inv) { inv.vatRates.orEmpty().mapNotNull { u -> u.value?.replace(',', '.')?.toDoubleOrNull()?.let { it to (u.label?.takeIf { l -> l.isNotEmpty() } ?: u.value) } } }
+    val vatPicks = remember { mutableStateMapOf<String, Double>() }
+    fun asksVat(r: PriceRow) = r.askVat && vatChoices.isNotEmpty()
+    fun rateOf(r: PriceRow): Double? = if (asksVat(r)) vatPicks[r.sku] ?: r.vatRate else r.vatRate
     var leadTime by rememberSaveable { mutableStateOf("") }
     var validDays by rememberSaveable { mutableStateOf("30") }
     var vade by rememberSaveable { mutableStateOf(0) }
@@ -841,6 +849,8 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
             // a free request: the line says its currency (send and draft alike); on a request that
             // names one nothing is sent — the server writes the request's. No rate is ever sent.
             if (fixedCurrency == null) currencyOf(r)?.let { put("currency", JsonPrimitive(it)) }
+            // only a line that asks says its rate (send and draft alike) — elsewhere the server ignores it
+            if (asksVat(r)) rateOf(r)?.let { v -> put("vatRate", if (v == Math.floor(v)) JsonPrimitive(v.toInt()) else JsonPrimitive(v)) }
         }
     })
     // only what was stated
@@ -866,7 +876,7 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
             val cur = currencyOf(r).orEmpty()
             val sum = firstOrNull { it.currency == cur } ?: QuoteSum(cur).also { add(it) }
             sum.net += amount
-            val rate = r.vatRate
+            val rate = rateOf(r)
             if (rate == null) { sum.vat = null; return@forEach }
             val groups = sum.vat ?: return@forEach
             val lineVat = (amount * BigDecimal.valueOf(rate)).setScale(0, RoundingMode.HALF_UP).divide(HUNDRED)
@@ -887,6 +897,7 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
             if (p != null) { prices[sku] = WorkisMoney.shownWire(p); discounts[sku] = l.text("discount_pct", "discountPct")?.let(WorkisMoney::shownWire).orEmpty() }
             l.text("qty")?.let { qtys[sku] = WorkisMoney.shownWire(it) }
             l.text("currency")?.takeIf { it in pickable }?.let { currencies[sku] = it }
+            l.text("vat_rate", "vatRate")?.toDoubleOrNull()?.takeIf { v -> vatChoices.any { it.first == v } }?.let { vatPicks[sku] = it }
         }
         d.text("lead_time_days", "leadTimeDays")?.let { leadTime = it }
         d.text("valid_days", "validDays")?.let { validDays = it }
@@ -1007,7 +1018,12 @@ fun QuoteComposerScreen(vm: QuotesViewModel, invitationId: String, onClose: () -
                                         }
                                     }
                                     // the price is without VAT; the row's rate, when it carries one
-                                    r.vatRate?.let { rate ->
+                                    if (asksVat(r)) {
+                                        // the product carries no rate yet: the seller says it, from the server's list
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                            VatMenu(rateOf(r), vatChoices) { vatPicks[r.sku] = it }
+                                        }
+                                    } else r.vatRate?.let { rate ->
                                         Text(vatLine(rate), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
                                     }
                                 }
@@ -1110,6 +1126,30 @@ private fun CurrencyMenu(value: String, options: List<String>, onPick: (String) 
                 DropdownMenuItem(
                     text = { Text(c, fontFamily = WorkisMono, fontSize = 14.sp, color = colors.ink, fontWeight = if (c == value) FontWeight.SemiBold else FontWeight.Normal) },
                     onClick = { open = false; onPick(c) },
+                )
+            }
+        }
+    }
+}
+
+/** Ledger 109: the line's VAT rate over the server's list; a current value outside it is its own row. */
+@Composable
+private fun VatMenu(value: Double?, options: List<Pair<Double, String>>, onPick: (Double) -> Unit) {
+    val colors = WorkisTheme.colors
+    var open by remember { mutableStateOf(false) }
+    val word = stringResource(R.string.vat_word)
+    val shown = value?.let { vatLine(it) } ?: "$word —"
+    Box {
+        Text(
+            "$shown ⌄", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.ink,
+            modifier = Modifier.clickable { open = true }.padding(vertical = 8.dp),
+        )
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            val all = if (value != null && options.none { it.first == value }) listOf(value to "%" + WorkisMoney.pct(value)) + options else options
+            all.forEach { (v, label) ->
+                DropdownMenuItem(
+                    text = { Text(label, fontFamily = WorkisMono, fontSize = 14.sp, color = colors.ink, fontWeight = if (v == value) FontWeight.SemiBold else FontWeight.Normal) },
+                    onClick = { open = false; onPick(v) },
                 )
             }
         }
