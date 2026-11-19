@@ -63,6 +63,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -1015,8 +1016,18 @@ class JowiViewModel : ViewModel() {
 @Composable
 fun JowiScreen(vm: JowiViewModel = viewModel()) {
     val colors = WorkisTheme.colors
+    // the list's "Cari" row (ledger 112): the account with that firm over the list, back = the list
+    var cariFirm by rememberSaveable { mutableStateOf<String?>(null) }
+    cariFirm?.let { firm ->
+        androidx.activity.compose.BackHandler { cariFirm = null }
+        val ledgerVm: ai.workis.jowi.ui.screens.partner.LedgerViewModel = viewModel()
+        ai.workis.jowi.ui.screens.partner.LedgerScreen(ledgerVm, firm, onBack = { cariFirm = null })
+        return
+    }
     vm.openList?.let { id ->
-        ai.workis.jowi.ui.screens.partner.ListDetailScreen(id, onBack = { vm.openList = null }, onOpenList = { vm.openList = it })
+        // Android's back closes the list, back to the thread (not out of the tab)
+        androidx.activity.compose.BackHandler { vm.openList = null }
+        ai.workis.jowi.ui.screens.partner.ListDetailScreen(id, onBack = { vm.openList = null }, onOpenList = { vm.openList = it }, onCari = { cariFirm = it })
         return
     }
     // a value, not a bare string: an example or a clarify "back" lands with the
