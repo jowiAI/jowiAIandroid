@@ -211,6 +211,7 @@
     <string name="cargo_net_broadcasts_hint">Jobs waiting for a carrier — first accept wins. A job aging here is the signal to widen the pool or call a carrier.</string>
     <string name="cargo_net_fleet">Workis fleet</string>
     <string name="cargo_net_fleet_hint">The Workis fleet: its ertesi-gün cargo on a basket over the floor is paid by Workis.</string>
+    <string name="cargo_net_hour">h</string>
     <string name="cargo_net_keep">Keep</string>
     <string name="cargo_net_keep_note">Keeping — note to the carrier (optional)</string>
     <string name="cargo_net_min">min</string>
@@ -232,6 +233,8 @@
     <string name="cargo_net_shipments">Active shipments</string>
     <string name="cargo_net_shipments_empty">Nothing in flight.</string>
     <string name="cargo_net_shipments_hint">Everything not yet delivered, network-wide, ordered by promise — the top rows are the ones to worry about.</string>
+    <string name="cargo_net_tab_network">Network</string>
+    <string name="cargo_net_tab_tariff">Tariff</string>
     <string name="cargo_net_tariff">Platform tariff</string>
     <string name="cargo_net_tariff_hint">USD per shipment — applies to every job accepted after the change.</string>
     <string name="cargo_net_tariff_save">Save tariff</string>

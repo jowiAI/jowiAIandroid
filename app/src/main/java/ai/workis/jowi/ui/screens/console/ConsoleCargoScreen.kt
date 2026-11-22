@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -24,6 +25,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.TextButton
@@ -37,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -223,6 +228,7 @@ fun ConsoleCargoScreen(vm: ConsoleCargoViewModel = viewModel()) {
     LaunchedEffect(Unit) { ScreenContext.clear(); vm.load() }
     var deciding by androidx.compose.runtime.remember { mutableStateOf<Deciding?>(null) }
     var decisionNote by androidx.compose.runtime.remember { mutableStateOf("") }
+    var face by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("net") }
     val page = vm.page
     when {
         page == null && vm.loadError != null -> Text(vm.loadError.orEmpty(), fontSize = 13.sp, color = colors.danger)
@@ -239,99 +245,105 @@ fun ConsoleCargoScreen(vm: ConsoleCargoViewModel = viewModel()) {
                         )
                     }
                 }
-                // agreement 7.1 — first on the phone: the one list that waits for a decision
+                // two faces of one page (ledger 118): "Ağ" is what is watched and decided,
+                // "Tarife" what is set — the numbers are not lost under a long network list
                 item {
-                    val rows = page.objections.orEmpty()
-                    Section(stringResource(R.string.cargo_net_objections), rows.size, stringResource(R.string.cargo_net_objections_hint)) {
-                        if (rows.isEmpty()) Empty(stringResource(R.string.cargo_net_objections_empty))
-                        Rows(rows) { rv ->
-                            ObjectionRow(rv, canDecide = vm.canWrite, enabled = !vm.busy) { decision -> decisionNote = ""; deciding = Deciding(rv, decision) }
+                    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                        listOf("net" to R.string.cargo_net_tab_network, "tariff" to R.string.cargo_net_tab_tariff).forEachIndexed { i, (key, label) ->
+                            SegmentedButton(
+                                selected = face == key, onClick = { face = key },
+                                shape = SegmentedButtonDefaults.itemShape(index = i, count = 2),
+                                colors = SegmentedButtonDefaults.colors(
+                                    activeContainerColor = colors.ink.copy(alpha = 0.08f), activeContentColor = colors.ink,
+                                    inactiveContainerColor = colors.surface, inactiveContentColor = colors.muted,
+                                    activeBorderColor = colors.border, inactiveBorderColor = colors.border,
+                                ),
+                                icon = {},
+                            ) { Text(stringResource(label), fontSize = 13.sp, fontWeight = FontWeight.Medium) }
                         }
                     }
                 }
-                item {
-                    val rows = page.broadcasts.orEmpty()
-                    Section(stringResource(R.string.cargo_net_broadcasts), rows.size, stringResource(R.string.cargo_net_broadcasts_hint)) {
-                        if (rows.isEmpty()) Empty(stringResource(R.string.cargo_net_broadcasts_empty))
-                        Rows(rows) { BroadcastRow(it) }
+                if (face == "net") {
+                    // agreement 7.1 — first on the phone: the one list that waits for a decision;
+                    // its chip is blue when this reader decides (blue's one meaning)
+                    item {
+                        val rows = page.objections.orEmpty()
+                        Section(WorkisIcons.Bubble, stringResource(R.string.cargo_net_objections), rows.size, stringResource(R.string.cargo_net_objections_hint), mine = vm.canWrite) {
+                            if (rows.isEmpty()) Clear(stringResource(R.string.cargo_net_objections_empty))
+                            Rows(rows) { rv ->
+                                ObjectionRow(rv, canDecide = vm.canWrite, enabled = !vm.busy) { decision -> decisionNote = ""; deciding = Deciding(rv, decision) }
+                            }
+                        }
                     }
-                }
-                item {
-                    val rows = page.shipments.orEmpty()
-                    Section(stringResource(R.string.cargo_net_shipments), rows.size, stringResource(R.string.cargo_net_shipments_hint)) {
-                        if (rows.isEmpty()) Empty(stringResource(R.string.cargo_net_shipments_empty))
-                        Rows(rows) { ShipmentRow(it) }
+                    item {
+                        val rows = page.broadcasts.orEmpty()
+                        Section(WorkisIcons.Globe, stringResource(R.string.cargo_net_broadcasts), rows.size, stringResource(R.string.cargo_net_broadcasts_hint)) {
+                            if (rows.isEmpty()) Clear(stringResource(R.string.cargo_net_broadcasts_empty))
+                            Rows(rows) { BroadcastRow(it) }
+                        }
                     }
-                }
-                // today's runs, then every vehicle of every carrier with its "plan route"
-                item {
-                    val runs = page.runs.orEmpty()
-                    Section(stringResource(R.string.cargo_net_routes), 0, stringResource(R.string.cargo_net_fleet_hint)) {
-                        if (runs.isEmpty()) Empty(stringResource(R.string.cargo_net_routes_empty))
-                        Rows(runs) { RunRow(it) }
-                        page.carriers.orEmpty().forEach { c ->
-                            val name = (c.short ?: c.company).orEmpty()
-                            val cid = c.id
-                            // the Workis-fleet tick stands on the carrier, above its vehicles
-                            if (vm.canWrite && cid != null) {
-                                HorizontalDivider(color = colors.border)
+                    item {
+                        val rows = page.shipments.orEmpty()
+                        Section(WorkisIcons.ShippingBox, stringResource(R.string.cargo_net_shipments), rows.size, stringResource(R.string.cargo_net_shipments_hint)) {
+                            if (rows.isEmpty()) Empty(stringResource(R.string.cargo_net_shipments_empty))
+                            Rows(rows) { ShipmentRow(it) }
+                        }
+                    }
+                    // today's runs, then every vehicle of every carrier with its "plan route"
+                    item {
+                        val runs = page.runs.orEmpty()
+                        val vehicles = page.carriers.orEmpty().flatMap { c -> c.vehicles.orEmpty().map { it to (c.short ?: c.company).orEmpty() } }
+                        Section(WorkisIcons.Route, stringResource(R.string.cargo_net_routes), runs.size, null) {
+                            if (runs.isEmpty()) Empty(stringResource(R.string.cargo_net_routes_empty))
+                            Rows(runs) { RunRow(it) }
+                            if (vehicles.isNotEmpty()) HorizontalDivider(color = colors.border)
+                            Rows(vehicles) { (v, carrier) -> VehicleRow(v, carrier, vm.planning) { v.id?.let(vm::plan) } }
+                        }
+                    }
+                } else {
+                    item {
+                        val rows = page.tariff.orEmpty().filter { !it.level.isNullOrEmpty() }
+                        Section(WorkisIcons.CreditCard, stringResource(R.string.cargo_net_tariff), 0, stringResource(R.string.cargo_net_tariff_hint)) {
+                            Rows(rows) { row -> NumberRow(levelWord(row.level.orEmpty()), row.feeUsd, vm.fees[row.level].orEmpty(), vm.canWrite) { vm.type(row.level.orEmpty(), it) } }
+                            vm.tariffNote?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.danger) }
+                            if (vm.tariffSaved) Clear(stringResource(R.string.cargo_net_saved))
+                            // only when a typed number differs from the server's
+                            if (vm.canWrite && vm.changedFees().isNotEmpty()) {
+                                OutlinedButton(onClick = vm::saveTariff, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.cargo_net_tariff_save), fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink)
+                                }
+                            }
+                        }
+                    }
+                    // the consolidation numbers — the tariff's pattern: typed, then saved with the button
+                    val rules = page.rules.orEmpty().filter { !it.key.isNullOrEmpty() }
+                    if (rules.isNotEmpty()) item {
+                        Section(WorkisIcons.Link, stringResource(R.string.cargo_net_rules), 0, stringResource(R.string.cargo_net_rules_hint)) {
+                            Rows(rules) { row -> NumberRow(ruleWord(row.key.orEmpty()), row.usd, vm.ruleTexts[row.key].orEmpty(), vm.canWrite) { vm.typeRule(row.key.orEmpty(), it) } }
+                            vm.rulesNote?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.danger) }
+                            if (vm.rulesSaved) Clear(stringResource(R.string.cargo_net_saved))
+                            if (vm.canWrite && vm.changedRules().isNotEmpty()) {
+                                OutlinedButton(onClick = vm::saveRules, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.cargo_net_rules_save), fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink)
+                                }
+                            }
+                        }
+                    }
+                    // the Workis-fleet tick, one carrier a row — a setting, so it lives beside the numbers
+                    val carriers = page.carriers.orEmpty()
+                    if (carriers.isNotEmpty()) item {
+                        Section(WorkisIcons.Truck, stringResource(R.string.cargo_net_fleet), 0, stringResource(R.string.cargo_net_fleet_hint)) {
+                            Rows(carriers) { c ->
+                                val cid = c.id
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text(name, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink)
-                                        Text(stringResource(R.string.cargo_net_fleet), fontSize = 12.sp, color = colors.muted)
-                                    }
-                                    Switch(
+                                    Text((c.short ?: c.company).orEmpty(), fontSize = 14.sp, color = colors.ink, modifier = Modifier.weight(1f))
+                                    if (vm.canWrite && cid != null) Switch(
                                         checked = vm.fleet[cid] == true, onCheckedChange = { vm.setFleet(cid, it) }, enabled = !vm.busy,
                                         colors = SwitchDefaults.colors(checkedTrackColor = SuccessGreen, checkedThumbColor = colors.surface),
-                                    )
+                                    ) else if (c.ownFleet == true) {
+                                        Icon(WorkisIcons.Check, contentDescription = stringResource(R.string.cargo_net_fleet), tint = SuccessGreen, modifier = Modifier.size(16.dp))
+                                    }
                                 }
-                            } else if (!vm.canWrite && c.ownFleet == true) {
-                                HorizontalDivider(color = colors.border)
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(WorkisIcons.Check, contentDescription = null, tint = colors.muted, modifier = Modifier.size(15.dp))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(name + " · " + stringResource(R.string.cargo_net_fleet), fontSize = 13.sp, color = colors.muted)
-                                }
-                            }
-                            c.vehicles.orEmpty().forEach { v ->
-                                HorizontalDivider(color = colors.border)
-                                VehicleRow(v, name, vm.planning) { v.id?.let(vm::plan) }
-                            }
-                        }
-                    }
-                }
-                item {
-                    val rows = page.tariff.orEmpty().filter { !it.level.isNullOrEmpty() }
-                    Section(stringResource(R.string.cargo_net_tariff), 0, stringResource(R.string.cargo_net_tariff_hint)) {
-                        Rows(rows) { row -> NumberRow(levelWord(row.level.orEmpty()), row.feeUsd, vm.fees[row.level].orEmpty(), vm.canWrite) { vm.type(row.level.orEmpty(), it) } }
-                        vm.tariffNote?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.danger) }
-                        if (vm.tariffSaved) Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(WorkisIcons.Check, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(15.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.cargo_net_saved), fontSize = 13.sp, color = SuccessGreen)
-                        }
-                        // only when a typed number differs from the server's
-                        if (vm.canWrite && vm.changedFees().isNotEmpty()) {
-                            OutlinedButton(onClick = vm::saveTariff, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) {
-                                Text(stringResource(R.string.cargo_net_tariff_save), fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink)
-                            }
-                        }
-                    }
-                }
-                // the consolidation numbers — the tariff's pattern: typed, then saved with the button
-                val rules = page.rules.orEmpty().filter { !it.key.isNullOrEmpty() }
-                if (rules.isNotEmpty()) item {
-                    Section(stringResource(R.string.cargo_net_rules), 0, stringResource(R.string.cargo_net_rules_hint)) {
-                        Rows(rules) { row -> NumberRow(ruleWord(row.key.orEmpty()), row.usd, vm.ruleTexts[row.key].orEmpty(), vm.canWrite) { vm.typeRule(row.key.orEmpty(), it) } }
-                        vm.rulesNote?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.danger) }
-                        if (vm.rulesSaved) Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(WorkisIcons.Check, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(15.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.cargo_net_saved), fontSize = 13.sp, color = SuccessGreen)
-                        }
-                        if (vm.canWrite && vm.changedRules().isNotEmpty()) {
-                            OutlinedButton(onClick = vm::saveRules, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) {
-                                Text(stringResource(R.string.cargo_net_rules_save), fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink)
                             }
                         }
                     }
@@ -368,16 +380,26 @@ fun ConsoleCargoScreen(vm: ConsoleCargoViewModel = viewModel()) {
     }
 }
 
-/** A section: the title (with its count above zero), the card, the web's hint under it. */
+/**
+ * A section: its own icon in the accent tone, the name in ink (never upper-cased), the count on a
+ * chip; the card; the web's hint under it. `mine`: the rows wait for THIS reader's decision —
+ * the chip is blue (blue's one meaning, "sıra sizde").
+ */
 @Composable
-private fun Section(title: String, count: Int, hint: String?, content: @Composable () -> Unit) {
+private fun Section(icon: ImageVector, title: String, count: Int, hint: String?, mine: Boolean = false, content: @Composable () -> Unit) {
     val colors = WorkisTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            (if (count > 0) "$title · $count" else title).uppercase(),
-            fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, letterSpacing = 1.sp, color = colors.muted,
-            modifier = Modifier.padding(horizontal = 4.dp),
-        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
+            Icon(icon, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(15.dp))
+            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
+            if (count > 0) Text(
+                "$count", fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp,
+                color = if (mine) colors.blue else colors.ink,
+                modifier = Modifier
+                    .background((if (mine) colors.blue else colors.ink).copy(alpha = if (mine) 0.16f else 0.08f), CircleShape)
+                    .padding(horizontal = 7.dp, vertical = 2.dp),
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -388,6 +410,24 @@ private fun Section(title: String, count: Int, hint: String?, content: @Composab
         ) { content() }
         hint?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp)) }
     }
+}
+
+/** An empty list that is GOOD news (and "saved") — green is the status colour, with its tick. */
+@Composable
+private fun Clear(words: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(WorkisIcons.Check, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(15.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(words, fontSize = 13.sp, lineHeight = 18.sp, color = SuccessGreen)
+    }
+}
+
+/** The server's minutes in a unit a person reads: "45 dk", "17 sa", "43 gün" — whole units, floor. */
+@Composable
+private fun age(minutes: Int): String = when {
+    minutes >= 1440 -> "${minutes / 1440} " + stringResource(R.string.days_word)
+    minutes >= 60 -> "${minutes / 60} " + stringResource(R.string.cargo_net_hour)
+    else -> "$minutes " + stringResource(R.string.cargo_net_min)
 }
 
 /** Rows with a hairline between them. */
@@ -454,17 +494,27 @@ private fun ObjectionRow(rv: CargoNetObjection, canDecide: Boolean, enabled: Boo
 @Composable
 private fun BroadcastRow(b: CargoNetBroadcast) {
     val colors = WorkisTheme.colors
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("${b.pickup.orEmpty()} → ${b.dropoff.orEmpty()}", fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 19.sp, color = colors.ink)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            val words = listOfNotNull(
-                b.buyer?.takeIf { it.isNotEmpty() },
-                b.level?.takeIf { it.isNotEmpty() }?.let { levelWord(it) },
-                b.ageMin?.let { "$it " + stringResource(R.string.cargo_net_min) },
-            ).joinToString(" · ")
-            Text(words, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, modifier = Modifier.weight(1f))
-            b.feeUsd?.let { Text(WorkisMoney.text(it, "USD"), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.ink) }
+            b.level?.takeIf { it.isNotEmpty() }?.let { StatusPill(levelWord(it)) }
+            // how long it has waited is this row's signal — the beige note chip, clock + words
+            b.ageMin?.let { m ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.background(BeigeBg, CircleShape).padding(horizontal = 8.dp, vertical = 3.dp),
+                ) {
+                    Icon(WorkisIcons.Clock, contentDescription = null, tint = Beige, modifier = Modifier.size(11.dp))
+                    Text(age(m), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = Beige)
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            b.feeUsd?.let {
+                Text(WorkisMoney.text(it, null), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
+                Text("USD", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+            }
         }
+        b.buyer?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted) }
     }
 }
 
@@ -494,7 +544,10 @@ private fun RunRow(r: CargoNetRun) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(r.plate.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
             Text(r.carrier.orEmpty(), fontSize = 12.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Text("${r.done ?: 0}/${r.stops ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.ink)
+            // every stop done: green, with its tick — never colour alone
+            val all = (r.stops ?: 0) > 0 && r.done == r.stops
+            if (all) Icon(WorkisIcons.Check, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(13.dp))
+            Text("${r.done ?: 0}/${r.stops ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = if (all) SuccessGreen else colors.ink)
         }
         r.aiNote?.takeIf { it.isNotEmpty() }?.let {
             Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, maxLines = 3, overflow = TextOverflow.Ellipsis)

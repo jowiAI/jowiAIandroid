@@ -211,6 +211,7 @@
     <string name="cargo_net_broadcasts_hint">Taşıyıcı bekleyen işler — ilk kabul eden kazanır. Burada bekleyen bir iş, havuzu genişletme veya taşıyıcıyı arama sinyalidir.</string>
     <string name="cargo_net_fleet">Workis filosu</string>
     <string name="cargo_net_fleet_hint">Workis filosu: tabanın üstündeki sepetlerde ertesi gün kargosunu Workis karşılar.</string>
+    <string name="cargo_net_hour">sa</string>
     <string name="cargo_net_keep">Koru</string>
     <string name="cargo_net_keep_note">Koruma — taşıyıcıya not (isteğe bağlı)</string>
     <string name="cargo_net_min">dk</string>
@@ -232,6 +233,8 @@
     <string name="cargo_net_shipments">Aktif sevkiyatlar</string>
     <string name="cargo_net_shipments_empty">Yolda sevkiyat yok.</string>
     <string name="cargo_net_shipments_hint">Ağ genelinde henüz teslim edilmemiş her şey, söz verilen tarihe göre sıralı — en üstteki satırlar dikkat edilmesi gerekenler.</string>
+    <string name="cargo_net_tab_network">Ağ</string>
+    <string name="cargo_net_tab_tariff">Tarife</string>
     <string name="cargo_net_tariff">Platform tarifesi</string>
     <string name="cargo_net_tariff_hint">Gönderi başına USD — değişiklikten sonra kabul edilen her iş için geçerlidir.</string>
     <string name="cargo_net_tariff_save">Tarifeyi kaydet</string>
