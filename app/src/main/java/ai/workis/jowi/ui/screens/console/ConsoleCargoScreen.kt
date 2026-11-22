@@ -24,6 +24,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -52,7 +54,6 @@ import ai.workis.jowi.data.CargoNetBroadcast
 import ai.workis.jowi.data.CargoNetObjection
 import ai.workis.jowi.data.CargoNetRun
 import ai.workis.jowi.data.CargoNetShipment
-import ai.workis.jowi.data.CargoNetTariff
 import ai.workis.jowi.data.CargoNetVehicle
 import ai.workis.jowi.data.ConsoleCargo
 import ai.workis.jowi.data.ScreenContext
@@ -78,8 +79,9 @@ import kotlin.math.abs
  * Console → Kargo: the network's control tower (web /workis/console/kargo/, page key `cargo`,
  * ledger 114). The rating objections (carrier agreement 7.1: keep or remove), the jobs still
  * waiting for a carrier, everything not yet delivered, today's routes with "plan route" per
- * vehicle, the platform tariff. The consolidation numbers and the Workis-fleet tick have no
- * API door and stay on the web. Who may write is the server's call: a refusal is printed.
+ * vehicle, the platform tariff, the consolidation numbers and the Workis-fleet tick. Who may
+ * write is the server's flag (`canWrite`, ledger 115): without it the tariff, the numbers and
+ * the fleet are read-only and no verdict button is drawn; route planning is open to every seat.
  */
 class ConsoleCargoViewModel : ViewModel() {
     var page by mutableStateOf<ConsoleCargo?>(null)
@@ -94,6 +96,15 @@ class ConsoleCargoViewModel : ViewModel() {
         private set
     var tariffSaved by mutableStateOf(false)
         private set
+    /** The consolidation numbers as typed, per key. */
+    val ruleTexts = mutableStateMapOf<String, String>()
+    var rulesNote by mutableStateOf<String?>(null)
+        private set
+    var rulesSaved by mutableStateOf(false)
+        private set
+    /** The fleet ticks as shown, per carrier id. */
+    val fleet = mutableStateMapOf<String, Boolean>()
+    val canWrite: Boolean get() = page?.canWrite == true
     var busy by mutableStateOf(false)
         private set
     /** The server's word after an action (a refusal, or the planner's note). */
@@ -112,6 +123,10 @@ class ConsoleCargoViewModel : ViewModel() {
                 page = p; loadError = null
                 fees.clear()
                 p.tariff.orEmpty().forEach { row -> row.level?.let { fees[it] = WorkisMoney.field(row.feeUsd ?: 0.0) } }
+                ruleTexts.clear()
+                p.rules.orEmpty().forEach { row -> row.key?.let { ruleTexts[it] = WorkisMoney.field(row.usd ?: 0.0) } }
+                fleet.clear()
+                p.carriers.orEmpty().forEach { c -> c.id?.let { fleet[it] = c.ownFleet == true } }
             } else if (page == null) loadError = err
         }
     }
@@ -126,6 +141,41 @@ class ConsoleCargoViewModel : ViewModel() {
             val level = row.level ?: return@forEach
             val typed = WorkisMoney.wire(fees[level].orEmpty()).toDoubleOrNull() ?: return@forEach
             if (typed > 0 && abs(typed - (row.feeUsd ?: 0.0)) > 0.0001) put(level, typed)
+        }
+    }
+
+    fun typeRule(key: String, text: String) { ruleTexts[key] = text; rulesSaved = false; rulesNote = null }
+
+    /** The rules whose typed number differs from the server's (zero is a number here; negative is not sent). */
+    fun changedRules(): Map<String, Double> = buildMap {
+        page?.rules.orEmpty().forEach { row ->
+            val key = row.key ?: return@forEach
+            val typed = WorkisMoney.wire(ruleTexts[key].orEmpty()).toDoubleOrNull() ?: return@forEach
+            if (typed >= 0 && abs(typed - (row.usd ?: 0.0)) > 0.0001) put(key, typed)
+        }
+    }
+
+    fun saveRules() {
+        val changed = changedRules()
+        if (changed.isEmpty() || busy) return
+        busy = true
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.consoleCargoRules(jsonBody(*changed.map { it.key to it.value }.toTypedArray())) }
+            busy = false
+            if (r?.success == true) { rulesSaved = true; rulesNote = null; load() }
+            else rulesNote = r?.error ?: r?.message ?: err
+        }
+    }
+
+    /** The tick moves at once and goes back if the server refuses. */
+    fun setFleet(carrierId: String, on: Boolean) {
+        if (busy) return
+        fleet[carrierId] = on
+        busy = true
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.consoleCargoOwnFleet(carrierId, jsonBody("on" to on)) }
+            busy = false
+            if (r?.success != true) { fleet[carrierId] = !on; actionNote = r?.error ?: r?.message ?: err }
         }
     }
 
@@ -195,7 +245,7 @@ fun ConsoleCargoScreen(vm: ConsoleCargoViewModel = viewModel()) {
                     Section(stringResource(R.string.cargo_net_objections), rows.size, stringResource(R.string.cargo_net_objections_hint)) {
                         if (rows.isEmpty()) Empty(stringResource(R.string.cargo_net_objections_empty))
                         Rows(rows) { rv ->
-                            ObjectionRow(rv, enabled = !vm.busy) { decision -> decisionNote = ""; deciding = Deciding(rv, decision) }
+                            ObjectionRow(rv, canDecide = vm.canWrite, enabled = !vm.busy) { decision -> decisionNote = ""; deciding = Deciding(rv, decision) }
                         }
                     }
                 }
@@ -216,18 +266,44 @@ fun ConsoleCargoScreen(vm: ConsoleCargoViewModel = viewModel()) {
                 // today's runs, then every vehicle of every carrier with its "plan route"
                 item {
                     val runs = page.runs.orEmpty()
-                    val vehicles = page.carriers.orEmpty().flatMap { c -> c.vehicles.orEmpty().map { it to (c.short ?: c.company).orEmpty() } }
-                    Section(stringResource(R.string.cargo_net_routes), 0, null) {
+                    Section(stringResource(R.string.cargo_net_routes), 0, stringResource(R.string.cargo_net_fleet_hint)) {
                         if (runs.isEmpty()) Empty(stringResource(R.string.cargo_net_routes_empty))
                         Rows(runs) { RunRow(it) }
-                        if (vehicles.isNotEmpty()) HorizontalDivider(color = colors.border)
-                        Rows(vehicles) { (v, carrier) -> VehicleRow(v, carrier, vm.planning) { v.id?.let(vm::plan) } }
+                        page.carriers.orEmpty().forEach { c ->
+                            val name = (c.short ?: c.company).orEmpty()
+                            val cid = c.id
+                            // the Workis-fleet tick stands on the carrier, above its vehicles
+                            if (vm.canWrite && cid != null) {
+                                HorizontalDivider(color = colors.border)
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(name, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink)
+                                        Text(stringResource(R.string.cargo_net_fleet), fontSize = 12.sp, color = colors.muted)
+                                    }
+                                    Switch(
+                                        checked = vm.fleet[cid] == true, onCheckedChange = { vm.setFleet(cid, it) }, enabled = !vm.busy,
+                                        colors = SwitchDefaults.colors(checkedTrackColor = SuccessGreen, checkedThumbColor = colors.surface),
+                                    )
+                                }
+                            } else if (!vm.canWrite && c.ownFleet == true) {
+                                HorizontalDivider(color = colors.border)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(WorkisIcons.Check, contentDescription = null, tint = colors.muted, modifier = Modifier.size(15.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(name + " · " + stringResource(R.string.cargo_net_fleet), fontSize = 13.sp, color = colors.muted)
+                                }
+                            }
+                            c.vehicles.orEmpty().forEach { v ->
+                                HorizontalDivider(color = colors.border)
+                                VehicleRow(v, name, vm.planning) { v.id?.let(vm::plan) }
+                            }
+                        }
                     }
                 }
                 item {
                     val rows = page.tariff.orEmpty().filter { !it.level.isNullOrEmpty() }
                     Section(stringResource(R.string.cargo_net_tariff), 0, stringResource(R.string.cargo_net_tariff_hint)) {
-                        Rows(rows) { row -> TariffRow(row, vm.fees[row.level].orEmpty()) { vm.type(row.level.orEmpty(), it) } }
+                        Rows(rows) { row -> NumberRow(levelWord(row.level.orEmpty()), row.feeUsd, vm.fees[row.level].orEmpty(), vm.canWrite) { vm.type(row.level.orEmpty(), it) } }
                         vm.tariffNote?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.danger) }
                         if (vm.tariffSaved) Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(WorkisIcons.Check, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(15.dp))
@@ -235,9 +311,27 @@ fun ConsoleCargoScreen(vm: ConsoleCargoViewModel = viewModel()) {
                             Text(stringResource(R.string.cargo_net_saved), fontSize = 13.sp, color = SuccessGreen)
                         }
                         // only when a typed number differs from the server's
-                        if (vm.changedFees().isNotEmpty()) {
+                        if (vm.canWrite && vm.changedFees().isNotEmpty()) {
                             OutlinedButton(onClick = vm::saveTariff, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) {
                                 Text(stringResource(R.string.cargo_net_tariff_save), fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink)
+                            }
+                        }
+                    }
+                }
+                // the consolidation numbers — the tariff's pattern: typed, then saved with the button
+                val rules = page.rules.orEmpty().filter { !it.key.isNullOrEmpty() }
+                if (rules.isNotEmpty()) item {
+                    Section(stringResource(R.string.cargo_net_rules), 0, stringResource(R.string.cargo_net_rules_hint)) {
+                        Rows(rules) { row -> NumberRow(ruleWord(row.key.orEmpty()), row.usd, vm.ruleTexts[row.key].orEmpty(), vm.canWrite) { vm.typeRule(row.key.orEmpty(), it) } }
+                        vm.rulesNote?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.danger) }
+                        if (vm.rulesSaved) Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(WorkisIcons.Check, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(R.string.cargo_net_saved), fontSize = 13.sp, color = SuccessGreen)
+                        }
+                        if (vm.canWrite && vm.changedRules().isNotEmpty()) {
+                            OutlinedButton(onClick = vm::saveRules, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.cargo_net_rules_save), fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink)
                             }
                         }
                     }
@@ -320,7 +414,14 @@ private fun levelWord(code: String): String = when (code) {
 }
 
 @Composable
-private fun ObjectionRow(rv: CargoNetObjection, enabled: Boolean, onDecide: (String) -> Unit) {
+private fun ruleWord(key: String): String = when (key) {
+    "ertesi_gun_birlesik" -> stringResource(R.string.cargo_net_rule_consolidated)
+    "free_basket_min" -> stringResource(R.string.cargo_net_rule_floor)
+    else -> key
+}
+
+@Composable
+private fun ObjectionRow(rv: CargoNetObjection, canDecide: Boolean, enabled: Boolean, onDecide: (String) -> Unit) {
     val colors = WorkisTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -339,7 +440,7 @@ private fun ObjectionRow(rv: CargoNetObjection, enabled: Boolean, onDecide: (Str
                 (rv.objectedAt?.takeIf { it.isNotEmpty() }?.let { " · " + WorkisClock.stamp(it) } ?: ""),
             fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), modifier = Modifier.fillMaxWidth()) {
+        if (canDecide) Row(horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(onClick = { onDecide("keep") }, enabled = enabled) {
                 Text(stringResource(R.string.cargo_net_keep), fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink)
             }
@@ -423,11 +524,13 @@ private fun VehicleRow(v: CargoNetVehicle, carrier: String, planning: String?, o
 }
 
 @Composable
-private fun TariffRow(row: CargoNetTariff, typed: String, onType: (String) -> Unit) {
+private fun NumberRow(label: String, value: Double?, typed: String, canWrite: Boolean, onType: (String) -> Unit) {
     val colors = WorkisTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(levelWord(row.level.orEmpty()), fontSize = 14.sp, color = colors.ink, modifier = Modifier.weight(1f))
-        BasicTextField(
+        Text(label, fontSize = 14.sp, color = colors.ink, modifier = Modifier.weight(1f))
+        // a reader (a field lead) gets the number as plain text
+        if (!canWrite) Text(WorkisMoney.text(value ?: 0.0, null), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink)
+        else BasicTextField(
             value = typed, onValueChange = onType, singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink, textAlign = TextAlign.End).readingStep(),

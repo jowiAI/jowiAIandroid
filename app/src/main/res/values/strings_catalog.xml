@@ -209,6 +209,8 @@
     <string name="cargo_net_broadcasts">Open broadcasts</string>
     <string name="cargo_net_broadcasts_empty">No jobs waiting — the pool is absorbing everything.</string>
     <string name="cargo_net_broadcasts_hint">Jobs waiting for a carrier — first accept wins. A job aging here is the signal to widen the pool or call a carrier.</string>
+    <string name="cargo_net_fleet">Workis fleet</string>
+    <string name="cargo_net_fleet_hint">The Workis fleet: its ertesi-gün cargo on a basket over the floor is paid by Workis.</string>
     <string name="cargo_net_keep">Keep</string>
     <string name="cargo_net_keep_note">Keeping — note to the carrier (optional)</string>
     <string name="cargo_net_min">min</string>
@@ -221,6 +223,11 @@
     <string name="cargo_net_remove_note">Removing — note to the carrier (optional)</string>
     <string name="cargo_net_routes">Today\'s routes</string>
     <string name="cargo_net_routes_empty">No routes planned today.</string>
+    <string name="cargo_net_rule_consolidated">Next day, consolidated</string>
+    <string name="cargo_net_rule_floor">Free-cargo basket floor</string>
+    <string name="cargo_net_rules">Consolidation</string>
+    <string name="cargo_net_rules_hint">An ertesi-gün job the accepting carrier already drives to that day costs the consolidated fee; on a USD goods order at or above the floor, the Workis fleet\'s ertesi-gün cargo is paid by Workis.</string>
+    <string name="cargo_net_rules_save">Save numbers</string>
     <string name="cargo_net_saved">Saved</string>
     <string name="cargo_net_shipments">Active shipments</string>
     <string name="cargo_net_shipments_empty">Nothing in flight.</string>

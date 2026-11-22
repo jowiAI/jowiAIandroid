@@ -463,6 +463,14 @@ interface WorkisApi {
     @POST("workis/console/cargo/tariff/")
     suspend fun consoleCargoTariff(@Body body: kotlinx.serialization.json.JsonObject): CargoNetResult
 
+    /** The consolidation numbers (USD); only the keys sent change (ledger 115). */
+    @POST("workis/console/cargo/rules/")
+    suspend fun consoleCargoRules(@Body body: kotlinx.serialization.json.JsonObject): CargoNetResult
+
+    /** The Workis-fleet tick: `{on}`. */
+    @POST("workis/console/cargo/carriers/{id}/own-fleet/")
+    suspend fun consoleCargoOwnFleet(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): CargoNetResult
+
     /** `{decision: keep|remove, note}`. */
     @POST("workis/console/cargo/objections/{id}/")
     suspend fun consoleCargoObjection(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): CargoNetResult

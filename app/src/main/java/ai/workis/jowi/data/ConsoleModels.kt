@@ -406,6 +406,10 @@ data class StartConvBody(val text: String)
 @Serializable
 data class ConsoleCargo(
     val dormant: Boolean? = null,
+    /** The coordinator, or a pilot holding Kargo; false for a field lead (ledger 115). */
+    val canWrite: Boolean? = null,
+    /** The consolidation numbers (USD), by key. */
+    val rules: List<CargoNetRule>? = null,
     val tariff: List<CargoNetTariff>? = null,
     val broadcasts: List<CargoNetBroadcast>? = null,
     val shipments: List<CargoNetShipment>? = null,
@@ -413,6 +417,9 @@ data class ConsoleCargo(
     val runs: List<CargoNetRun>? = null,
     val objections: List<CargoNetObjection>? = null,
 )
+
+@Serializable
+data class CargoNetRule(val key: String? = null, @Serializable(with = FlexDouble::class) val usd: Double? = null)
 
 @Serializable
 data class CargoNetTariff(val level: String? = null, @Serializable(with = FlexDouble::class) val feeUsd: Double? = null)
@@ -445,6 +452,8 @@ data class CargoNetCarrier(
     @Serializable(with = FlexString::class) val id: String? = null,
     val short: String? = null,
     val company: String? = null,
+    /** The Workis-fleet tick (ledger 115). */
+    val ownFleet: Boolean? = null,
     val vehicles: List<CargoNetVehicle>? = null,
 )
 

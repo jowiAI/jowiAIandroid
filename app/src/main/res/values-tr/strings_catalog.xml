@@ -209,6 +209,8 @@
     <string name="cargo_net_broadcasts">Açık yayınlar</string>
     <string name="cargo_net_broadcasts_empty">Bekleyen iş yok — havuz her şeyi karşılıyor.</string>
     <string name="cargo_net_broadcasts_hint">Taşıyıcı bekleyen işler — ilk kabul eden kazanır. Burada bekleyen bir iş, havuzu genişletme veya taşıyıcıyı arama sinyalidir.</string>
+    <string name="cargo_net_fleet">Workis filosu</string>
+    <string name="cargo_net_fleet_hint">Workis filosu: tabanın üstündeki sepetlerde ertesi gün kargosunu Workis karşılar.</string>
     <string name="cargo_net_keep">Koru</string>
     <string name="cargo_net_keep_note">Koruma — taşıyıcıya not (isteğe bağlı)</string>
     <string name="cargo_net_min">dk</string>
@@ -221,6 +223,11 @@
     <string name="cargo_net_remove_note">Kaldırma — taşıyıcıya not (isteğe bağlı)</string>
     <string name="cargo_net_routes">Bugünün rotaları</string>
     <string name="cargo_net_routes_empty">Bugün planlanmış rota yok.</string>
+    <string name="cargo_net_rule_consolidated">Ertesi gün, birleşik</string>
+    <string name="cargo_net_rule_floor">Ücretsiz kargo sepet tabanı</string>
+    <string name="cargo_net_rules">Birleştirme</string>
+    <string name="cargo_net_rules_hint">Kabul eden kargocunun o gün zaten gittiği bir ertesi gün işi birleşik bedeli öder; tabanın üstündeki USD sipariş sepetlerinde Workis filosunun ertesi gün kargosunu Workis karşılar.</string>
+    <string name="cargo_net_rules_save">Sayıları kaydet</string>
     <string name="cargo_net_saved">Kaydedildi</string>
     <string name="cargo_net_shipments">Aktif sevkiyatlar</string>
     <string name="cargo_net_shipments_empty">Yolda sevkiyat yok.</string>
