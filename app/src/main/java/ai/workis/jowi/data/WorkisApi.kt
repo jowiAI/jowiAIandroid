@@ -455,6 +455,21 @@ interface WorkisApi {
     // --- Console Gruplar (ledger 62, Django groups_api.py) ---
     // Every POST answers the page re-read (+ `message`); a refusal is {success: false, error}.
     /** Missing / unknown slug = the fire sector. */
+    /** Console → Kargo (ledger 114): the control tower's one page. */
+    @GET("workis/console/cargo/")
+    suspend fun consoleCargo(): ConsoleCargo
+
+    /** USD numbers per level; only the levels sent change. */
+    @POST("workis/console/cargo/tariff/")
+    suspend fun consoleCargoTariff(@Body body: kotlinx.serialization.json.JsonObject): CargoNetResult
+
+    /** `{decision: keep|remove, note}`. */
+    @POST("workis/console/cargo/objections/{id}/")
+    suspend fun consoleCargoObjection(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): CargoNetResult
+
+    @POST("workis/console/cargo/routes/{vehicleId}/plan/")
+    suspend fun consoleCargoPlan(@Path("vehicleId") vehicleId: String, @Body body: kotlinx.serialization.json.JsonObject): CargoNetResult
+
     @GET("workis/console/groups/")
     suspend fun consoleGroups(@Query("sector") sector: String? = null): GroupsPage
 

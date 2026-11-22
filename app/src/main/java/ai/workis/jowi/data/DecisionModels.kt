@@ -69,7 +69,52 @@ data class WorkisSide(
     val roles: List<String>? = null,
     val scope: String? = null,
     val canTrade: Boolean? = null,
-)
+    /**
+     * The console this account may open (Django 2026-11-21, ledger 113) — kept as the raw
+     * element so "the key was sent, and it is null" (no console) can be told from "the key is
+     * absent" (a server from before the pilot seat — only then does the role number decide).
+     */
+    @Serializable(with = ConsoleKey::class) val console: kotlinx.serialization.json.JsonElement = ConsoleAbsent,
+) {
+    /** The server SENT the key (null included). */
+    val consoleSent: Boolean get() = console !== ConsoleAbsent
+    val consoleValue: WorkspaceConsole? get() = (console as? kotlinx.serialization.json.JsonObject)?.let { o ->
+        runCatching { TolerantJson.decodeFromJsonElement(WorkspaceConsole.serializer(), o) }.getOrNull() ?: WorkspaceConsole()
+    }
+}
+
+/**
+ * `seat` is a label ("coordinator" · "lead" · "pilot") — no permission is derived from it.
+ * `pages` are the console pages this person may open, in menu order; `jowi` says whether the
+ * console's Jowi field is drawn.
+ */
+@Serializable
+data class WorkspaceConsole(val seat: String? = null, val pages: List<String>? = null, val jowi: Boolean? = null)
+
+/** The default of `WorkisSide.console`: the key was not in the answer at all. Told by identity. */
+internal val ConsoleAbsent: kotlinx.serialization.json.JsonElement = kotlinx.serialization.json.JsonPrimitive("\u0000absent")
+
+/**
+ * Reads `console` as the raw element, a JSON null included (→ `JsonNull`). The descriptor says
+ * "nullable" on purpose: the app's Json runs with `coerceInputValues`, which would otherwise
+ * swap a sent null for the default — and "sent, null" is exactly what must be told apart.
+ */
+@OptIn(kotlinx.serialization.SealedSerializationApi::class)
+internal object ConsoleKey : kotlinx.serialization.KSerializer<kotlinx.serialization.json.JsonElement> {
+    private val base = kotlinx.serialization.json.JsonElement.serializer()
+    override val descriptor: kotlinx.serialization.descriptors.SerialDescriptor =
+        object : kotlinx.serialization.descriptors.SerialDescriptor by base.descriptor {
+            override val isNullable: Boolean get() = true
+        }
+
+    override fun deserialize(decoder: kotlinx.serialization.encoding.Decoder): kotlinx.serialization.json.JsonElement =
+        (decoder as? kotlinx.serialization.json.JsonDecoder)?.decodeJsonElement() ?: ConsoleAbsent
+
+    override fun serialize(encoder: kotlinx.serialization.encoding.Encoder, value: kotlinx.serialization.json.JsonElement) =
+        base.serialize(encoder, value)
+}
+
+private val TolerantJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
 
 @Serializable
 data class WorkspaceAccount(

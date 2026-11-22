@@ -400,3 +400,83 @@ data class ReplyBody(val text: String, val internal: Boolean? = null)
 
 @Serializable
 data class StartConvBody(val text: String)
+
+// ---------- Console → Kargo, the control tower (ledger 114; API_CONTRACT "AS SHIPPED") ----------
+
+@Serializable
+data class ConsoleCargo(
+    val dormant: Boolean? = null,
+    val tariff: List<CargoNetTariff>? = null,
+    val broadcasts: List<CargoNetBroadcast>? = null,
+    val shipments: List<CargoNetShipment>? = null,
+    val carriers: List<CargoNetCarrier>? = null,
+    val runs: List<CargoNetRun>? = null,
+    val objections: List<CargoNetObjection>? = null,
+)
+
+@Serializable
+data class CargoNetTariff(val level: String? = null, @Serializable(with = FlexDouble::class) val feeUsd: Double? = null)
+
+@Serializable
+data class CargoNetBroadcast(
+    @Serializable(with = FlexString::class) val orderId: String? = null,
+    val buyer: String? = null,
+    val pickup: String? = null,
+    val dropoff: String? = null,
+    val level: String? = null,
+    @Serializable(with = FlexDouble::class) val feeUsd: Double? = null,
+    @Serializable(with = FlexInt::class) val ageMin: Int? = null,
+)
+
+@Serializable
+data class CargoNetShipment(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    @Serializable(with = FlexString::class) val number: String? = null,
+    val statusLabel: String? = null,
+    val carrier: String? = null,
+    val pickup: String? = null,
+    val dropoff: String? = null,
+    val level: String? = null,
+    val promisedAt: String? = null,
+)
+
+@Serializable
+data class CargoNetCarrier(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val short: String? = null,
+    val company: String? = null,
+    val vehicles: List<CargoNetVehicle>? = null,
+)
+
+@Serializable
+data class CargoNetVehicle(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    @Serializable(with = FlexString::class) val plate: String? = null,
+    val kindLabel: String? = null,
+)
+
+@Serializable
+data class CargoNetRun(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    @Serializable(with = FlexString::class) val plate: String? = null,
+    val carrier: String? = null,
+    @Serializable(with = FlexInt::class) val done: Int? = null,
+    @Serializable(with = FlexInt::class) val stops: Int? = null,
+    val aiNote: String? = null,
+)
+
+@Serializable
+data class CargoNetObjection(
+    @Serializable(with = FlexString::class) val id: String? = null,
+    val carrier: String? = null,
+    @Serializable(with = FlexInt::class) val rating: Int? = null,
+    @Serializable(with = FlexString::class) val shipmentNumber: String? = null,
+    val by: String? = null,
+    val comment: String? = null,
+    val objection: String? = null,
+    val objectedAt: String? = null,
+)
+
+/** The three POSTs' answer: `{success, error?, message?, note?}` — `stops` is a LIST on plan and is not read. */
+@Serializable
+data class CargoNetResult(val success: Boolean = false, val error: String? = null, val message: String? = null, val note: String? = null)

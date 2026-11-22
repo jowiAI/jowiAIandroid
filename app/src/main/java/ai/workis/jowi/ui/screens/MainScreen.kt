@@ -67,18 +67,32 @@ private enum class MainTab(val labelRes: Int) {
 @Composable
 fun MainScreen() {
     val colors = WorkisTheme.colors
-    val isCoordinator = remember { Graph.auth.isCoordinator() }
+    val roleConsole = remember { Graph.auth.isCoordinator() }
     val isExpert = remember { Graph.auth.isExpert() }
     val seat by Graph.partner.seat.collectAsState()
-    LaunchedEffect(Unit) { if (!isCoordinator && !isExpert) Graph.partner.refresh() }
     // What this account can walk into (`auth/workspaces/`, ledger 20): a HOSPITALITY room
     // puts Kararlar on the bar and takes the seatless Başvuru door OFF it — a hotel manager
     // has no Workis seat and never will. A room and no seat = Jowi is this account's whole
     // app, so the Jowi tab goes too: she writes questions and instructions into ONE field.
     val workspaces by Graph.workspaces.value.collectAsState()
-    LaunchedEffect(Unit) { if (workspaces == null) Graph.workspaces.refresh() }
+    // `workspacesAsked`: the read came back, answer or not — a failed read must not hold the
+    // trading side's own question (`company/`) back for ever
+    var workspacesAsked by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { if (workspaces == null) Graph.workspaces.refresh(); workspacesAsked = true }
     val jowiWorkspace = workspaces?.hasHospitality == true
     val jowiOnly = jowiWorkspace && workspaces?.workis?.hasSeat != true
+    // The console opens on the server's word (`workis.console`, ledger 113), not on a role
+    // number: a pilot (6) has one, and so will whoever comes next. The role decides only
+    // while that answer is not here yet (so a coordinator's bar does not flash) or on a
+    // server that never sent the key. `seat` is read for no permission.
+    val side = workspaces?.workis
+    val isCoordinator = if (side?.consoleSent == true) side.consoleValue != null else roleConsole
+    // the console's Jowi field is a tick of its own for a pilot — the server would answer 403
+    val consoleJowiOff = isCoordinator && side?.consoleValue?.jowi == false
+    // a console account has no trading tab: `company/` is asked only for the others, and
+    // only once the workspaces answer says which this is (a pilot's role number does not)
+    val knowsConsole = workspaces != null || workspacesAsked || roleConsole
+    LaunchedEffect(knowsConsole, isCoordinator) { if (knowsConsole && !isCoordinator && !isExpert) Graph.partner.refresh() }
 
     // Until company/ answers, the partner Panel tab stays (with its spinner) — never the
     // Başvuru tab, which is only for a 403 `seat:"none"` (2026-09-14: a stale verdict flashed it).
@@ -93,10 +107,10 @@ fun MainScreen() {
         partnerTab?.let { add(it) }
         if (jowiWorkspace) add(MainTab.Decisions)
         add(MainTab.Account)
-        if (!jowiOnly) add(MainTab.Jowi)
+        if (!jowiOnly && !consoleJowiOff) add(MainTab.Jowi)
     }
     fun icon(tab: MainTab): ImageVector = when (tab) {
-        MainTab.Panel -> if (isExpert) WorkisIcons.GraduationCap else WorkisIcons.Grid
+        MainTab.Panel -> if (isExpert && !isCoordinator) WorkisIcons.GraduationCap else WorkisIcons.Grid
         MainTab.Market -> Icons.Filled.ShoppingCart
         MainTab.Seatless -> Icons.Filled.Person
         MainTab.Decisions -> WorkisIcons.Checklist
@@ -183,7 +197,7 @@ fun MainScreen() {
                 selected = tabs.first().name; userPicked = true
             }
             when (current) {
-                MainTab.Panel -> if (isExpert) ExpertRoot() else ai.workis.jowi.ui.screens.console.ConsoleRoot()
+                MainTab.Panel -> if (isExpert && !isCoordinator) ExpertRoot() else ai.workis.jowi.ui.screens.console.ConsoleRoot()
                 MainTab.Market -> MarketRoot(onAskJowi = { selected = MainTab.Jowi.name; userPicked = true })
                 MainTab.Seatless -> SeatlessScreen(
                     onApply = { showApply = true },

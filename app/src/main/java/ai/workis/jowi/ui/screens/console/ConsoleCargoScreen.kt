@@ -1,0 +1,442 @@
+package ai.workis.jowi.ui.screens.console
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import ai.workis.jowi.Graph
+import ai.workis.jowi.R
+import ai.workis.jowi.data.CargoNetBroadcast
+import ai.workis.jowi.data.CargoNetObjection
+import ai.workis.jowi.data.CargoNetRun
+import ai.workis.jowi.data.CargoNetShipment
+import ai.workis.jowi.data.CargoNetTariff
+import ai.workis.jowi.data.CargoNetVehicle
+import ai.workis.jowi.data.ConsoleCargo
+import ai.workis.jowi.data.ScreenContext
+import ai.workis.jowi.data.WorkisClock
+import ai.workis.jowi.data.WorkisMoney
+import ai.workis.jowi.data.jsonBody
+import ai.workis.jowi.data.partnerCall
+import ai.workis.jowi.ui.screens.partner.StatusPill
+import ai.workis.jowi.ui.theme.Beige
+import ai.workis.jowi.ui.theme.BeigeBg
+import ai.workis.jowi.ui.theme.Kiremit500
+import ai.workis.jowi.ui.theme.SuccessGreen
+import ai.workis.jowi.ui.theme.Text
+import ai.workis.jowi.ui.theme.WorkisIcons
+import ai.workis.jowi.ui.theme.WorkisMono
+import ai.workis.jowi.ui.theme.WorkisSans
+import ai.workis.jowi.ui.theme.WorkisTheme
+import ai.workis.jowi.ui.theme.readingStep
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+
+/**
+ * Console → Kargo: the network's control tower (web /workis/console/kargo/, page key `cargo`,
+ * ledger 114). The rating objections (carrier agreement 7.1: keep or remove), the jobs still
+ * waiting for a carrier, everything not yet delivered, today's routes with "plan route" per
+ * vehicle, the platform tariff. The consolidation numbers and the Workis-fleet tick have no
+ * API door and stay on the web. Who may write is the server's call: a refusal is printed.
+ */
+class ConsoleCargoViewModel : ViewModel() {
+    var page by mutableStateOf<ConsoleCargo?>(null)
+        private set
+    var loadError by mutableStateOf<String?>(null)
+        private set
+    var refreshing by mutableStateOf(false)
+        private set
+    /** The tariff as typed, per level; seeded from the server's numbers. */
+    val fees = mutableStateMapOf<String, String>()
+    var tariffNote by mutableStateOf<String?>(null)
+        private set
+    var tariffSaved by mutableStateOf(false)
+        private set
+    var busy by mutableStateOf(false)
+        private set
+    /** The server's word after an action (a refusal, or the planner's note). */
+    var actionNote by mutableStateOf<String?>(null)
+        private set
+    var planning by mutableStateOf<String?>(null)
+        private set
+
+    private val lang get() = Graph.language.value
+
+    fun load() {
+        viewModelScope.launch {
+            val (p, err) = partnerCall(lang) { Graph.api.consoleCargo() }
+            refreshing = false
+            if (p != null) {
+                page = p; loadError = null
+                fees.clear()
+                p.tariff.orEmpty().forEach { row -> row.level?.let { fees[it] = WorkisMoney.field(row.feeUsd ?: 0.0) } }
+            } else if (page == null) loadError = err
+        }
+    }
+
+    fun refresh() { refreshing = true; load() }
+
+    fun type(level: String, text: String) { fees[level] = text; tariffSaved = false; tariffNote = null }
+
+    /** The levels whose typed number differs from the server's — only these are sent. */
+    fun changedFees(): Map<String, Double> = buildMap {
+        page?.tariff.orEmpty().forEach { row ->
+            val level = row.level ?: return@forEach
+            val typed = WorkisMoney.wire(fees[level].orEmpty()).toDoubleOrNull() ?: return@forEach
+            if (typed > 0 && abs(typed - (row.feeUsd ?: 0.0)) > 0.0001) put(level, typed)
+        }
+    }
+
+    fun saveTariff() {
+        val changed = changedFees()
+        if (changed.isEmpty() || busy) return
+        busy = true
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.consoleCargoTariff(jsonBody(*changed.map { it.key to it.value }.toTypedArray())) }
+            busy = false
+            if (r?.success == true) { tariffSaved = true; tariffNote = null; load() }
+            else tariffNote = r?.error ?: r?.message ?: err
+        }
+    }
+
+    fun decide(id: String, decision: String, note: String) {
+        if (busy) return
+        busy = true
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.consoleCargoObjection(id, jsonBody("decision" to decision, "note" to note.trim())) }
+            busy = false
+            actionNote = if (r?.success == true) null else r?.error ?: r?.message ?: err
+            load()
+        }
+    }
+
+    fun plan(vehicleId: String) {
+        if (planning != null) return
+        planning = vehicleId
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.consoleCargoPlan(vehicleId, jsonBody()) }
+            planning = null
+            actionNote = r?.error ?: r?.message ?: r?.note ?: err
+            load()
+        }
+    }
+}
+
+private data class Deciding(val objection: CargoNetObjection, val decision: String)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ConsoleCargoScreen(vm: ConsoleCargoViewModel = viewModel()) {
+    val colors = WorkisTheme.colors
+    LaunchedEffect(Unit) { ScreenContext.clear(); vm.load() }
+    var deciding by androidx.compose.runtime.remember { mutableStateOf<Deciding?>(null) }
+    var decisionNote by androidx.compose.runtime.remember { mutableStateOf("") }
+    val page = vm.page
+    when {
+        page == null && vm.loadError != null -> Text(vm.loadError.orEmpty(), fontSize = 13.sp, color = colors.danger)
+        page == null -> Box(Modifier.fillMaxWidth().padding(top = 30.dp), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp, color = Kiremit500)
+        }
+        else -> PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
+            LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                vm.actionNote?.takeIf { it.isNotEmpty() }?.let { note ->
+                    item {
+                        Text(
+                            note, fontSize = 13.sp, lineHeight = 18.sp, color = Beige,
+                            modifier = Modifier.fillMaxWidth().background(BeigeBg, RoundedCornerShape(12.dp)).padding(12.dp),
+                        )
+                    }
+                }
+                // agreement 7.1 — first on the phone: the one list that waits for a decision
+                item {
+                    val rows = page.objections.orEmpty()
+                    Section(stringResource(R.string.cargo_net_objections), rows.size, stringResource(R.string.cargo_net_objections_hint)) {
+                        if (rows.isEmpty()) Empty(stringResource(R.string.cargo_net_objections_empty))
+                        Rows(rows) { rv ->
+                            ObjectionRow(rv, enabled = !vm.busy) { decision -> decisionNote = ""; deciding = Deciding(rv, decision) }
+                        }
+                    }
+                }
+                item {
+                    val rows = page.broadcasts.orEmpty()
+                    Section(stringResource(R.string.cargo_net_broadcasts), rows.size, stringResource(R.string.cargo_net_broadcasts_hint)) {
+                        if (rows.isEmpty()) Empty(stringResource(R.string.cargo_net_broadcasts_empty))
+                        Rows(rows) { BroadcastRow(it) }
+                    }
+                }
+                item {
+                    val rows = page.shipments.orEmpty()
+                    Section(stringResource(R.string.cargo_net_shipments), rows.size, stringResource(R.string.cargo_net_shipments_hint)) {
+                        if (rows.isEmpty()) Empty(stringResource(R.string.cargo_net_shipments_empty))
+                        Rows(rows) { ShipmentRow(it) }
+                    }
+                }
+                // today's runs, then every vehicle of every carrier with its "plan route"
+                item {
+                    val runs = page.runs.orEmpty()
+                    val vehicles = page.carriers.orEmpty().flatMap { c -> c.vehicles.orEmpty().map { it to (c.short ?: c.company).orEmpty() } }
+                    Section(stringResource(R.string.cargo_net_routes), 0, null) {
+                        if (runs.isEmpty()) Empty(stringResource(R.string.cargo_net_routes_empty))
+                        Rows(runs) { RunRow(it) }
+                        if (vehicles.isNotEmpty()) HorizontalDivider(color = colors.border)
+                        Rows(vehicles) { (v, carrier) -> VehicleRow(v, carrier, vm.planning) { v.id?.let(vm::plan) } }
+                    }
+                }
+                item {
+                    val rows = page.tariff.orEmpty().filter { !it.level.isNullOrEmpty() }
+                    Section(stringResource(R.string.cargo_net_tariff), 0, stringResource(R.string.cargo_net_tariff_hint)) {
+                        Rows(rows) { row -> TariffRow(row, vm.fees[row.level].orEmpty()) { vm.type(row.level.orEmpty(), it) } }
+                        vm.tariffNote?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.danger) }
+                        if (vm.tariffSaved) Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(WorkisIcons.Check, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(15.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(R.string.cargo_net_saved), fontSize = 13.sp, color = SuccessGreen)
+                        }
+                        // only when a typed number differs from the server's
+                        if (vm.changedFees().isNotEmpty()) {
+                            OutlinedButton(onClick = vm::saveTariff, enabled = !vm.busy, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.cargo_net_tariff_save), fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink)
+                            }
+                        }
+                    }
+                }
+                item { Spacer(Modifier.height(30.dp)) }
+            }
+        }
+    }
+    deciding?.let { d ->
+        val remove = d.decision == "remove"
+        AlertDialog(
+            onDismissRequest = { deciding = null },
+            containerColor = colors.surface,
+            title = {
+                Text(
+                    stringResource(if (remove) R.string.cargo_net_remove_note else R.string.cargo_net_keep_note),
+                    fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = colors.ink,
+                )
+            },
+            text = {
+                OutlinedTextField(
+                    value = decisionNote, onValueChange = { decisionNote = it },
+                    textStyle = TextStyle(fontFamily = WorkisSans, fontSize = 14.sp, color = colors.ink).readingStep(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { deciding = null; d.objection.id?.let { vm.decide(it, d.decision, decisionNote) } }) {
+                    Text(stringResource(if (remove) R.string.cargo_net_remove else R.string.cargo_net_keep), fontWeight = FontWeight.SemiBold, color = colors.accentText)
+                }
+            },
+            dismissButton = { TextButton(onClick = { deciding = null }) { Text(stringResource(R.string.cancel), color = colors.muted) } },
+        )
+    }
+}
+
+/** A section: the title (with its count above zero), the card, the web's hint under it. */
+@Composable
+private fun Section(title: String, count: Int, hint: String?, content: @Composable () -> Unit) {
+    val colors = WorkisTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            (if (count > 0) "$title · $count" else title).uppercase(),
+            fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, letterSpacing = 1.sp, color = colors.muted,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(colors.surface, RoundedCornerShape(20.dp))
+                .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) { content() }
+        hint?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp)) }
+    }
+}
+
+/** Rows with a hairline between them. */
+@Composable
+private fun <T> Rows(rows: List<T>, row: @Composable (T) -> Unit) {
+    val colors = WorkisTheme.colors
+    rows.forEachIndexed { i, r ->
+        if (i > 0) HorizontalDivider(color = colors.border)
+        row(r)
+    }
+}
+
+@Composable
+private fun Empty(words: String) {
+    Text(words, fontSize = 13.sp, lineHeight = 18.sp, color = WorkisTheme.colors.faint)
+}
+
+@Composable
+private fun levelWord(code: String): String = when (code) {
+    "acil45" -> stringResource(R.string.cargo_level_acil45)
+    "ayni_gun" -> stringResource(R.string.cargo_level_ayni_gun)
+    "ertesi_gun" -> stringResource(R.string.cargo_level_ertesi_gun)
+    else -> code
+}
+
+@Composable
+private fun ObjectionRow(rv: CargoNetObjection, enabled: Boolean, onDecide: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                rv.carrier.orEmpty(), fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+            )
+            Text("★".repeat((rv.rating ?: 0).coerceIn(0, 5)), fontSize = 12.sp, color = Beige)
+            Spacer(Modifier.weight(1f))
+            Text(rv.shipmentNumber.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+        }
+        rv.by?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, color = colors.muted) }
+        rv.comment?.takeIf { it.isNotEmpty() }?.let { Text("“$it”", fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink) }
+        Text(
+            stringResource(R.string.cargo_net_objection_word) + ": " + rv.objection.orEmpty() +
+                (rv.objectedAt?.takeIf { it.isNotEmpty() }?.let { " · " + WorkisClock.stamp(it) } ?: ""),
+            fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { onDecide("keep") }, enabled = enabled) {
+                Text(stringResource(R.string.cargo_net_keep), fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink)
+            }
+            OutlinedButton(onClick = { onDecide("remove") }, enabled = enabled) {
+                Text(stringResource(R.string.cargo_net_remove), fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BroadcastRow(b: CargoNetBroadcast) {
+    val colors = WorkisTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text("${b.pickup.orEmpty()} → ${b.dropoff.orEmpty()}", fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 19.sp, color = colors.ink)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val words = listOfNotNull(
+                b.buyer?.takeIf { it.isNotEmpty() },
+                b.level?.takeIf { it.isNotEmpty() }?.let { levelWord(it) },
+                b.ageMin?.let { "$it " + stringResource(R.string.cargo_net_min) },
+            ).joinToString(" · ")
+            Text(words, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, modifier = Modifier.weight(1f))
+            b.feeUsd?.let { Text(WorkisMoney.text(it, "USD"), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.ink) }
+        }
+    }
+}
+
+@Composable
+private fun ShipmentRow(sh: CargoNetShipment) {
+    val colors = WorkisTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(sh.number.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
+            sh.statusLabel?.takeIf { it.isNotEmpty() }?.let { StatusPill(it) }
+            Spacer(Modifier.weight(1f))
+            sh.promisedAt?.takeIf { it.isNotEmpty() }?.let {
+                Text(WorkisClock.stamp(it), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+            }
+        }
+        Text(
+            listOfNotNull(sh.carrier?.takeIf { it.isNotEmpty() }, "${sh.pickup.orEmpty()} → ${sh.dropoff.orEmpty()}").joinToString(" · "),
+            fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted,
+        )
+    }
+}
+
+@Composable
+private fun RunRow(r: CargoNetRun) {
+    val colors = WorkisTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(r.plate.orEmpty(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.ink)
+            Text(r.carrier.orEmpty(), fontSize = 12.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Text("${r.done ?: 0}/${r.stops ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.ink)
+        }
+        r.aiNote?.takeIf { it.isNotEmpty() }?.let {
+            Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun VehicleRow(v: CargoNetVehicle, carrier: String, planning: String?, onPlan: () -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                listOfNotNull(v.plate?.takeIf { it.isNotEmpty() }, v.kindLabel?.takeIf { it.isNotEmpty() }).joinToString(" · "),
+                fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.ink,
+            )
+            if (carrier.isNotEmpty()) Text(carrier, fontSize = 12.sp, color = colors.muted)
+        }
+        if (planning != null && planning == v.id) {
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Kiremit500)
+        } else {
+            OutlinedButton(onClick = onPlan, enabled = planning == null && v.id != null) {
+                Text(stringResource(R.string.cargo_net_plan), fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TariffRow(row: CargoNetTariff, typed: String, onType: (String) -> Unit) {
+    val colors = WorkisTheme.colors
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(levelWord(row.level.orEmpty()), fontSize = 14.sp, color = colors.ink, modifier = Modifier.weight(1f))
+        BasicTextField(
+            value = typed, onValueChange = onType, singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            textStyle = TextStyle(fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink, textAlign = TextAlign.End).readingStep(),
+            cursorBrush = SolidColor(Kiremit500),
+            modifier = Modifier
+                .width(110.dp)
+                .border(1.dp, colors.border, RoundedCornerShape(10.dp))
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+        )
+        Text("USD", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.faint)
+    }
+}

@@ -86,6 +86,11 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   above the button, "değiştir" sheet, `needsChoice` chips; build sends `{into}`|`{newTitle}`, collect `listId`|`title`) and `memory`
   (the line above the reading; chips tick rows LOCALLY by `partnerId`, never sent) — `JowiCardMemory.kt`; history rows carry neither,
   the session keeps its values (`destPicks`/`keptMatch`/`KeptNeed`).
+- Console gate (ledger 113): the console opens on `auth/workspaces/` → `workis.console` (`{seat, pages, jowi}` | null), NOT on role
+  3/4 — the role decides only while that answer is pending or when the key is absent (`WorkisSide.consoleSent`; `ConsoleKey` keeps a
+  sent null apart from an absent key). Doors come from `pages` (`ConsoleScreens` in `ConsoleRoot.kt`); without `panel` no
+  `console/summary/` call, the root is a door list and the first page opens once per launch; `jowi: false` takes the Jowi tab off.
+  `seat` is read for no permission. Kargo (ledger 114, page `cargo`) = `ConsoleCargoScreen.kt`.
 - Tab sets: role 3/4 and 5 → Panel · Hesap · Jowi; others → Pazar|Başvuru · Hesap · Jowi. Talepler (`cases/`) is retired.
   `GET auth/workspaces/` (`Graph.workspaces`, read once per session) adds Kararlar when a HOSPITALITY room exists, takes Başvuru
   off, and takes the Jowi tab off when the account is Jowi-only (a room and `workis.hasSeat != true`).

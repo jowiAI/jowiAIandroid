@@ -36,6 +36,9 @@ class ConsoleViewModel : ViewModel() {
     var laneData by mutableStateOf<JowiAnsweredLane?>(null)
     var laneError by mutableStateOf<String?>(null)
 
+    /** A console without the Panel page opened its first page already — once per launch (ledger 113). */
+    var openedFirst = false
+
     var loading by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     var busyId by mutableStateOf<String?>(null) // id whose action is in flight

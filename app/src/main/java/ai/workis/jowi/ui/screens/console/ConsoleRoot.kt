@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.workis.jowi.R
+import kotlinx.coroutines.launch
 import ai.workis.jowi.data.ScreenContext
 import ai.workis.jowi.data.ApplicationRow
 import ai.workis.jowi.data.JowiAnswered
@@ -80,11 +81,43 @@ sealed interface ConsoleDest {
     data class Family(val seller: String, val name: String?, val id: String) : ConsoleDest
     /** Gruplar (ledger 62): the Workis groups page, roles 3 | 4. */
     data object Groups : ConsoleDest
+    /** Kargo (ledger 114): the network's control tower, page key `cargo`. */
+    data object Cargo : ConsoleDest
+}
+
+/**
+ * The console pages this app has a screen for, in the web menu's order (ledger 113). A key
+ * the server sends and the app cannot draw is skipped.
+ */
+private val ConsoleScreens = listOf("panel", "apps", "partners", "queries", "cargo", "knowledge", "products", "groups")
+
+/** The door a page key opens; "conversations" rides with `queries` (the same page on the web). */
+private fun destOf(page: String): ConsoleDest? = when (page) {
+    "apps" -> ConsoleDest.Pipeline
+    "partners" -> ConsoleDest.Partners()
+    "queries" -> ConsoleDest.Questions()
+    "conversations" -> ConsoleDest.Conversations
+    "cargo" -> ConsoleDest.Cargo
+    "knowledge" -> ConsoleDest.Knowledge
+    "products" -> ConsoleDest.CatalogSellers
+    "groups" -> ConsoleDest.Groups
+    else -> null
 }
 
 @Composable
 fun ConsoleRoot(vm: ConsoleViewModel = viewModel()) {
     var dest by remember { mutableStateOf<ConsoleDest>(ConsoleDest.Home) }
+    // `workis.console` from `auth/workspaces/` (ledger 113): null only while that answer is
+    // pending or on a server that never sent the key — then every page, as before
+    val workspaces by Graph.workspaces.value.collectAsState()
+    val console = workspaces?.workis?.consoleValue
+    val pages = (console?.pages ?: ConsoleScreens).filter { it in ConsoleScreens }
+    // a console without the Panel opens on the first page of its menu, once per launch
+    LaunchedEffect(console) {
+        if (!vm.openedFirst && console != null && "panel" !in pages) {
+            pages.firstOrNull()?.let(::destOf)?.let { vm.openedFirst = true; dest = it }
+        }
+    }
 
     BackHandler(enabled = dest != ConsoleDest.Home) {
         dest = when (val d = dest) {
@@ -95,7 +128,8 @@ fun ConsoleRoot(vm: ConsoleViewModel = viewModel()) {
     }
 
     when (val d = dest) {
-        is ConsoleDest.Home -> ConsoleHome(vm) { dest = it }
+        is ConsoleDest.Home -> ConsoleHome(vm, console, pages) { dest = it }
+        ConsoleDest.Cargo -> ConsoleSub(stringResource(R.string.cargo_net_title), { dest = ConsoleDest.Home }) { ConsoleCargoScreen() }
         is ConsoleDest.Pipeline -> ConsoleSub(stringResource(R.string.console_all_apps), { dest = ConsoleDest.Home }) {
             ConsolePipeline(vm) { dest = ConsoleDest.Detail(it) }
         }
@@ -181,22 +215,41 @@ fun ConsoleSub(
 }
 
 @Composable
-private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
+private fun ConsoleHome(vm: ConsoleViewModel, console: ai.workis.jowi.data.WorkspaceConsole?, pages: List<String>, onOpen: (ConsoleDest) -> Unit) {
     // a tab root: no seller screen is open (2026-09-17)
     LaunchedEffect(Unit) { ScreenContext.clear() }
+    fun has(page: String) = page in pages
+    val hasPanel = has("panel")
 
     val colors = WorkisTheme.colors
-    LaunchedEffect(Unit) { if (vm.summary == null) vm.loadSummary() }
-    val s = vm.summary
+    // The menu follows the coordinator's ticks (ledger 113): `auth/workspaces/` is read again
+    // every time the root appears — coming back from a page that answered 403 lands here.
+    LaunchedEffect(Unit) { Graph.workspaces.refresh() }
+    // only what this console may read: `console/summary/` answers 403 without the Panel page
+    LaunchedEffect(hasPanel) { if (hasPanel && vm.summary == null) vm.loadSummary() }
+    val s = if (hasPanel) vm.summary else null
     // Yazışmalar counts OPEN threads: the summary's field, else the open rows of the list
     // (fetched only when the summary lacks the field) — never the raw list size
-    LaunchedEffect(s) { if (s != null && s.openConversations == null && vm.conversations == null) vm.loadConversations() }
+    LaunchedEffect(s) { if (has("queries") && s != null && s.openConversations == null && vm.conversations == null) vm.loadConversations() }
     val openConversations = s?.openConversations ?: vm.conversations?.conversations?.count { it.open == true }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
 
+    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            refreshing = true
+            scope.launch {
+                Graph.workspaces.refresh()
+                if (hasPanel) vm.loadSummary()
+                refreshing = false
+            }
+        },
+        modifier = Modifier.fillMaxSize().background(colors.canvas),
+    ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colors.canvas)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp),
     ) {
@@ -212,18 +265,52 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
         }
         Spacer(Modifier.height(14.dp))
 
+        if (console?.pages?.isEmpty() == true) {
+            // a pilot with nothing ticked yet
+            Text(
+                stringResource(R.string.console_no_pages), fontSize = 15.sp, lineHeight = 21.sp, color = colors.muted,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
+            )
+        } else if (pages.isEmpty()) {
+            // ticked pages, none of which has a screen here: the sentence and the door to the web console
+            val context = androidx.compose.ui.platform.LocalContext.current
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(colors.surface, RoundedCornerShape(20.dp))
+                    .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(stringResource(R.string.console_pages_on_web), fontSize = 14.sp, lineHeight = 20.sp, color = colors.muted)
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { ai.workis.jowi.ui.components.openInApp(context, "https://workis.ai/workis/console/") },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.console_open), fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink) }
+            }
+        } else if (!hasPanel) {
+            // the menu of a console that has no Panel: one door per ticked page, in the server's order
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                pages.forEach { page ->
+                    PageDoor(page, onOpen)
+                    if (page == "queries") PageDoor("conversations", onOpen)
+                }
+            }
+        } else {
         // The web Panel's order, tile for tile (ledger 61): two big tiles (applications,
         // questions), the count rows (partners, correspondence, experts), the two activity
         // tiles, the sidebar's doors, then "Jowi yanıtladı" and "/ Soru konuları".
         // Every tile IS the door to its surface — no duplicated list previews below.
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.height(160.dp)) {
+        // a door is drawn only for a page this console holds (`pages`, ledger 113)
+        if (has("apps") || has("queries")) Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.height(160.dp)) {
             // the web hides the "onay bekliyor" line at zero
-            BigTile(
+            if (!has("apps")) Spacer(Modifier.weight(1f)) else BigTile(
                 icon = WorkisIcons.Tray, number = s?.newApplications, label = stringResource(R.string.stat_new_apps),
                 sub = s?.awaitingApproval?.takeIf { it > 0 }?.let { "$it " + stringResource(R.string.stat_awaiting) },
                 modifier = Modifier.weight(1f),
             ) { onOpen(ConsoleDest.Pipeline) }
-            BigTile(
+            if (!has("queries")) Spacer(Modifier.weight(1f)) else BigTile(
                 icon = Icons.Filled.Email, number = s?.openQuestions, label = stringResource(R.string.stat_open_q),
                 sub = s?.oldestQuestionDays?.takeIf { it > 0 }?.let { stringResource(R.string.oldest_word) + " $it " + stringResource(R.string.days_word) },
                 modifier = Modifier.weight(1f),
@@ -232,11 +319,11 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
         Spacer(Modifier.height(14.dp))
 
         // the count rows: Partnerler · Yazışmalar · Uzmanlar (coordinator only, null for a lead — half a row, as on the web)
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            CapsuleTile(WorkisIcons.Building, stringResource(R.string.partners_title), s?.activePartners, Modifier.weight(1f)) { onOpen(ConsoleDest.Partners()) }
-            CapsuleTile(WorkisIcons.Bubble, stringResource(R.string.conversations_title), openConversations, Modifier.weight(1f)) { onOpen(ConsoleDest.Conversations) }
+        if (has("partners") || has("queries")) Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            if (!has("partners")) Spacer(Modifier.weight(1f)) else CapsuleTile(WorkisIcons.Building, stringResource(R.string.partners_title), s?.activePartners, Modifier.weight(1f)) { onOpen(ConsoleDest.Partners()) }
+            if (!has("queries")) Spacer(Modifier.weight(1f)) else CapsuleTile(WorkisIcons.Bubble, stringResource(R.string.conversations_title), openConversations, Modifier.weight(1f)) { onOpen(ConsoleDest.Conversations) }
         }
-        s?.experts?.let { n ->
+        s?.experts?.takeIf { has("partners") }?.let { n ->
             Spacer(Modifier.height(14.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 CapsuleTile(WorkisIcons.GraduationCap, stringResource(R.string.tile_experts), n, Modifier.weight(1f)) { onOpen(ConsoleDest.Partners(initialSeat = "expert")) }
@@ -269,26 +356,33 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
         // Ürünler — the seller picker (a lead sees only the sellers that opened their
         // catalogue to it): the web SIDEBAR's doors, kept because the phone has no sidebar.
         // No count — the summary never carries `knowledgeUnits`.
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            CapsuleDoor(WorkisIcons.Pencil, stringResource(R.string.expert_knowledge_title), Modifier.weight(1f)) { onOpen(ConsoleDest.Knowledge) }
-            CapsuleDoor(WorkisIcons.ShippingBox, stringResource(R.string.catalog_title), Modifier.weight(1f)) { onOpen(ConsoleDest.CatalogSellers) }
+        if (has("knowledge") || has("products")) {
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                if (!has("knowledge")) Spacer(Modifier.weight(1f)) else CapsuleDoor(WorkisIcons.Pencil, stringResource(R.string.expert_knowledge_title), Modifier.weight(1f)) { onOpen(ConsoleDest.Knowledge) }
+                if (!has("products")) Spacer(Modifier.weight(1f)) else CapsuleDoor(WorkisIcons.ShippingBox, stringResource(R.string.catalog_title), Modifier.weight(1f)) { onOpen(ConsoleDest.CatalogSellers) }
+            }
+            Spacer(Modifier.height(14.dp))
         }
-        Spacer(Modifier.height(14.dp))
-        // Gruplar (ledger 62) — the Workis groups page, half width under Bilgi / Ürünler
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            CapsuleDoor(WorkisIcons.Grid, stringResource(R.string.groups_door), Modifier.weight(1f)) { onOpen(ConsoleDest.Groups) }
-            Spacer(Modifier.weight(1f))
+        // Gruplar (ledger 62) — the Workis groups page — and Kargo, the network's control
+        // tower (ledger 114), under Bilgi / Ürünler; one alone stays half width
+        if (has("groups") || has("cargo")) {
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                if (has("groups")) CapsuleDoor(WorkisIcons.Grid, stringResource(R.string.groups_door), Modifier.weight(1f)) { onOpen(ConsoleDest.Groups) }
+                if (has("cargo")) CapsuleDoor(WorkisIcons.Truck, stringResource(R.string.cargo_title), Modifier.weight(1f)) { onOpen(ConsoleDest.Cargo) }
+                if (!(has("groups") && has("cargo"))) Spacer(Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(14.dp))
         }
-        Spacer(Modifier.height(14.dp))
 
-        s?.jowiAnswered?.takeIf { (it.total ?: 0) > 0 }?.let { ja ->
+        // web order: Jowi answered above the question topics (both open Sorular)
+        s?.jowiAnswered?.takeIf { has("queries") && (it.total ?: 0) > 0 }?.let { ja ->
             JowiAnsweredBlock(ja) { source, topic -> onOpen(ConsoleDest.Questions(openJowi = true, source = source, topic = topic)) }
             Spacer(Modifier.height(14.dp))
         }
 
         // "/ Soru konuları" — the web's own section under "Jowi yanıtladı" (the count and the
         // age moved up into the big tile). Header → the FULL list; each bento cell → that topic.
-        val topics = s?.questionTopics.orEmpty().filter { !it.topic.isNullOrEmpty() }.sortedByDescending { it.count ?: 0 }
+        val topics = (if (has("queries")) s?.questionTopics.orEmpty() else emptyList()).filter { !it.topic.isNullOrEmpty() }.sortedByDescending { it.count ?: 0 }
         if (topics.isNotEmpty()) {
             Column(
                 modifier = Modifier
@@ -327,8 +421,27 @@ private fun ConsoleHome(vm: ConsoleViewModel, onOpen: (ConsoleDest) -> Unit) {
             Spacer(Modifier.height(12.dp))
             Text(it, color = colors.danger, fontSize = 13.sp)
         }
+        } // the Panel board
         Spacer(Modifier.height(30.dp))
     }
+    }
+}
+
+/** One door of a console that has no Panel — the page's own word and icon, full width. */
+@Composable
+private fun PageDoor(page: String, onOpen: (ConsoleDest) -> Unit) {
+    val dest = destOf(page) ?: return
+    val (label, icon) = when (page) {
+        "apps" -> stringResource(R.string.console_all_apps) to WorkisIcons.Tray
+        "partners" -> stringResource(R.string.partners_title) to WorkisIcons.Building
+        "queries" -> stringResource(R.string.questions_title) to Icons.Filled.Email
+        "conversations" -> stringResource(R.string.conversations_title) to WorkisIcons.Bubble
+        "cargo" -> stringResource(R.string.cargo_title) to WorkisIcons.Truck
+        "knowledge" -> stringResource(R.string.expert_knowledge_title) to WorkisIcons.Pencil
+        "products" -> stringResource(R.string.catalog_title) to WorkisIcons.ShippingBox
+        else -> stringResource(R.string.groups_door) to WorkisIcons.Grid
+    }
+    CapsuleDoor(icon, label, Modifier.fillMaxWidth()) { onOpen(dest) }
 }
 
 /**
