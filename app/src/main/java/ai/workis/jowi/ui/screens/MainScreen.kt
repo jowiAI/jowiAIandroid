@@ -75,10 +75,7 @@ fun MainScreen() {
     // has no Workis seat and never will. A room and no seat = Jowi is this account's whole
     // app, so the Jowi tab goes too: she writes questions and instructions into ONE field.
     val workspaces by Graph.workspaces.value.collectAsState()
-    // `workspacesAsked`: the read came back, answer or not — a failed read must not hold the
-    // trading side's own question (`company/`) back for ever
-    var workspacesAsked by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { if (workspaces == null) Graph.workspaces.refresh(); workspacesAsked = true }
+    LaunchedEffect(Unit) { if (workspaces == null) Graph.workspaces.refresh() }
     val jowiWorkspace = workspaces?.hasHospitality == true
     val jowiOnly = jowiWorkspace && workspaces?.workis?.hasSeat != true
     // The console opens on the server's word (`workis.console`, ledger 113), not on a role
@@ -89,10 +86,10 @@ fun MainScreen() {
     val isCoordinator = if (side?.consoleSent == true) side.consoleValue != null else roleConsole
     // the console's Jowi field is a tick of its own for a pilot — the server would answer 403
     val consoleJowiOff = isCoordinator && side?.consoleValue?.jowi == false
-    // a console account has no trading tab: `company/` is asked only for the others, and
-    // only once the workspaces answer says which this is (a pilot's role number does not)
-    val knowsConsole = workspaces != null || workspacesAsked || roleConsole
-    LaunchedEffect(knowsConsole, isCoordinator) { if (knowsConsole && !isCoordinator && !isExpert) Graph.partner.refresh() }
+    // `company/` is asked at launch again (ledger 117): Django answers a pilot 403
+    // `seat: "operator"` like roles 3|4, which draws neither Pazar nor Başvuru whichever
+    // answer arrives first — no waiting for `auth/workspaces/`.
+    LaunchedEffect(Unit) { if (!roleConsole && !isExpert) Graph.partner.refresh() }
 
     // Until company/ answers, the partner Panel tab stays (with its spinner) — never the
     // Başvuru tab, which is only for a 403 `seat:"none"` (2026-09-14: a stale verdict flashed it).
