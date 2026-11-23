@@ -69,6 +69,8 @@ data class WorkisSide(
     val roles: List<String>? = null,
     val scope: String? = null,
     val canTrade: Boolean? = null,
+    /** Ledger 119: this seat's Jowi reads a photo (a buying seat) — absent on a server from before it. */
+    val canAskPhoto: Boolean? = null,
     /**
      * The console this account may open (Django 2026-11-21, ledger 113) — kept as the raw
      * element so "the key was sent, and it is null" (no console) can be told from "the key is

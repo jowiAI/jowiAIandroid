@@ -2,4 +2,6 @@
 <!-- Files handed to other apps through the share sheet (guide PDF) live under cache/share. -->
 <paths>
     <cache-path name="share" path="share/" />
+    <!-- the system camera writes the one photo Jowi is asked with here (ledger 119) -->
+    <cache-path name="photo" path="photo/" />
 </paths>

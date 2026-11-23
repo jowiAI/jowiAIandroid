@@ -91,6 +91,11 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   sent null apart from an absent key). Doors come from `pages` (`ConsoleScreens` in `ConsoleRoot.kt`); without `panel` no
   `console/summary/` call, the root is a door list and the first page opens once per launch; `jowi: false` takes the Jowi tab off.
   `seat` is read for no permission. Kargo (ledger 114, page `cargo`) = `ConsoleCargoScreen.kt`.
+- Asking with a photo (ledger 119, `ui/screens/JowiPhoto.kt`): the "+" inside the ask field (system camera via `TakePicture` into
+  `cache/photo`, system picker — no permission of the app's own), drawn only on a buying seat (`workis.canAskPhoto`, else not console
+  and not expert). The photo waits in the view model (`staged`), leaves as multipart `image` (JPEG, long edge ≤ 2000) with `q` or
+  alone, never through `ask/preview/`; a photo-alone row's text is `PhotoMark` and is never printed. The second call (ticks, chip,
+  "Listeye ekle") is JSON with `item` + `photoKey` — the photo is never re-uploaded.
 - Tab sets: role 3/4 and 5 → Panel · Hesap · Jowi; others → Pazar|Başvuru · Hesap · Jowi. Talepler (`cases/`) is retired.
   `GET auth/workspaces/` (`Graph.workspaces`, read once per session) adds Kararlar when a HOSPITALITY room exists, takes Başvuru
   off, and takes the Jowi tab off when the account is Jowi-only (a room and `workis.hasSeat != true`).

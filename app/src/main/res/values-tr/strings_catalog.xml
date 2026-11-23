@@ -680,6 +680,16 @@
     <string name="jowi_note_title">Jowi\'nin notu</string>
     <string name="jowi_open_link">Aç</string>
     <string name="jowi_option_other_hint">Kendi cümlenizle yazın — ya da gördüğünüz etiketin adını verin.</string>
+    <string name="jowi_photo_add">Fotoğrafla sor</string>
+    <string name="jowi_photo_choose">Fotoğraflardan seç</string>
+    <string name="jowi_photo_hint">Bundan istiyorsanız böyle gönderin; bir sorunuz varsa aşağıya yazın.</string>
+    <string name="jowi_photo_label">Fotoğraf</string>
+    <string name="jowi_photo_reading">Jowi fotoğrafa bakıyor</string>
+    <string name="jowi_photo_remove">Fotoğrafı kaldır</string>
+    <string name="jowi_photo_suggestions">Katalogdaki ürünler</string>
+    <string name="jowi_photo_take">Fotoğraf çek</string>
+    <string name="jowi_photo_unreadable">Bu fotoğraf açılamadı. Başka bir fotoğraf seçin.</string>
+    <string name="jowi_photo_uploading">Fotoğraf yükleniyor</string>
     <string name="jowi_pick">Jowi\'nin önerisi</string>
     <string name="jowi_prompt">Jowi\'ye sor…</string>
     <string name="jowi_scope_general">Genel</string>

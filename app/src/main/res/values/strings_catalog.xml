@@ -680,6 +680,16 @@
     <string name="jowi_note_title">Jowi\'s note</string>
     <string name="jowi_open_link">Open</string>
     <string name="jowi_option_other_hint">Type it in your own words — or name the label you see.</string>
+    <string name="jowi_photo_add">Ask with a photo</string>
+    <string name="jowi_photo_choose">Choose from Photos</string>
+    <string name="jowi_photo_hint">Send it as it is to ask for this product, or type a question below.</string>
+    <string name="jowi_photo_label">Photo</string>
+    <string name="jowi_photo_reading">Jowi is looking at the photo</string>
+    <string name="jowi_photo_remove">Remove the photo</string>
+    <string name="jowi_photo_suggestions">In the catalogue</string>
+    <string name="jowi_photo_take">Take a photo</string>
+    <string name="jowi_photo_unreadable">This photo could not be opened. Choose another one.</string>
+    <string name="jowi_photo_uploading">Uploading the photo</string>
     <string name="jowi_pick">Jowi\'s pick</string>
     <string name="jowi_prompt">Ask Jowi…</string>
     <string name="jowi_scope_general">General</string>

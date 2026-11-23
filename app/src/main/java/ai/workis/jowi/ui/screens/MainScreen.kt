@@ -203,7 +203,9 @@ fun MainScreen() {
                 )
                 MainTab.Decisions -> DecisionsScreen(workspace = workspaces?.hospitality)
                 MainTab.Account -> AccountScreen(onReaccept = { showReaccept = true }, onDeparture = { showDeparture = true })
-                MainTab.Jowi -> JowiScreen()
+                // ledger 119: the buying seat's Jowi reads a photo — the server's word when it sends
+                // one (`workis.canAskPhoto`), else: not a console seat and not an expert
+                MainTab.Jowi -> JowiScreen(photo = side?.canAskPhoto ?: (!isCoordinator && !isExpert))
             }
         }
     }

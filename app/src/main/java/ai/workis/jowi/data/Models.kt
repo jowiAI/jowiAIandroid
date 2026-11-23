@@ -227,6 +227,13 @@ data class AskBody(
     val listId: String? = null,
     /** The reader's own name for a new list (else the item's name) — part of the shape, not sent today. */
     val title: String? = null,
+    /**
+     * A card born from a photo (ledger 119): what Jowi read it as names the list's row, and the
+     * list keeps the photo — the second call never re-uploads it. `q` is empty when the photo
+     * was sent without words.
+     */
+    val item: String? = null,
+    val photoKey: String? = null,
 )
 
 /**
@@ -459,9 +466,26 @@ data class AskSeller(
     val rowName get() = short?.takeIf { it.isNotEmpty() } ?: name.orEmpty()
 }
 
+/** A catalogue product under an identification answer (ledger 119): `{productId, name, seller, imageKey}`. */
+@Serializable
+data class AskSuggestion(
+    @Serializable(with = FlexString::class) val productId: String? = null,
+    val name: String? = null,
+    val seller: String? = null,
+    val imageKey: String? = null,
+)
+
 @Serializable
 data class AskResponse(
     val success: Boolean = false,
+    /**
+     * A question asked with a photo (ledger 119): where the firm's own copy sits (null when it
+     * could not be kept), the server's word that the item can be sourced ("Listeye ekle"), and
+     * the catalogue products of an identification answer (`source: "photo"`, at most three).
+     */
+    val photoKey: String? = null,
+    @Serializable(with = FlexBool::class) val canSource: Boolean? = null,
+    val suggestions: List<AskSuggestion>? = null,
     val answer: String? = null,
     val source: String? = null, // "page" | "chain" | "knowledge" | "model" | "knowledge+model" | "match" …
     /** Seat-aware ask: which chain answered — "buyer" | "console" | "expert". */
@@ -636,6 +660,14 @@ data class AskTurn(
 @Serializable
 data class AskLine(
     @Serializable(with = FlexString::class) val id: String? = null,
+    /**
+     * The photo a question was asked with (ledger 119) — the firm's own key, drawn through
+     * `image/?k=`; a photo sent without words has `text == "📷"`. A `source: "photo"` answer row
+     * may carry `canSource` / `suggestions` too (Django's second round) — read when sent.
+     */
+    val imageKey: String? = null,
+    @Serializable(with = FlexBool::class) val canSource: Boolean? = null,
+    val suggestions: List<AskSuggestion>? = null,
     /** Only a turn that did nothing can be withdrawn — the server decides. */
     val canHide: Boolean? = null,
     val hidden: Boolean? = null,

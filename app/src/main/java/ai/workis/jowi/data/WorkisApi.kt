@@ -874,6 +874,14 @@ interface WorkisApi {
     @POST("workis/ask/")
     suspend fun ask(@Body body: AskBody): AskResponse
 
+    /** Ledger 119: a question with a photo — `image` + the same fields as form values (`q` may be empty). */
+    @Multipart
+    @POST("workis/ask/")
+    suspend fun askPhoto(
+        @Part image: okhttp3.MultipartBody.Part,
+        @PartMap fields: Map<String, @JvmSuppressWildcards okhttp3.RequestBody>,
+    ): AskResponse
+
     /** Compose-time rewrite — the caller falls back to the typed text on failure/timeout. */
     @POST("workis/ask/preview/")
     suspend fun askPreview(@Body body: AskPreviewBody): AskPreview

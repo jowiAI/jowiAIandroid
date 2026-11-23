@@ -147,6 +147,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import retrofit2.HttpException
 import ai.workis.jowi.ui.theme.readingSize
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.ui.graphics.asImageBitmap
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /** A purchase request read by Jowi — the parsed line + the catalogue's sellers (price-blind). */
 data class AskMatch(
@@ -259,7 +264,26 @@ data class JowiLine(
     val needMovedId: String? = null,
     /** The card arrived by such a move: `text` is the main box's line ("Kartı güncelledim: …"), not the card's job line. */
     val needAmend: Boolean = false,
+    /**
+     * Asked with a photo (ledger 119). On the asker's line: the picture just sent (this session)
+     * or the firm's own key of it (a history row). On a reply: it answers a photo (`photoAsked`),
+     * that photo's key (sent back with the ticks; null when the server could not keep it), what
+     * Jowi read it as, the server's word that it can be sourced, and the catalogue products.
+     */
+    val image: android.graphics.Bitmap? = null,
+    val imageKey: String? = null,
+    val photoAsked: Boolean = false,
+    val photoKey: String? = null,
+    val photoItem: String? = null,
+    val canSource: Boolean = false,
+    val suggestions: List<ai.workis.jowi.data.AskSuggestion> = emptyList(),
 )
+
+/** The row's text for a photo sent without words — the server logs the same mark; it is never printed. */
+const val PhotoMark = "📷"
+
+/** What a photo answer carried beyond its text — kept for the session by the photo's key (older history rows lack it). */
+private data class PhotoExtra(val item: String?, val canSource: Boolean, val suggestions: List<ai.workis.jowi.data.AskSuggestion>)
 
 /**
  * What this session knows of a need card. The history row carries the card and its list since
@@ -321,6 +345,39 @@ class JowiViewModel : ViewModel() {
      */
     private val keptNeeds = HashMap<String, KeptNeed>()
 
+    // ---- asking with a photo (ledger 119) ----
+    /** The photo chosen and not sent yet — it waits above the ask field. */
+    var staged by mutableStateOf<StagedPhoto?>(null)
+    /** The picker's file could not be opened — the app's own sentence, nothing reached the server. */
+    var photoUnreadable by mutableStateOf(false)
+    /** Where a photo's request stands: "upload" until the last byte has left, then "reading". */
+    var photoStage by mutableStateOf<String?>(null)
+        private set
+    private val photoExtras = HashMap<String, PhotoExtra>()
+
+    fun stage(p: StagedPhoto?) { photoUnreadable = p == null; if (p != null) staged = p }
+
+    /** The waiting photo goes out with the words, or alone — never through the compose-time rewrite. */
+    fun sendStaged(typed: String) {
+        val p = staged ?: return
+        if (hasPending || clarify != null || previewing) return
+        staged = null; photoUnreadable = false
+        send(typed.trim(), null, photo = p)
+    }
+
+    /** "Listeye ekle" under a photo no seller carries: `{q: item, item, createList, photoKey}`, a turn of its own. */
+    fun sourceFromPhoto(line: JowiLine) {
+        val item = line.photoItem?.takeIf { it.isNotEmpty() } ?: return
+        if (hasPending) return
+        send(item, null, createList = true, item = item, photoKey = line.photoKey, unscoped = true)
+    }
+
+    /** That request was made (this session or an earlier one): the door is gone. */
+    fun sourcedLater(line: JowiLine): Boolean {
+        val i = lines.indexOfFirst { it.id == line.id }
+        return i >= 0 && lines.drop(i + 1).any { it.question == line.photoItem && it.listId != null }
+    }
+
     private var nextId = 1L
     private fun newId() = nextId++
     private val lang get() = Graph.language.value
@@ -350,6 +407,7 @@ class JowiViewModel : ViewModel() {
     ): List<JowiLine> {
         val out = ArrayList<JowiLine>(rows.size)
         var lastQ: String? = null
+        var lastPhoto: String? = null
         rows.forEach { l ->
             // a withdrawn turn: a stub in its place, the answer rows folded into it
             if (l.hidden == true) {
@@ -375,7 +433,22 @@ class JowiViewModel : ViewModel() {
                 question = if (isUser) null else lastQ,
                 at = l.at, serverId = l.id, canHide = l.canHide == true,
                 canRematch = match != null && l.canRematch == true,
+                imageKey = l.imageKey?.takeIf { isUser && it.isNotEmpty() },
             )
+            // a reply under a photo question answers THAT photo; what the live answer carried
+            // beyond its text is the row's when the server sends it, else this session's
+            val photo = lastPhoto
+            if (!isUser && photo != null) {
+                line = line.copy(photoAsked = true, photoKey = photo)
+                if (l.source == "photo") {
+                    val e = photoExtras[photo]
+                    line = line.copy(
+                        photoItem = l.item?.takeIf { it.isNotEmpty() } ?: e?.item,
+                        canSource = l.canSource ?: (e?.canSource == true),
+                        suggestions = l.suggestions ?: e?.suggestions.orEmpty(),
+                    )
+                }
+            }
             if (!isUser) {
                 val key = lastQ.orEmpty() + "\u001F" + l.text.orEmpty()
                 kept[key]?.let { (opts, picked) ->
@@ -409,7 +482,7 @@ class JowiViewModel : ViewModel() {
                 }
             }
             out += line
-            if (isUser) lastQ = l.text
+            if (isUser) { lastQ = l.text; lastPhoto = line.imageKey }
         }
         return out
     }
@@ -633,13 +706,19 @@ class JowiViewModel : ViewModel() {
     /** "Teklif topla": the same question again with createList — the server opens the chat-born list (pool) or records the demand gap. */
     fun collectQuotes(line: JowiLine) {
         val q = line.question ?: lines.lastOrNull { it.who == "user" }?.text ?: return
-        send(q, null, createList = true)
+        // a card born from a photo: `item` names the row, the list keeps the photo
+        if (line.photoAsked) send(line.match?.item?.takeIf { it.isNotEmpty() } ?: q, null, createList = true, item = line.match?.item, photoKey = line.photoKey)
+        else send(q, null, createList = true)
     }
 
     /** "Teklif topla" on a match card: the same sentence again, but the answer
      *  stays on THAT card — no new pair is drawn. */
     fun collectQuotesOnCard(line: JowiLine) {
-        val q = line.question ?: lines.lastOrNull { it.who == "user" }?.text ?: return
+        var q = line.question ?: lines.lastOrNull { it.who == "user" }?.text ?: return
+        // a card born from a photo (ledger 119): `item` names the list's row and `photoKey` lets the
+        // list keep its photo; a photo sent without words has no `q` (the mark is the row's, not a question)
+        val born = line.photoAsked
+        if (born && q == PhotoMark) q = ""
         val id = line.id
         val idx = lines.indexOfFirst { it.id == id }
         if (idx < 0 || lines[idx].collecting) return
@@ -670,6 +749,8 @@ class JowiViewModel : ViewModel() {
                         createList = true, screen = ctx?.screen, state = ctx?.state,
                         visible = ctx?.visible?.takeIf { it.isNotEmpty() }, seller = ctx?.seller,
                         picks = picks, listId = into, title = title,
+                        item = if (born) line.match?.item?.takeIf { it.isNotEmpty() } else null,
+                        photoKey = if (born) line.photoKey else null,
                     ),
                 )
             }.getOrNull()
@@ -769,10 +850,15 @@ class JowiViewModel : ViewModel() {
      * requested 2026-10-01; the app sends it as told).
      */
     fun refine(line: JowiLine, chip: AskOption) {
-        val q = line.question?.takeIf { it.isNotEmpty() } ?: return
+        var q = line.question?.takeIf { it.isNotEmpty() } ?: return
+        // a card born from a photo: the picture is not sent again and its words may only point
+        // at it ("bundan") — what Jowi read it as is the request the chip narrows; the photo's
+        // key rides along so the next card still carries it
+        val item = line.match?.item?.takeIf { line.photoAsked && it.isNotEmpty() }
+        if (item != null) q = item
         val idx = lines.indexOfFirst { it.id == line.id }
         if (idx >= 0) lines[idx] = lines[idx].copy(optionPicked = true)
-        send(q, null, hint = chip.label)
+        send(q, null, hint = chip.label, photoKey = if (item != null) line.photoKey else null)
     }
 
     /** The newest answer on screen (a withdrawn stub does not count). */
@@ -795,12 +881,16 @@ class JowiViewModel : ViewModel() {
     fun send(
         q: String, original: String?, createList: Boolean = false, hint: String? = null,
         ctxNeed: String? = null, chipList: String? = null,
+        item: String? = null, photoKey: String? = null, unscoped: Boolean = false, photo: StagedPhoto? = null,
     ) {
         val now = nowStamp()
         val userId = newId()
-        lines += JowiLine(id = userId, who = "user", text = q, original = original?.takeIf { it != q }, at = now)
+        // a photo sent alone: the row is its picture (the server logs the same mark for it)
+        val shown = if (photo != null && q.isEmpty()) PhotoMark else q
+        lines += JowiLine(id = userId, who = "user", text = shown, original = original?.takeIf { it != q }, at = now, image = photo?.image)
         val pendingId = newId()
-        lines += JowiLine(id = pendingId, who = "jowi", pending = true, question = q, at = now)
+        lines += JowiLine(id = pendingId, who = "jowi", pending = true, question = shown, at = now, photoAsked = photo != null || photoKey != null)
+        if (photo != null) photoStage = "upload"
         scrollTick++
         viewModelScope.launch {
             val i = { lines.indexOfFirst { it.id == pendingId } }
@@ -808,16 +898,31 @@ class JowiViewModel : ViewModel() {
                 // where the user is (2026-09-17): the server resolves "bu ürün" /
                 // "sağ üstteki düğme" against the snapshot the screens wrote
                 val ctx = ScreenContext.current
-                val r = Graph.api.ask(
+                val r = if (photo != null) {
+                    // multipart: `image` + the same fields as form values. A photo is a product ask
+                    // wherever it is sent from — no list / need context travels with it
+                    val text = "text/plain".toMediaType()
+                    val fields = buildMap {
+                        put("q", q.toRequestBody(text))
+                        put("page", askPage(ctx).toRequestBody(text))
+                        ctx?.screen?.let { put("screen", it.toRequestBody(text)) }
+                    }
+                    val body = PhotoBody(photo.jpeg) {
+                        viewModelScope.launch { if (photoStage == "upload") photoStage = "reading" }
+                    }
+                    Graph.api.askPhoto(MultipartBody.Part.createFormData("image", "photo.jpg", body), fields)
+                } else Graph.api.ask(
                     AskBody(
                         q = q, qOriginal = original?.takeIf { it != q },
-                        page = askPage(ctx), ctxList = chipList?.takeIf { it.isNotEmpty() } ?: ctxList(),
+                        page = askPage(ctx), ctxList = if (unscoped) null else chipList?.takeIf { it.isNotEmpty() } ?: ctxList(),
                         ctxNeed = ctxNeed?.takeIf { it.isNotEmpty() },
                         createList = if (createList) true else null,
                         screen = ctx?.screen, state = ctx?.state, visible = ctx?.visible?.takeIf { it.isNotEmpty() },
                         seller = ctx?.seller, hint = hint?.takeIf { it.isNotEmpty() },
+                        item = item?.takeIf { it.isNotEmpty() }, photoKey = photoKey?.takeIf { it.isNotEmpty() },
                     ),
                 )
+                if (photo != null) photoStage = null
                 val match = if (r.kind == "match") AskMatch(
                     r.item.orEmpty(), r.qty, r.unit, r.nProducts, r.approximate == true, r.listStage, r.sellers.orEmpty(),
                     products = r.products.orEmpty(), question = r.question, options = r.options.orEmpty(),
@@ -837,7 +942,16 @@ class JowiViewModel : ViewModel() {
                     options = r.options?.takeIf { it.isNotEmpty() && r.kind != "match" },
                     serverId = r.turn?.answerIds?.firstOrNull(),
                     need = r.need,
+                    // a follow-up of a photo card (chip, "Listeye ekle") keeps the key it was sent with
+                    photoKey = r.photoKey?.takeIf { it.isNotEmpty() } ?: photoKey?.takeIf { it.isNotEmpty() },
+                    photoItem = r.item?.takeIf { r.source == "photo" && it.isNotEmpty() },
+                    canSource = r.source == "photo" && r.canSource == true,
+                    suggestions = r.suggestions.orEmpty(),
                 )
+                r.photoKey?.takeIf { it.isNotEmpty() }?.let { k ->
+                    if (photo != null) lines.indexOfFirst { it.id == userId }.takeIf { it >= 0 }?.let { u -> lines[u] = lines[u].copy(imageKey = k) }
+                    if (r.source == "photo") photoExtras[k] = PhotoExtra(r.item, r.canSource == true, r.suggestions.orEmpty())
+                }
                 r.need?.let { n ->
                     // the main box moved an open card (`source: "need"` + `updated`, 2026-10-06):
                     // the SAME card (its needId) is re-drawn here, under this message — never a
@@ -871,8 +985,11 @@ class JowiViewModel : ViewModel() {
                 }
                 scrollTick++
             } catch (e: HttpException) {
+                // a refused photo (400 `code: "photo"`) carries its sentence in `error` — as it came
+                if (photo != null) photoStage = null
                 val idx = i(); if (idx >= 0) lines[idx] = lines[idx].copy(pending = false, error = messageFromBody(e, lang))
             } catch (e: Exception) {
+                if (photo != null) photoStage = null
                 val idx = i(); if (idx >= 0) lines[idx] = lines[idx].copy(pending = false, error = statusMessage(null, lang))
             }
         }
@@ -1014,7 +1131,7 @@ class JowiViewModel : ViewModel() {
 
 @OptIn(ExperimentalLayoutApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun JowiScreen(vm: JowiViewModel = viewModel()) {
+fun JowiScreen(photo: Boolean = false, vm: JowiViewModel = viewModel()) {
     val colors = WorkisTheme.colors
     // the list's "Cari" row (ledger 112): the account with that firm over the list, back = the list
     var cariFirm by rememberSaveable { mutableStateOf<String?>(null) }
@@ -1164,9 +1281,9 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
                         // answers stand as their bubbles above the card's latest reading
                         line.needAnswers.isNotEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             line.needAnswers.forEach { NeedAnswerBubble(it) }
-                            ReplyBubble(line, vm) { askFocus.requestFocus() }
+                            ReplyBubble(line, vm, ::putQuestion) { askFocus.requestFocus() }
                         }
-                        else -> ReplyBubble(line, vm) { askFocus.requestFocus() }
+                        else -> ReplyBubble(line, vm, ::putQuestion) { askFocus.requestFocus() }
                     }
                 }
                 vm.clarify?.let { (typed, reading) ->
@@ -1179,6 +1296,18 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
             }
         }
 
+        // ledger 119: the chosen photo waits above the field; a file that could not be opened says so
+        if (photo) {
+            if (vm.photoUnreadable) { PhotoNote(stringResource(R.string.jowi_photo_unreadable)); Spacer(Modifier.height(8.dp)) }
+            vm.staged?.let { p ->
+                StagedPhotoCard(
+                    p, busy = vm.busy || vm.clarify != null || vm.previewing,
+                    onRemove = { vm.staged = null },
+                    onSend = { val q = question.text; question = TextFieldValue(""); vm.sendStaged(q) },
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = question,
@@ -1190,6 +1319,8 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
                         color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 },
+                // the photo door: a "+" inside the field, at its leading edge (buying seats only)
+                leadingIcon = if (photo) { { PhotoDoor(enabled = !vm.busy, onStaged = vm::stage) } } else null,
                 singleLine = true,
                 shape = RoundedCornerShape(26.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -1198,8 +1329,13 @@ fun JowiScreen(vm: JowiViewModel = viewModel()) {
                 ),
                 modifier = Modifier.weight(1f).focusRequester(askFocus),
             )
-            val canSend = question.text.isNotBlank() && vm.clarify == null && !vm.previewing
-            IconButton(onClick = { val q = question.text.trim(); question = TextFieldValue(""); vm.submit(q) }, enabled = canSend) {
+            // a waiting photo goes with the words (or alone) and skips the compose-time rewrite
+            val waiting = photo && vm.staged != null
+            val canSend = (question.text.isNotBlank() || (waiting && !vm.busy)) && vm.clarify == null && !vm.previewing
+            IconButton(onClick = {
+                val q = question.text.trim(); question = TextFieldValue("")
+                if (waiting) vm.sendStaged(q) else vm.submit(q)
+            }, enabled = canSend) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.send), tint = if (canSend) Kiremit500 else colors.faint)
             }
         }
@@ -1335,6 +1471,23 @@ private fun UserBubble(line: JowiLine, vm: JowiViewModel) {
                 .combinedClickable(enabled = line.canHide && line.serverId != null, onClick = {}, onLongClick = { menu = true })
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
+            // asked with a photo: the picture, then the words — a photo sent alone is the whole
+            // row (its mark is not printed)
+            val photoLabel = stringResource(R.string.jowi_photo_label)
+            val pictured = line.image != null || line.imageKey != null
+            line.image?.let { b ->
+                androidx.compose.foundation.Image(
+                    b.asImageBitmap(), contentDescription = photoLabel, contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                    modifier = Modifier.sizeIn(maxWidth = 190.dp, maxHeight = 190.dp).clip(RoundedCornerShape(12.dp)),
+                )
+            } ?: line.imageKey?.let { k ->
+                AuthImage(
+                    catalogImageUrl(k, "card"), corner = 12.dp,
+                    modifier = Modifier.size(190.dp).semantics { contentDescription = photoLabel },
+                )
+            }
+            if (pictured) Spacer(Modifier.height(6.dp))
+            if (!(pictured && line.text == PhotoMark))
             Text(line.text, fontSize = 15.sp, lineHeight = 21.sp, color = colors.ink, textAlign = TextAlign.End)
             // Jowi rewrote the question: the record hides behind a keyboard glyph
             // rather than a second permanent line. A monogram would say WHO wrote
@@ -1370,7 +1523,7 @@ private fun UserBubble(line: JowiLine, vm: JowiViewModel) {
 
 /** Jowi's (or a human's) reply on a scheme-adaptive card with the slash as the mark; a null answer is guidance — the beige note idiom. */
 @Composable
-private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Unit) {
+private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onPutQuestion: (String) -> Unit, onFocusAsk: () -> Unit) {
     val colors = WorkisTheme.colors
     val context = LocalContext.current
     val guidance = line.error != null && !line.pending
@@ -1416,6 +1569,15 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Uni
                 )
             }
             when {
+                // a photo's two waits are told apart: the upload, then the reading (4–8 s)
+                line.pending && line.photoAsked && vm.photoStage != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Kiremit500)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        stringResource(if (vm.photoStage == "upload") R.string.jowi_photo_uploading else R.string.jowi_photo_reading),
+                        fontSize = 13.sp, color = colors.muted,
+                    )
+                }
                 line.pending -> CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Kiremit500)
                 line.error != null -> Row(verticalAlignment = Alignment.Top) {
                     Icon(Icons.Filled.Info, contentDescription = null, tint = Beige, modifier = Modifier.size(16.dp).padding(top = 2.dp))
@@ -1429,6 +1591,41 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Uni
                     AnswerText(line.text, color = colors.ink, fontSize = 15.sp, lineHeight = 22.sp)
                     line.need?.let { NeedCard(it, line, vm) }
                     line.match?.takeIf { it.sellers.isNotEmpty() || it.products.isNotEmpty() }?.let { MatchCard(it, line, vm) }
+                    // an identification answer's catalogue products (ledger 119): a tap puts the
+                    // product's NAME into the ask field, open to edit — the asker sends it
+                    if (line.suggestions.isNotEmpty()) {
+                        Text(
+                            stringResource(R.string.jowi_photo_suggestions).uppercase(),
+                            fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp,
+                            color = colors.faint, modifier = Modifier.padding(top = 2.dp),
+                        )
+                        line.suggestions.forEach { s ->
+                            val name = s.name.orEmpty()
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().clickable(enabled = name.isNotEmpty()) { onPutQuestion(name); onFocusAsk() }.padding(vertical = 2.dp),
+                            ) {
+                                AuthImage(catalogImageUrl(s.imageKey), Modifier.size(40.dp))
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text(name, fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.Medium, color = colors.ink)
+                                    s.seller?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, color = colors.faint) }
+                                }
+                            }
+                        }
+                    }
+                    // no seller carries what the photo shows — the server's word (`canSource`)
+                    if (line.canSource && !line.photoItem.isNullOrEmpty() && line.listId == null && !vm.sourcedLater(line)) {
+                        val busy = vm.busy
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable(enabled = !busy) { vm.sourceFromPhoto(line) }.padding(vertical = 4.dp),
+                        ) {
+                            Icon(WorkisIcons.DocPlus, contentDescription = null, tint = if (busy) colors.faint else colors.accentText, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(stringResource(R.string.add_to_list), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (busy) colors.faint else colors.accentText)
+                        }
+                    }
                     // the chat-born list opens natively; else the step after a technical answer
                     val listId = line.listId
                     if (listId != null && line.match == null) {
