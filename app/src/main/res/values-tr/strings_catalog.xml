@@ -694,6 +694,7 @@
     <string name="jowi_prompt">Jowi\'ye sor…</string>
     <string name="jowi_scope_general">Genel</string>
     <string name="jowi_scope_this_list">Bu liste</string>
+    <string name="jowi_source_to_list">Listeye ekle — Workis tedarikçi bulsun</string>
     <string name="jowi_withdrawn_trace">Bu soruyu geri çektiniz</string>
     <string name="kind_auto">Otomatik algıla</string>
     <string name="kind_catalog">Katalog</string>

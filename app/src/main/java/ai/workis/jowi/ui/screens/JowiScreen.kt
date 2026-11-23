@@ -365,9 +365,26 @@ class JowiViewModel : ViewModel() {
         send(typed.trim(), null, photo = p)
     }
 
-    /** "Listeye ekle" under a photo no seller carries: `{q: item, item, createList, photoKey}`, a turn of its own. */
+    /** What a `canSource` reply would source: what Jowi read the photo as, or a near-products card's item (ledger 121). */
+    fun sourceItem(line: JowiLine): String? = (line.photoItem ?: line.match?.item)?.takeIf { it.isNotEmpty() }
+
+    /**
+     * A catalogue product under an identification answer ASKS (ledger 120): its name as a new
+     * visible turn, `{q: name, hint: name}` — `hint` always reads as a product request — with no
+     * list context; the match card comes back.
+     */
+    fun askSuggestion(name: String) {
+        if (name.isEmpty() || hasPending) return
+        send(name, null, hint = name, unscoped = true)
+    }
+
+    /**
+     * "Listeye ekle" where no seller carries the item — under a photo answer, or as the second
+     * action of a card of NEAR products: `{q: item, item, createList, photoKey?}`, no product
+     * picked, a turn of its own.
+     */
     fun sourceFromPhoto(line: JowiLine) {
-        val item = line.photoItem?.takeIf { it.isNotEmpty() } ?: return
+        val item = sourceItem(line) ?: return
         if (hasPending) return
         send(item, null, createList = true, item = item, photoKey = line.photoKey, unscoped = true)
     }
@@ -375,7 +392,8 @@ class JowiViewModel : ViewModel() {
     /** That request was made (this session or an earlier one): the door is gone. */
     fun sourcedLater(line: JowiLine): Boolean {
         val i = lines.indexOfFirst { it.id == line.id }
-        return i >= 0 && lines.drop(i + 1).any { it.question == line.photoItem && it.listId != null }
+        val item = sourceItem(line)
+        return i >= 0 && lines.drop(i + 1).any { it.question == item && it.listId != null }
     }
 
     private var nextId = 1L
@@ -449,6 +467,8 @@ class JowiViewModel : ViewModel() {
                     )
                 }
             }
+            // a card of near products says whether its item may be sourced instead (ledger 121)
+            if (!isUser && l.kind == "match") l.canSource?.let { line = line.copy(canSource = it) }
             if (!isUser) {
                 val key = lastQ.orEmpty() + "\u001F" + l.text.orEmpty()
                 kept[key]?.let { (opts, picked) ->
@@ -945,7 +965,7 @@ class JowiViewModel : ViewModel() {
                     // a follow-up of a photo card (chip, "Listeye ekle") keeps the key it was sent with
                     photoKey = r.photoKey?.takeIf { it.isNotEmpty() } ?: photoKey?.takeIf { it.isNotEmpty() },
                     photoItem = r.item?.takeIf { r.source == "photo" && it.isNotEmpty() },
-                    canSource = r.source == "photo" && r.canSource == true,
+                    canSource = (r.source == "photo" || r.kind == "match") && r.canSource == true,
                     suggestions = r.suggestions.orEmpty(),
                 )
                 r.photoKey?.takeIf { it.isNotEmpty() }?.let { k ->
@@ -1281,9 +1301,9 @@ fun JowiScreen(photo: Boolean = false, vm: JowiViewModel = viewModel()) {
                         // answers stand as their bubbles above the card's latest reading
                         line.needAnswers.isNotEmpty() -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             line.needAnswers.forEach { NeedAnswerBubble(it) }
-                            ReplyBubble(line, vm, ::putQuestion) { askFocus.requestFocus() }
+                            ReplyBubble(line, vm) { askFocus.requestFocus() }
                         }
-                        else -> ReplyBubble(line, vm, ::putQuestion) { askFocus.requestFocus() }
+                        else -> ReplyBubble(line, vm) { askFocus.requestFocus() }
                     }
                 }
                 vm.clarify?.let { (typed, reading) ->
@@ -1523,7 +1543,7 @@ private fun UserBubble(line: JowiLine, vm: JowiViewModel) {
 
 /** Jowi's (or a human's) reply on a scheme-adaptive card with the slash as the mark; a null answer is guidance — the beige note idiom. */
 @Composable
-private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onPutQuestion: (String) -> Unit, onFocusAsk: () -> Unit) {
+private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onFocusAsk: () -> Unit) {
     val colors = WorkisTheme.colors
     val context = LocalContext.current
     val guidance = line.error != null && !line.pending
@@ -1591,8 +1611,8 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onPutQuestion: (Strin
                     AnswerText(line.text, color = colors.ink, fontSize = 15.sp, lineHeight = 22.sp)
                     line.need?.let { NeedCard(it, line, vm) }
                     line.match?.takeIf { it.sellers.isNotEmpty() || it.products.isNotEmpty() }?.let { MatchCard(it, line, vm) }
-                    // an identification answer's catalogue products (ledger 119): a tap puts the
-                    // product's NAME into the ask field, open to edit — the asker sends it
+                    // an identification answer's catalogue products (ledger 119): a tap ASKS for
+                    // that product (ledger 120) — its name as a new turn, the match card comes back
                     if (line.suggestions.isNotEmpty()) {
                         Text(
                             stringResource(R.string.jowi_photo_suggestions).uppercase(),
@@ -1603,7 +1623,7 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onPutQuestion: (Strin
                             val name = s.name.orEmpty()
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().clickable(enabled = name.isNotEmpty()) { onPutQuestion(name); onFocusAsk() }.padding(vertical = 2.dp),
+                                modifier = Modifier.fillMaxWidth().clickable(enabled = name.isNotEmpty() && !vm.busy) { vm.askSuggestion(name) }.padding(vertical = 2.dp),
                             ) {
                                 AuthImage(catalogImageUrl(s.imageKey), Modifier.size(40.dp))
                                 Spacer(Modifier.width(10.dp))
@@ -1615,15 +1635,22 @@ private fun ReplyBubble(line: JowiLine, vm: JowiViewModel, onPutQuestion: (Strin
                         }
                     }
                     // no seller carries what the photo shows — the server's word (`canSource`)
-                    if (line.canSource && !line.photoItem.isNullOrEmpty() && line.listId == null && !vm.sourcedLater(line)) {
+                    // …under a photo answer, and as the SECOND action of a card of near products
+                    // (ledger 121): there it is ink and medium — the ticks' "Teklif topla" keeps the accent
+                    if (line.canSource && vm.sourceItem(line) != null && line.listId == null && !vm.sourcedLater(line)) {
                         val busy = vm.busy
+                        val onCard = line.match != null
+                        val tint = if (busy) colors.faint else if (onCard) colors.ink else colors.accentText
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier.clickable(enabled = !busy) { vm.sourceFromPhoto(line) }.padding(vertical = 4.dp),
                         ) {
-                            Icon(WorkisIcons.DocPlus, contentDescription = null, tint = if (busy) colors.faint else colors.accentText, modifier = Modifier.size(16.dp))
+                            Icon(WorkisIcons.DocPlus, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.add_to_list), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (busy) colors.faint else colors.accentText)
+                            Text(
+                                stringResource(if (onCard) R.string.jowi_source_to_list else R.string.add_to_list),
+                                fontSize = 13.sp, lineHeight = 18.sp, fontWeight = if (onCard) FontWeight.Medium else FontWeight.SemiBold, color = tint,
+                            )
                         }
                     }
                     // the chat-born list opens natively; else the step after a technical answer

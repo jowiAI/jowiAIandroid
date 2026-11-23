@@ -694,6 +694,7 @@
     <string name="jowi_prompt">Ask Jowi…</string>
     <string name="jowi_scope_general">General</string>
     <string name="jowi_scope_this_list">This list</string>
+    <string name="jowi_source_to_list">Add to list — let Workis find a supplier</string>
     <string name="jowi_withdrawn_trace">You withdrew this question</string>
     <string name="kind_auto">Detect automatically</string>
     <string name="kind_catalog">Catalogue</string>
