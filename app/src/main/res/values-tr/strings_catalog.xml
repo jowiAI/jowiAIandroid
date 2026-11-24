@@ -992,6 +992,9 @@
     <string name="quote_currency_label">Teklif para birimi</string>
     <string name="quote_doc">Teklif (PDF)</string>
     <string name="quote_draft_saved">kaydedildi</string>
+    <string name="quote_from_confirm">Evet, böyle</string>
+    <string name="quote_from_title">Kimden teklif isteyelim?</string>
+    <string name="quote_from_understood">Şöyle anladım</string>
     <string name="quote_list_word">liste</string>
     <string name="quote_number_label">Teklif no.</string>
     <string name="quote_pdf">Teklif PDF</string>

@@ -992,6 +992,9 @@
     <string name="quote_currency_label">Quote currency</string>
     <string name="quote_doc">Quote (PDF)</string>
     <string name="quote_draft_saved">saved</string>
+    <string name="quote_from_confirm">Yes, that is it</string>
+    <string name="quote_from_title">Whom shall we ask for quotes?</string>
+    <string name="quote_from_understood">I understood</string>
     <string name="quote_list_word">list</string>
     <string name="quote_number_label">Quote no.</string>
     <string name="quote_pdf">Quote PDF</string>

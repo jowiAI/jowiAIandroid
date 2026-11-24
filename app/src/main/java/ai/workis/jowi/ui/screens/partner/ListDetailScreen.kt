@@ -366,6 +366,28 @@ class ListDetailViewModel : ViewModel() {
     var currencyPending by mutableStateOf<String?>(null)
         private set
 
+    /** Ledger 123, step one: Jowi reads the sentence — nothing is saved. A refusal is the server's sentence. */
+    fun readQuoteFrom(text: String, onDone: (ai.workis.jowi.data.QuoteFromReading?, String?) -> Unit) {
+        val listId = id ?: return
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.listQuoteFrom(listId, jsonBody("text" to text)) }
+            val reading = r?.reading?.takeIf { r.success != false }
+            onDone(reading, if (reading == null) r?.error ?: r?.message ?: err ?: ai.workis.jowi.data.statusMessage(-1, lang) else null)
+        }
+    }
+
+    /** Step two: the reading's record goes back untouched; then the list is read again. Null = done. */
+    fun confirmQuoteFrom(record: kotlinx.serialization.json.JsonObject, onDone: (String?) -> Unit) {
+        val listId = id ?: return
+        viewModelScope.launch {
+            val (r, err) = partnerCall(lang) { Graph.api.listQuoteFrom(listId, record) }
+            if (r == null || r.success == false) { onDone(r?.error ?: r?.message ?: err ?: ai.workis.jowi.data.statusMessage(-1, lang)); return@launch }
+            val (d, _) = partnerCall(lang) { Graph.api.listDetail(listId) }
+            if (d != null) landed(d)
+            onDone(null)
+        }
+    }
+
     /** `POST lists/{id}/note/ {quoteCurrency}` — only that field; a refusal is the server's sentence and the re-read puts the picker back. */
     fun saveCurrency(value: String) {
         val listId = id ?: return
@@ -1248,8 +1270,97 @@ private fun ItemsSegment(
             SurfaceCard { reqs.forEach { Text("• $it", fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted) } }
         }
     }
+    QuoteFromRow(d, vm)
     QuoteCurrencyRow(d, vm)
     if (d.isDraft) NoteLetterSection(d, vm, onTyping)
+}
+
+/**
+ * "Kimden teklif isteyelim?" (ledger 123): the server's summary of how many quotes and from whom,
+ * its warning under it. On a draft (`canChange`) the row opens the sentence form; otherwise it
+ * only says. No ready-made 3 / 5 buttons (as iOS).
+ */
+@Composable
+private fun QuoteFromRow(d: PurchaseListDetail, vm: ListDetailViewModel) {
+    val colors = WorkisTheme.colors
+    val q = d.quoteFrom ?: return
+    val summary = q.summary?.takeIf { it.isNotEmpty() } ?: return
+    val door = q.canChange == true
+    var open by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Eyebrow(stringResource(R.string.quote_from_title).uppercase())
+        SurfaceCard(if (door) Modifier.clip(RoundedCornerShape(20.dp)).clickable(role = Role.Button) { open = true } else Modifier) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(summary, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink, modifier = Modifier.weight(1f))
+                if (door) { Spacer(Modifier.width(8.dp)); Text("›", fontSize = 16.sp, color = colors.faint) }
+            }
+        }
+        q.warning?.takeIf { it.isNotEmpty() }?.let {
+            Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
+        }
+    }
+    if (open) QuoteFromDialog(q, vm) { open = false }
+}
+
+/**
+ * The buyer tells Jowi in a sentence; Jowi says how it read it; the buyer confirms. This field
+ * goes to `quote-from/` only, never to `ask/`. Nothing is saved until "Evet, böyle", and that is
+ * open only while a reading without a question stands for the text now in the field.
+ */
+@Composable
+private fun QuoteFromDialog(q: ai.workis.jowi.data.PLQuoteFrom, vm: ListDetailViewModel, onDismiss: () -> Unit) {
+    val colors = WorkisTheme.colors
+    var text by remember { mutableStateOf(q.sentence.orEmpty()) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var reading by remember { mutableStateOf<ai.workis.jowi.data.QuoteFromReading?>(null) }
+    var readText by remember { mutableStateOf("") }
+    val shown = reading?.takeIf { readText == text }
+    val record = shown?.takeIf { it.ask.isNullOrEmpty() }?.record
+    fun read() {
+        val sent = text
+        if (busy || sent.isBlank()) return
+        busy = true; error = null
+        vm.readQuoteFrom(sent) { r, msg -> busy = false; reading = r; readText = sent; error = msg }
+    }
+    val fc = OutlinedTextFieldDefaults.colors(focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border, focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue)
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        containerColor = colors.surface,
+        title = { Text(stringResource(R.string.quote_from_title), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = colors.ink) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = text, onValueChange = { text = it; error = null },
+                    minLines = 2, maxLines = 5, shape = RoundedCornerShape(14.dp), colors = fc, enabled = !busy,
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp).readingStep(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedButton(onClick = { read() }, enabled = !busy && text.isNotBlank(), border = BorderStroke(1.dp, colors.border)) {
+                    Text(stringResource(R.string.use_tell), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = if (!busy && text.isNotBlank()) colors.ink else colors.faint)
+                }
+                error?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.danger) }
+                shown?.let { r ->
+                    Eyebrow(stringResource(R.string.quote_from_understood).uppercase())
+                    val ask = r.ask.orEmpty()
+                    if (ask.isNotEmpty()) Text(ask, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
+                    else Text(r.summary.orEmpty(), fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium, color = colors.ink)
+                    r.warning?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint) }
+                }
+            }
+        },
+        confirmButton = {
+            if (busy) CircularProgressIndicator(Modifier.padding(horizontal = 12.dp).size(18.dp), strokeWidth = 2.dp, color = Kiremit500)
+            else TextButton(onClick = {
+                val rec = record ?: return@TextButton
+                busy = true; error = null
+                vm.confirmQuoteFrom(rec) { msg -> busy = false; if (msg == null) onDismiss() else error = msg }
+            }, enabled = record != null) {
+                Text(stringResource(R.string.quote_from_confirm), color = if (record != null) colors.accentText else colors.faint, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !busy) { Text(stringResource(R.string.cancel), color = colors.muted) } },
+    )
 }
 
 /**
@@ -2537,6 +2648,14 @@ private fun SendPreviewSheet(d: PurchaseListDetail, vm: ListDetailViewModel, onR
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.send_preview_title), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = colors.ink)
             Text(stringResource(R.string.send_preview_sub), fontSize = 13.sp, color = colors.muted)
+            // what the buyer asked for — how many quotes, from whom (the server's line, ledger 123)
+            d.quoteFrom?.summary?.takeIf { it.isNotEmpty() }?.let { s ->
+                Row(verticalAlignment = Alignment.Top) {
+                    Text(stringResource(R.string.quote_from_title), fontSize = 13.sp, color = colors.muted)
+                    Spacer(Modifier.width(12.dp))
+                    Text(s, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                }
+            }
             error?.let { Text(it, color = colors.danger, fontSize = 13.sp) }
             groups.forEach { g ->
                 val uncovered = g.key == "~uncovered"

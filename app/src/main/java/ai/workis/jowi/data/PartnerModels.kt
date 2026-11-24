@@ -832,6 +832,38 @@ data class PLVirtualInvite(
 @Serializable
 data class PLProject(@Serializable(with = FlexString::class) val id: String? = null, val name: String? = null, val isDefault: Boolean? = null)
 
+/**
+ * "Kimden teklif isteyelim?" (ledger 123, Django `docs/ios_notes/2026-11-24_kimden_teklif.md`):
+ * `summary` is the list's line, `sentence` opens the field, `warning` only says, `canChange` only
+ * on a draft. The record (`n`, `firms`, `only`) is never read here.
+ */
+@Serializable
+data class PLQuoteFrom(
+    val sentence: String? = null,
+    val summary: String? = null,
+    val warning: String? = null,
+    @Serializable(with = FlexBool::class) val canChange: Boolean? = null,
+)
+
+/** Jowi's reading of the buyer's sentence: `record` goes back AS IT CAME; a filled `ask` leaves nothing to confirm. */
+@Serializable
+data class QuoteFromReading(
+    val record: kotlinx.serialization.json.JsonObject? = null,
+    val summary: String? = null,
+    val sentence: String? = null,
+    val warning: String? = null,
+    val ask: String? = null,
+)
+
+@Serializable
+data class QuoteFromResult(
+    val success: Boolean? = null,
+    val error: String? = null,
+    val message: String? = null,
+    val reading: QuoteFromReading? = null,
+    val quoteFrom: PLQuoteFrom? = null,
+)
+
 @Serializable
 data class PurchaseListDetail(
     val list: PLInfo? = null,
@@ -841,6 +873,8 @@ data class PurchaseListDetail(
     val sellerTotals: List<PLSellerTotal>? = null,
     val rfqDocs: List<PLRfqDoc>? = null,
     val sendPreview: List<PLSendRow>? = null,
+    /** Ledger 123: how many quotes and, if the buyer cares, from whom — every word the server's. */
+    val quoteFrom: PLQuoteFrom? = null,
     /** Ledger 122: the `~uncovered` group's heading and sentence — the server's words (rows nobody sells are SENT too, Workis sources them). */
     val sourcingTitle: String? = null,
     val sourcingWords: String? = null,

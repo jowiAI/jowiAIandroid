@@ -714,6 +714,10 @@ interface WorkisApi {
     @POST("workis/lists/{id}/note/")
     suspend fun listNote(@Path("id") id: String, @Body body: NoteBody): SimpleResult
 
+    /** Ledger 123: `{text}` → `{reading}` (422 = not about this) · the reading's `record` as it came → `{quoteFrom}`. Draft only. */
+    @POST("workis/lists/{id}/quote-from/")
+    suspend fun listQuoteFrom(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): QuoteFromResult
+
     @POST("workis/lists/{id}/request-quotes/")
     suspend fun listRequestQuotes(@Path("id") id: String, @Body body: RequestQuotesBody): RequestQuotesResult
 
