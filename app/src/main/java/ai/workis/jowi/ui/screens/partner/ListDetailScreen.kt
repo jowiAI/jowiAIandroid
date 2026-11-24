@@ -1994,7 +1994,7 @@ private fun SendGroupCard(g: SendGroup, d: PurchaseListDetail) {
     val colors = WorkisTheme.colors
     val uncovered = g.key == "~uncovered"
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        val head = if (uncovered) stringResource(R.string.uncovered_group) + " · ${g.rows.size}" else buildString {
+        val head = if (uncovered) (d.sourcingTitle?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.uncovered_group)) + " · ${g.rows.size}" else buildString {
             // `channel` is not printed (ledger 94): the buyer is shown no difference
             append(g.rows.firstOrNull()?.seller.orEmpty())
             if (d.sendStatusMode == true) {
@@ -2006,7 +2006,7 @@ private fun SendGroupCard(g: SendGroup, d: PurchaseListDetail) {
         SurfaceCard {
             g.rows.forEach { r -> SendRowLine(r, uncovered, d.list?.units) }
         }
-        if (uncovered) Text(stringResource(R.string.uncovered_sub), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
+        if (uncovered) Text(d.sourcingWords?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.uncovered_sub), fontSize = 12.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
     }
 }
 
@@ -2530,7 +2530,9 @@ private fun SendPreviewSheet(d: PurchaseListDetail, vm: ListDetailViewModel, onR
     var excluded by remember { mutableStateOf(setOf<String>()) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val canSend = groups.any { it.key != "~uncovered" && it.key !in excluded }
+    // ledger 122: rows nobody sells go out too (Workis sources them) — closed only when nothing
+    // at all is left to ask for; what is missing the server refuses with its own sentence
+    val canSend = groups.any { it.key !in excluded }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = colors.surface) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.send_preview_title), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = colors.ink)
@@ -2542,7 +2544,7 @@ private fun SendPreviewSheet(d: PurchaseListDetail, vm: ListDetailViewModel, onR
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            if (uncovered) stringResource(R.string.uncovered_group) + " · ${g.rows.size}" else g.rows.firstOrNull()?.seller.orEmpty(),
+                            if (uncovered) (d.sourcingTitle?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.uncovered_group)) + " · ${g.rows.size}" else g.rows.firstOrNull()?.seller.orEmpty(),
                             fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink, modifier = Modifier.weight(1f),
                         )
                         if (!uncovered) Text(stringResource(if (off) R.string.send_action else R.string.exclude_seller), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.accentText, modifier = Modifier.clickable { excluded = if (off) excluded - g.key else excluded + g.key })
@@ -2550,7 +2552,7 @@ private fun SendPreviewSheet(d: PurchaseListDetail, vm: ListDetailViewModel, onR
                     Column(Modifier.alpha(if (off) 0.4f else 1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         g.rows.forEach { r -> SendRowLine(r, uncovered, d.list?.units) }
                     }
-                    if (uncovered) Text(stringResource(R.string.uncovered_sub), fontSize = 12.sp, color = colors.faint)
+                    if (uncovered) Text(d.sourcingWords?.takeIf { it.isNotEmpty() } ?: stringResource(R.string.uncovered_sub), fontSize = 12.sp, color = colors.faint)
                 }
             }
             Row { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = colors.muted) }; Spacer(Modifier.weight(1f))

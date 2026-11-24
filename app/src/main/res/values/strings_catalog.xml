@@ -1322,8 +1322,8 @@
     <string name="total_label">Total</string>
     <string name="try_sample">Try the example project</string>
     <string name="unbind_action">Clear selection</string>
-    <string name="uncovered_group">Items not covered</string>
-    <string name="uncovered_sub">Sent to no seller — the team is looking for a supplier.</string>
+    <string name="uncovered_group">Items being sourced</string>
+    <string name="uncovered_sub">Workis finds suppliers for these items; quotes appear here as they arrive.</string>
     <string name="unit_ask">unit?</string>
     <string name="unit_content_field">Unit holds</string>
     <string name="unit_content_hint">What one unit holds when the unit is a package: 12 adet for a box, 50 L for a tin. Leave empty otherwise.</string>

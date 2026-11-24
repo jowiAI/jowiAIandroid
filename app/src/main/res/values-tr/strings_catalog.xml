@@ -1322,8 +1322,8 @@
     <string name="total_label">Toplam</string>
     <string name="try_sample">Örnek projeyle dene</string>
     <string name="unbind_action">Seçimi kaldır</string>
-    <string name="uncovered_group">Kapsama alınmayan kalemler</string>
-    <string name="uncovered_sub">Hiçbir satıcıya gönderilmedi — ekip tedarikçi arıyor.</string>
+    <string name="uncovered_group">Tedarikçi aranan kalemler</string>
+    <string name="uncovered_sub">Workis bu kalemler için tedarikçi bulur; teklifler geldikçe burada görünür.</string>
     <string name="unit_ask">birim?</string>
     <string name="unit_content_field">Birim içeriği</string>
     <string name="unit_content_hint">Birim bir ambalajsa içinde ne olduğu: kutu için 12 adet, teneke için 50 L. Değilse boş bırakın.</string>

@@ -841,6 +841,9 @@ data class PurchaseListDetail(
     val sellerTotals: List<PLSellerTotal>? = null,
     val rfqDocs: List<PLRfqDoc>? = null,
     val sendPreview: List<PLSendRow>? = null,
+    /** Ledger 122: the `~uncovered` group's heading and sentence — the server's words (rows nobody sells are SENT too, Workis sources them). */
+    val sourcingTitle: String? = null,
+    val sourcingWords: String? = null,
     val sendStatusMode: Boolean? = null,
     val chatUnreadTotal: Int? = null,
     /** The buyer's "Satıcı yazışmaları" rows — one per invited seller. */

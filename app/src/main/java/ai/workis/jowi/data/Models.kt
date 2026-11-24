@@ -666,6 +666,8 @@ data class AskLine(
      * may carry `canSource` / `suggestions` too (Django's second round) — read when sent.
      */
     val imageKey: String? = null,
+    /** A pressed button's row, not typed words (`"add_to_list"`, ledger 122) — drawn as a trace. */
+    val act: String? = null,
     @Serializable(with = FlexBool::class) val canSource: Boolean? = null,
     val suggestions: List<AskSuggestion>? = null,
     /** Only a turn that did nothing can be withdrawn — the server decides. */

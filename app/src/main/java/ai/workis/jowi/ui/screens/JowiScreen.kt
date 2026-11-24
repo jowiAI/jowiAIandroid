@@ -272,6 +272,8 @@ data class JowiLine(
      */
     val image: android.graphics.Bitmap? = null,
     val imageKey: String? = null,
+    /** The asker's row is a pressed button ("Listeye ekle", ledger 122), not words they typed. */
+    val act: String? = null,
     val photoAsked: Boolean = false,
     val photoKey: String? = null,
     val photoItem: String? = null,
@@ -452,6 +454,7 @@ class JowiViewModel : ViewModel() {
                 at = l.at, serverId = l.id, canHide = l.canHide == true,
                 canRematch = match != null && l.canRematch == true,
                 imageKey = l.imageKey?.takeIf { isUser && it.isNotEmpty() },
+                act = l.act?.takeIf { isUser && it.isNotEmpty() },
             )
             // a reply under a photo question answers THAT photo; what the live answer carried
             // beyond its text is the row's when the server sends it, else this session's
@@ -907,7 +910,9 @@ class JowiViewModel : ViewModel() {
         val userId = newId()
         // a photo sent alone: the row is its picture (the server logs the same mark for it)
         val shown = if (photo != null && q.isEmpty()) PhotoMark else q
-        lines += JowiLine(id = userId, who = "user", text = shown, original = original?.takeIf { it != q }, at = now, image = photo?.image)
+        lines += JowiLine(id = userId, who = "user", text = shown, original = original?.takeIf { it != q }, at = now, image = photo?.image,
+            // a `createList` call without ticks is a button, as the server will log it
+            act = if (createList) "add_to_list" else null)
         val pendingId = newId()
         lines += JowiLine(id = pendingId, who = "jowi", pending = true, question = shown, at = now, photoAsked = photo != null || photoKey != null)
         if (photo != null) photoStage = "upload"
@@ -1296,6 +1301,7 @@ fun JowiScreen(photo: Boolean = false, vm: JowiViewModel = viewModel()) {
                     }
                     when {
                         line.hidden -> WithdrawnStub(line, vm)
+                        line.who == "user" && line.act != null -> ActTrace(line)
                         line.who == "user" -> UserBubble(line, vm)
                         // the need card is re-drawn IN PLACE on each answer: the buyer's
                         // answers stand as their bubbles above the card's latest reading
@@ -1458,6 +1464,29 @@ private fun WithdrawnStub(line: JowiLine, vm: JowiViewModel) {
                     Text(stringResource(R.string.jowi_bring_back), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = colors.accentText)
                 }
             }
+        }
+    }
+}
+
+/**
+ * A pressed button's row ("Listeye ekle", ledger 122): a small trace on the asker's side — what
+ * was pressed and for what — never a bubble, since nothing was typed. No menu.
+ */
+@Composable
+private fun ActTrace(line: JowiLine) {
+    val colors = WorkisTheme.colors
+    Column(horizontalAlignment = Alignment.End, modifier = Modifier.fillMaxWidth().padding(start = 48.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(WorkisIcons.DocPlus, contentDescription = null, tint = colors.muted, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(5.dp))
+            Text(
+                stringResource(R.string.add_to_list) + " · " + line.text,
+                fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted, textAlign = TextAlign.End,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+        }
+        clockOf(line.at).takeIf { it.isNotEmpty() }?.let {
+            Text(it, fontFamily = WorkisMono, fontSize = 9.sp, color = colors.faint)
         }
     }
 }
