@@ -1306,12 +1306,14 @@ private fun QuoteFromRow(d: PurchaseListDetail, vm: ListDetailViewModel) {
         SurfaceCard(if (door) Modifier.clip(RoundedCornerShape(20.dp)).clickable(role = Role.Button) { open = true } else Modifier) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(summary, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink, modifier = Modifier.weight(1f))
-                if (door) { Spacer(Modifier.width(8.dp)); Text("›", fontSize = 16.sp, color = colors.faint) }
+                // ledger 126: the row SAYS it can be changed — the word, not a chevron
+                if (door) { Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.quote_from_change), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.accentText) }
             }
         }
         q.warning?.takeIf { it.isNotEmpty() }?.let {
             Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
         }
+        if (door) Text(stringResource(R.string.quote_from_hint), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint, modifier = Modifier.padding(horizontal = 4.dp))
     }
     if (open) QuoteFromDialog(q, vm) { open = false }
 }
