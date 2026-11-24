@@ -705,11 +705,23 @@ class ListDetailViewModel : ViewModel() {
         items.firstOrNull { !hasQty(it) && it.id != null } ?: items.firstOrNull { !hasUnit(it) && it.id != null }
     }
 
-    fun requestQuotes(excluded: List<String>, onDone: (Boolean, String?) -> Unit) {
+    /** `onDone(ok, the server's sentence, the refusal's code)` — the code as sent ("" included), null when the key is absent (ledger 124). */
+    fun requestQuotes(excluded: List<String>, onDone: (Boolean, String?, String?) -> Unit) {
         viewModelScope.launch {
-            val (r, err) = partnerCall(lang) { Graph.api.listRequestQuotes(id!!, RequestQuotesBody(excluded)) }
+            var code: String? = null
+            val (r, err) = try {
+                Graph.api.listRequestQuotes(id!!, RequestQuotesBody(excluded)) to null
+            } catch (e: retrofit2.HttpException) {
+                val (said, c) = ai.workis.jowi.data.refusalFromBody(e, lang)
+                code = c
+                null to said
+            } catch (e: java.io.IOException) {
+                null to ai.workis.jowi.data.statusMessage(null, lang)
+            } catch (e: Exception) {
+                null to ai.workis.jowi.data.statusMessage(-1, lang)
+            }
             val ok = r != null && r.success != false
-            onDone(ok, r?.message ?: r?.error ?: err)
+            onDone(ok, r?.message ?: r?.error ?: err, r?.code ?: code)
             if (ok) { note = r?.message; load() }
         }
     }
@@ -2677,13 +2689,16 @@ private fun SendPreviewSheet(d: PurchaseListDetail, vm: ListDetailViewModel, onR
             Row { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel), color = colors.muted) }; Spacer(Modifier.weight(1f))
                 Button(onClick = {
                     busy = true
-                    vm.requestQuotes(excluded.toList()) { ok, msg ->
+                    vm.requestQuotes(excluded.toList()) { ok, msg, code ->
                         busy = false
-                        // a refusal while a matched row is not complete = the variant gate (2026-10-03):
-                        // the sentence goes to the list screen and that row opens there
-                        val open = if (ok) null else vm.firstOpenRow()
+                        // ledger 124: the refusal's `code` says where its sentence belongs —
+                        // `row_incomplete` → the list page, the first open row opens; any other
+                        // code → printed here, the sheet stays; no key (older server) → the old guess
+                        val rowGate = code == null || code == "row_incomplete"
+                        // a matched row that is not complete = the variant gate (2026-10-03)
+                        val open = if (ok || !rowGate) null else vm.firstOpenRow()
                         // else the quantity gate (ledger 83): the first row without a quantity
-                        val noQty = if (ok || open != null) null else vm.firstAmountRow()
+                        val noQty = if (ok || !rowGate || open != null) null else vm.firstAmountRow()
                         when {
                             ok -> onDismiss()
                             open != null -> onRefused(msg, open)

@@ -101,6 +101,19 @@ private fun bodyField(e: HttpException, vararg keys: String): String? = runCatch
     }
 }.getOrNull()
 
+/**
+ * A refusal's `code` as sent — "" included; null only when the body carries no `code` key (an
+ * older server). Reads the error body, so call it INSTEAD of `messageFromBody`, with [refusal].
+ */
+fun refusalFromBody(e: HttpException, lang: String): Pair<String, String?> {
+    val obj = runCatching {
+        e.response()?.errorBody()?.string()?.let { WorkisJson.decodeFromString<kotlinx.serialization.json.JsonObject>(it) }
+    }.getOrNull()
+    fun word(k: String) = (obj?.get(k) as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content
+    val said = word("message")?.takeIf { it.isNotBlank() } ?: word("error")?.takeIf { it.isNotBlank() } ?: statusMessage(e.code(), lang)
+    return said to word("code")
+}
+
 /** Pull the `error` code out of a non-2xx apply response body, if present. */
 fun errorCodeFromBody(e: HttpException): String? = bodyField(e, "error")
 

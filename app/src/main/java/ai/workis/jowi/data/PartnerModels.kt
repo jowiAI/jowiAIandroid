@@ -996,7 +996,11 @@ data class NoteBody(val note: String? = null, val letter: String? = null, val qu
 data class RequestQuotesBody(val excluded: List<String>)
 
 @Serializable
-data class RequestQuotesResult(val success: Boolean? = null, val held: Boolean? = null, val invited: Int? = null, val message: String? = null, val error: String? = null)
+data class RequestQuotesResult(
+    val success: Boolean? = null, val held: Boolean? = null, val invited: Int? = null, val message: String? = null, val error: String? = null,
+    /** Ledger 124: why the send was refused — `row_incomplete` opens the row, anything else is only said; null = no key (older server). */
+    val code: String? = null,
+)
 
 @Serializable
 data class AwardResult(val success: Boolean? = null, val orderIds: List<@Serializable(with = FlexString::class) String>? = null, val message: String? = null, val error: String? = null)
