@@ -1299,7 +1299,9 @@ private fun QuoteFromRow(d: PurchaseListDetail, vm: ListDetailViewModel) {
     val summary = q.summary?.takeIf { it.isNotEmpty() } ?: return
     val door = q.canChange == true
     var open by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    // ledger 125: 22 dp above the heading (the page's 14 + 8) — the rows' hint closes its card,
+    // this heading starts its own section
+    Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Eyebrow(stringResource(R.string.quote_from_title).uppercase())
         SurfaceCard(if (door) Modifier.clip(RoundedCornerShape(20.dp)).clickable(role = Role.Button) { open = true } else Modifier) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1986,7 +1988,8 @@ private fun NoteLetterSection(d: PurchaseListDetail, vm: ListDetailViewModel, on
         onFocus(it.isFocused)
         if (!it.isFocused && dirty) { dirty = false; vm.saveNote(noteText, letter) }
     }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // ledger 125: the same 22 dp above this heading — the quote currency's explanation sat on it
+    Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Eyebrow(stringResource(R.string.note_title).uppercase())
             if (vm.noteTick) { Spacer(Modifier.width(6.dp)); Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(14.dp)) }
