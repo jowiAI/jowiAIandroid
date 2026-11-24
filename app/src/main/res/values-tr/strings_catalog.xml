@@ -1353,6 +1353,7 @@
     <string name="use_add">Ekle</string>
     <string name="use_added">Eklendi</string>
     <string name="use_badge_added">Jowi ekledi</string>
+    <string name="use_badge_answered">Cevaplandı</string>
     <string name="use_badge_asking">Jowi soruyor</string>
     <string name="use_badge_better">Daha uygunu var</string>
     <string name="use_badge_fits">Uygun</string>
@@ -1368,6 +1369,14 @@
     <string name="use_reading">Jowi okuyor…</string>
     <string name="use_row_word">satır</string>
     <string name="use_skip">Atla</string>
+    <string name="use_sourced_intro">İşi söyleyin; tedarikçinin doğru ürüne fiyat verebilmesi için bilmesi gereken bir iki şeyi sorar, yanında ne gerektiğini söylerim.</string>
+    <string name="use_sourced_placeholder">ör. yağlı parça taşıma; kaynak; gıda ile temas</string>
+    <string name="use_sourced_why">Bu ürün Workis\'teki kataloglarda yok; talebiniz tedarikçilere sizin sözlerinizle gider.</string>
+    <string name="use_spec_clear">Temizle</string>
+    <string name="use_spec_own">ya da yazın</string>
+    <string name="use_specs_none">Yazdıklarınız tedarikçinin ihtiyacı olanı zaten söylüyor.</string>
+    <string name="use_specs_note">Seçtiğiniz satıra yazılır ve taleple birlikte tedarikçiye gider. Boş bırakmak hiçbir şeyi durdurmaz.</string>
+    <string name="use_specs_title">Tedarikçinin bilmesi gerekenler</string>
     <string name="use_switch">Buna geç</string>
     <string name="use_switched">Bu ürüne geçildi</string>
     <string name="use_tell">Jowi\'ye söyle</string>

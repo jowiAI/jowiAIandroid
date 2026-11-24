@@ -1353,6 +1353,7 @@
     <string name="use_add">Add</string>
     <string name="use_added">Added</string>
     <string name="use_badge_added">Jowi added</string>
+    <string name="use_badge_answered">Answered</string>
     <string name="use_badge_asking">Jowi asks</string>
     <string name="use_badge_better">Better fit found</string>
     <string name="use_badge_fits">Fits</string>
@@ -1368,6 +1369,14 @@
     <string name="use_reading">Jowi is reading…</string>
     <string name="use_row_word">row</string>
     <string name="use_skip">Skip</string>
+    <string name="use_sourced_intro">Say the job; I ask the one or two things a supplier must know to quote the right product, and say what goes with it.</string>
+    <string name="use_sourced_placeholder">e.g. carrying oily parts; welding; handling food</string>
+    <string name="use_sourced_why">No catalogue on Workis names this product, so your request goes to suppliers in your own words.</string>
+    <string name="use_spec_clear">Clear</string>
+    <string name="use_spec_own">or write it</string>
+    <string name="use_specs_none">Your words already say what a supplier needs.</string>
+    <string name="use_specs_note">What you choose is written on the row and goes to the supplier with the request. Leaving one empty stops nothing.</string>
+    <string name="use_specs_title">What the supplier must know</string>
     <string name="use_switch">Switch to this</string>
     <string name="use_switched">Switched to this one</string>
     <string name="use_tell">Tell Jowi</string>

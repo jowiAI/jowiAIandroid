@@ -234,6 +234,9 @@ data class AskBody(
      */
     val item: String? = null,
     val photoKey: String? = null,
+    /** "Listeye ekle" for an item nobody carries (ledger 127): the amount as the answer read it, so the row is born with it. */
+    val qty: kotlinx.serialization.json.JsonPrimitive? = null,
+    val unit: String? = null,
 )
 
 /**

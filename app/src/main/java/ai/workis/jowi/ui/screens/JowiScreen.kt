@@ -279,6 +279,9 @@ data class JowiLine(
     val photoItem: String? = null,
     val canSource: Boolean = false,
     val suggestions: List<ai.workis.jowi.data.AskSuggestion> = emptyList(),
+    /** The amount read with the item ("20", "çift") — goes back with "Listeye ekle" (ledger 127). */
+    val sourceQty: String? = null,
+    val sourceUnit: String? = null,
 )
 
 /** The row's text for a photo sent without words — the server logs the same mark; it is never printed. */
@@ -388,7 +391,8 @@ class JowiViewModel : ViewModel() {
     fun sourceFromPhoto(line: JowiLine) {
         val item = sourceItem(line) ?: return
         if (hasPending) return
-        send(item, null, createList = true, item = item, photoKey = line.photoKey, unscoped = true)
+        send(item, null, createList = true, item = item, photoKey = line.photoKey, unscoped = true,
+            qty = line.sourceQty, unit = line.sourceUnit)
     }
 
     /** That request was made (this session or an earlier one): the door is gone. */
@@ -472,6 +476,10 @@ class JowiViewModel : ViewModel() {
             }
             // a card of near products says whether its item may be sourced instead (ledger 121)
             if (!isUser && l.kind == "match") l.canSource?.let { line = line.copy(canSource = it) }
+            // typed words no catalogue carries (`kind: "miss"`, ledger 127): the same offer as a
+            // photo's — the server's `canSource` (false once a list was made), never the source
+            if (!isUser && l.kind == "miss") line = line.copy(photoItem = l.item?.takeIf { it.isNotEmpty() }, canSource = l.canSource == true)
+            if (!isUser && (l.kind == "miss" || l.kind == "photo")) line = line.copy(sourceQty = l.qty, sourceUnit = l.unit)
             if (!isUser) {
                 val key = lastQ.orEmpty() + "\u001F" + l.text.orEmpty()
                 kept[key]?.let { (opts, picked) ->
@@ -905,6 +913,7 @@ class JowiViewModel : ViewModel() {
         q: String, original: String?, createList: Boolean = false, hint: String? = null,
         ctxNeed: String? = null, chipList: String? = null,
         item: String? = null, photoKey: String? = null, unscoped: Boolean = false, photo: StagedPhoto? = null,
+        qty: String? = null, unit: String? = null,
     ) {
         val now = nowStamp()
         val userId = newId()
@@ -945,6 +954,11 @@ class JowiViewModel : ViewModel() {
                         screen = ctx?.screen, state = ctx?.state, visible = ctx?.visible?.takeIf { it.isNotEmpty() },
                         seller = ctx?.seller, hint = hint?.takeIf { it.isNotEmpty() },
                         item = item?.takeIf { it.isNotEmpty() }, photoKey = photoKey?.takeIf { it.isNotEmpty() },
+                        // the amount goes back as it came — a number when it reads as one
+                        qty = qty?.takeIf { createList && it.isNotEmpty() }?.let {
+                            it.toIntOrNull()?.let(::JsonPrimitive) ?: it.toDoubleOrNull()?.let(::JsonPrimitive) ?: JsonPrimitive(it)
+                        },
+                        unit = unit?.takeIf { createList && it.isNotEmpty() },
                     ),
                 )
                 if (photo != null) photoStage = null
@@ -969,8 +983,10 @@ class JowiViewModel : ViewModel() {
                     need = r.need,
                     // a follow-up of a photo card (chip, "Listeye ekle") keeps the key it was sent with
                     photoKey = r.photoKey?.takeIf { it.isNotEmpty() } ?: photoKey?.takeIf { it.isNotEmpty() },
-                    photoItem = r.item?.takeIf { r.source == "photo" && it.isNotEmpty() },
-                    canSource = (r.source == "photo" || r.kind == "match") && r.canSource == true,
+                    photoItem = r.item?.takeIf { (r.source == "photo" || r.kind == "miss") && it.isNotEmpty() },
+                    // the button is drawn from `canSource`, whatever the source (ledger 127)
+                    canSource = r.canSource == true,
+                    sourceQty = r.qty, sourceUnit = r.unit,
                     suggestions = r.suggestions.orEmpty(),
                 )
                 r.photoKey?.takeIf { it.isNotEmpty() }?.let { k ->

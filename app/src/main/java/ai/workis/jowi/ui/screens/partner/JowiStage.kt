@@ -5,6 +5,7 @@ import ai.workis.jowi.data.PLItem
 import ai.workis.jowi.data.PLUseAlternative
 import ai.workis.jowi.data.PLUseCard
 import ai.workis.jowi.data.PLUseComplement
+import ai.workis.jowi.data.PLUseSpec
 import ai.workis.jowi.data.PurchaseListDetail
 import ai.workis.jowi.data.WorkisMoney
 import ai.workis.jowi.ui.components.WorkisMark
@@ -16,6 +17,13 @@ import ai.workis.jowi.ui.theme.Text
 import ai.workis.jowi.ui.theme.WorkisIcons
 import ai.workis.jowi.ui.theme.WorkisMono
 import ai.workis.jowi.ui.theme.WorkisTheme
+import ai.workis.jowi.ui.theme.readingSize
+import androidx.compose.runtime.key
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -129,7 +137,8 @@ fun JowiStage(
             vm.useReading -> Text(stringResource(R.string.use_reading), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted)
             card != null -> CardState(row, card, vm.addedFromStage, vm::complementKey, busy = vm.busy,
                 onSwitch = { vm.switchTo(itemId, it, onNeedsVariant) },
-                onAdd = { vm.addComplement(itemId, it, onNeedsVariant) })
+                onAdd = { vm.addComplement(itemId, it, onNeedsVariant) },
+                onSpec = { label, value -> vm.answerSpec(itemId, label, value) })
             else -> {
                 val nothing = stringResource(R.string.use_nothing)
                 QuestionState(row, vm.useDraft, onDraft = { vm.useDraft = it },
@@ -177,7 +186,11 @@ private fun QuestionState(item: PLItem, draft: String, onDraft: (String) -> Unit
     val colors = WorkisTheme.colors
     Text(stringResource(R.string.use_question), fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold, color = colors.ink)
     // the web's set sentence first (ledger 68) — the satisfaction tick's `wrong_product` chip, word for word — then why Jowi asks
-    Text(stringResource(R.string.use_why_ask) + " " + stringResource(R.string.use_intro), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted)
+    // a row no product names (ledger 127): another reason to ask, another promise
+    val sourced = item.useSourced == true
+    Text(
+        if (sourced) stringResource(R.string.use_sourced_why) + " " + stringResource(R.string.use_sourced_intro)
+        else stringResource(R.string.use_why_ask) + " " + stringResource(R.string.use_intro), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted)
     val chips = item.useChips.orEmpty().filter { it.isNotBlank() }
     if (chips.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         chips.forEach { chip ->
@@ -200,7 +213,7 @@ private fun QuestionState(item: PLItem, draft: String, onDraft: (String) -> Unit
     val canTell = draft.isNotBlank()
     OutlinedTextField(
         value = draft, onValueChange = onDraft, singleLine = true,
-        placeholder = { Text(stringResource(R.string.use_placeholder), color = colors.faint) },
+        placeholder = { Text(stringResource(if (sourced) R.string.use_sourced_placeholder else R.string.use_placeholder), color = colors.faint) },
         shape = RoundedCornerShape(14.dp),
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border,
@@ -221,7 +234,7 @@ private fun QuestionState(item: PLItem, draft: String, onDraft: (String) -> Unit
 @Composable
 private fun CardState(
     item: PLItem, card: PLUseCard, added: Set<String>, keyOf: (String, PLUseComplement) -> String, busy: Boolean,
-    onSwitch: (PLUseAlternative) -> Unit, onAdd: (PLUseComplement) -> Unit,
+    onSwitch: (PLUseAlternative) -> Unit, onAdd: (PLUseComplement) -> Unit, onSpec: (String, String) -> Unit,
 ) {
     val colors = WorkisTheme.colors
     val use = item.use?.text?.takeIf { it.isNotBlank() } ?: card.use?.takeIf { it.isNotBlank() }
@@ -257,6 +270,18 @@ private fun CardState(
         }
     }
 
+    // no product to judge on this card (ledger 127) — what the supplier must know instead
+    if (card.sourced == true) {
+        StageEyebrow(stringResource(R.string.use_specs_title))
+        val specs = card.specs.orEmpty().filter { !it.label.isNullOrEmpty() }
+        if (specs.isEmpty()) {
+            Text(stringResource(R.string.use_specs_none), fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted)
+        } else {
+            specs.forEach { sp -> key(sp.label) { SpecRow(sp, onSpec) } }
+            Text(stringResource(R.string.use_specs_note), fontSize = 12.sp, lineHeight = 16.sp, color = colors.faint)
+        }
+    }
+
     val comps = card.complements.orEmpty().filter { !it.name.isNullOrBlank() }
     if (comps.isNotEmpty()) {
         StageEyebrow(stringResource(R.string.use_complements_title))
@@ -274,6 +299,76 @@ private fun CardState(
                 }
                 if (keyOf(item.id.orEmpty(), c) in added) Done(stringResource(R.string.use_added), muted = true)
                 else StageButton("+ " + stringResource(R.string.use_add), colors.ink, enabled = !busy) { onAdd(c) }
+            }
+        }
+    }
+}
+
+/**
+ * One spec of a sourced row's card: "Beden: 9 (L) · kavrama ve konfor", the trade values as chips
+ * (a tap on the chosen one takes it back), and a line to write another. The row decides nothing:
+ * the server writes the answer on the list's row and returns the card.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SpecRow(spec: PLUseSpec, onSpec: (String, String) -> Unit) {
+    val colors = WorkisTheme.colors
+    val label = spec.label.orEmpty()
+    val value = spec.value.orEmpty()
+    val options = spec.options.orEmpty().filter { it.isNotBlank() }
+    var focused by remember { mutableStateOf(false) }
+    // the line shows the buyer's own words only — a chosen chip is shown on the chip
+    var own by remember { mutableStateOf(if (value in options) "" else value) }
+    LaunchedEffect(value) { if (!focused) own = if (value in options) "" else value }
+    val focus = LocalFocusManager.current
+    Column(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(if (value.isEmpty()) label else "$label: $value") }
+                spec.why?.takeIf { it.isNotBlank() }?.let {
+                    withStyle(SpanStyle(fontSize = readingSize(13.sp), color = colors.muted)) { append(" · $it") }
+                }
+            },
+            fontSize = 15.sp, lineHeight = 20.sp, color = colors.ink,
+        )
+        if (options.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEach { o ->
+                val on = o == value
+                Row(
+                    Modifier
+                        .semantics { selected = on }
+                        .background(colors.surface, CircleShape)
+                        .border(if (on) 1.5.dp else 1.dp, if (on) colors.ink else colors.border, CircleShape)
+                        .clickable(role = Role.Button) { onSpec(label, if (on) "" else o) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    // chosen says itself with a tick and the heavier frame, never colour alone
+                    if (on) Icon(WorkisIcons.Check, contentDescription = null, tint = colors.ink, modifier = Modifier.size(12.dp))
+                    Text(o, fontSize = 13.sp, color = colors.ink, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1)
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedTextField(
+                value = own, onValueChange = { own = it.take(80) }, singleLine = true,
+                placeholder = { Text(stringResource(R.string.use_spec_own), color = colors.faint) },
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Kiremit500, unfocusedBorderColor = colors.border,
+                    focusedTextColor = colors.ink, unfocusedTextColor = colors.ink, cursorColor = colors.blue,
+                    focusedContainerColor = colors.surface, unfocusedContainerColor = colors.surface,
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    val s = own.trim().take(80)
+                    focus.clearFocus()
+                    if (s != value) onSpec(label, s)
+                }),
+                modifier = Modifier.weight(1f).onFocusChanged { focused = it.isFocused },
+            )
+            if (value.isNotEmpty()) TextButton(onClick = { own = ""; onSpec(label, "") }) {
+                Text(stringResource(R.string.use_spec_clear), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.muted)
             }
         }
     }
@@ -309,7 +404,7 @@ private fun Done(text: String, muted: Boolean = false) {
 
 // ---------- the row's Jowi line ----------
 
-private enum class JowiBadge { Asking, Better, Fits, Added }
+private enum class JowiBadge { Asking, Better, Fits, Added, Answered }
 
 /**
  * Under "İstenen": the badge (a door to the stage — asking/better on drafts only, fits and
@@ -321,6 +416,7 @@ fun JowiRowLine(item: PLItem, card: PLUseCard?, draft: Boolean, onBadge: () -> U
     val use = item.use?.text?.trim().orEmpty()
     val kind = when {
         draft && item.askUse == true && card == null -> JowiBadge.Asking
+        card?.sourced == true -> JowiBadge.Answered   // no product was judged (ledger 127)
         card?.verdict == "better" -> if (draft) JowiBadge.Better else JowiBadge.Fits
         card?.verdict == "fits" -> JowiBadge.Fits
         else -> null
@@ -355,6 +451,11 @@ private fun Badge(kind: JowiBadge, modifier: Modifier = Modifier) {
         JowiBadge.Fits -> Row(modifier.then(Modifier.padding(vertical = 3.dp)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(13.dp))
             Text(stringResource(R.string.use_badge_fits), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = SuccessGreen, maxLines = 1)
+        }
+        // a sourced row's card: the question was answered — nothing was judged
+        JowiBadge.Answered -> Row(modifier.then(Modifier.padding(vertical = 3.dp)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Icon(WorkisIcons.Check, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(12.dp))
+            Text(stringResource(R.string.use_badge_answered), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = SuccessGreen, maxLines = 1)
         }
         JowiBadge.Added -> Text(
             stringResource(R.string.use_badge_added), fontSize = 11.sp, fontWeight = FontWeight.Medium, color = colors.muted, maxLines = 1,

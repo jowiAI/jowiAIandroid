@@ -690,6 +690,11 @@ interface WorkisApi {
     @POST("workis/lists/items/{id}/use/")
     suspend fun listItemUse(@Path("id") id: String, @Body body: UseBody): UseReply
 
+    /** One spec of a sourced row's card (ledger 127): `{label, value}` → `{success, card}`; `value: ""` takes the
+     *  answer back. 400 `unknown_spec` | `sent`, 404 not yours / not a draft. */
+    @POST("workis/lists/items/{id}/spec/")
+    suspend fun listItemSpec(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): UseReply
+
     /** `{urgent: true|false}` on a draft's row (2026-10-29, ledger 79) — the buyer's "acele". */
     @POST("workis/lists/items/{id}/edit/")
     suspend fun listItemEdit(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult

@@ -629,6 +629,23 @@ class ListDetailViewModel : ViewModel() {
         }
     }
 
+    /** One spec of a sourced row's card (ledger 127): the server writes it on the row ("Beden: 9 (L)")
+     *  and answers the card as it now stands — drawn as it comes. A refusal (`unknown_spec`, `sent`)
+     *  is a code, not a sentence: nothing is printed, the re-read shows where the row stands. */
+    fun answerSpec(itemId: String, label: String, value: String) {
+        if (label.isEmpty()) return
+        viewModelScope.launch {
+            val (r, _) = partnerCall(lang) {
+                Graph.api.listItemSpec(itemId, kotlinx.serialization.json.buildJsonObject {
+                    put("label", kotlinx.serialization.json.JsonPrimitive(label))
+                    put("value", kotlinx.serialization.json.JsonPrimitive(value))
+                })
+            }
+            if (r?.success == true && r.card != null) freshCard(itemId, r.card)
+            load()
+        }
+    }
+
     /** "Buna geç": the bind door with the alternative's `cpid` + `sellerId`; the reply's `card`
      *  (`fits` + `switched`) is on the stage at once, then the re-read, then the variant rule as
      *  on any bind (the variant list opens when one must still be chosen). */

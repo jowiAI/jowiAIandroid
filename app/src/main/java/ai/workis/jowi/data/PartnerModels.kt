@@ -330,6 +330,20 @@ data class PLUseCard(
     val alternative: PLUseAlternative? = null,
     val complements: List<PLUseComplement>? = null,
     val switched: PLUseSwitched? = null,
+    /** The card of a row NO product names (ledger 127): nothing was judged, so `verdict` is never
+     *  drawn on it; `specs` (at most 3) are what the supplier must know, answered through `spec/`. */
+    @Serializable(with = FlexBool::class) val sourced: Boolean? = null,
+    val specs: List<PLUseSpec>? = null,
+)
+
+/** One thing a supplier must know to quote the right product: `options` are trade values (may be
+ *  empty — then only the line to write), `value` the buyer's answer ("" = none). */
+@Serializable
+data class PLUseSpec(
+    val label: String? = null,
+    val options: List<String>? = null,
+    val why: String? = null,
+    @Serializable(with = FlexString::class) val value: String? = null,
 )
 
 @Serializable
@@ -496,6 +510,8 @@ data class PLItem(
     val complete: Boolean? = null,
     /** Jowi's stage (2026-10-20): the row asks what it is for (drafts; once per row). */
     val askUse: Boolean? = null,
+    /** No product names the row (ledger 127) — the question's words and the card differ. */
+    @Serializable(with = FlexBool::class) val useSourced: Boolean? = null,
     /** Up to four application phrases from the product's facts — a tap fills the line, never sends. */
     val useChips: List<String>? = null,
     /** The answer and its card once given; null until then (decoded leniently). */
