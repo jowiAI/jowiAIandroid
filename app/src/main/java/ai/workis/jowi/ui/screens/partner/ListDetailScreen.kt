@@ -2033,6 +2033,8 @@ private fun RequestPage(d: PurchaseListDetail, vm: ListDetailViewModel, withdraw
     val folded = d.sendStatusMode == true && nQuotes(d) > 0
     val pending = d.pendingSellers.orEmpty()
     var showSilent by rememberSaveable { mutableStateOf(false) }
+    // where the request stands (ledger 128): the Talep step read in detail, under the strip
+    d.process?.let { ProcessSections(it, d.list?.units) }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Eyebrow(stringResource(R.string.send_preview_title).uppercase())
         SurfaceCard {

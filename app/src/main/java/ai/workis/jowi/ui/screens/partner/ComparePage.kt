@@ -35,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -274,8 +275,15 @@ internal fun DecisionPage(d: PurchaseListDetail, vm: ListDetailViewModel, onAwar
         }, icon = WorkisIcons.Warning)
     }
 
+    // the buyer's own rate (ledger 128): typed here, kept on this device per list, sent to no door
+    val own = p?.ownRate
+    val listId = d.list?.id.orEmpty()
+    var ownRates by rememberOwnRates(listId)
+    own?.let { OwnRateBox(it, ownRates) { v -> ownRates = v; OwnRateStore.save(listId, v) } }
 
-    CompareTable(rows, cols, picks, quoting, units, vm)
+    CompositionLocalProvider(LocalOwnRate provides own?.let { OwnRateView(it, ownRates) }) {
+        CompareTable(rows, cols, picks, quoting, units, vm)
+    }
 
     // one block per quote: what the selection gives it, its terms as the server's lines
     cols.forEach { c -> SellerBlock(c, parts.filter { it.sellerId == c.id }, quoting, onQuotePdf) { vm.pickAll(cmpSellerPicks(rows, c.id, picks)) } }
@@ -298,7 +306,8 @@ internal fun DecisionPage(d: PurchaseListDetail, vm: ListDetailViewModel, onAwar
                     }
                 }
             }
-            cmpSums(rows, picks).forEach { s ->
+            val sums = cmpSums(rows, picks)
+            sums.forEach { s ->
                 Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (s.vats.isEmpty()) SumLine(stringResource(R.string.total_label), WorkisMoney.text(s.net, s.currency), strong = true)
@@ -309,6 +318,7 @@ internal fun DecisionPage(d: PurchaseListDetail, vm: ListDetailViewModel, onAwar
                     }
                 }
             }
+            ownRateTotal(sums, own, ownRates)?.let { SumLine(stringResource(R.string.own_rate_total), it) }
             if (quoting) {
                 Button(
                     onClick = onAward, enabled = !vm.placing && parts.isNotEmpty(),
@@ -532,6 +542,8 @@ private fun PriceCell(o: PLProposalOption, seller: String, on: Boolean, quoting:
             Spacer(Modifier.width(4.dp))
             Text(o.currency.orEmpty(), fontFamily = WorkisMono, fontWeight = if (o.off == true) FontWeight.Bold else FontWeight.Medium, fontSize = 10.sp, color = if (o.off == true) colors.accentText else colors.faint, maxLines = 1, softWrap = false)
         }
+        // beside, never instead of: the price through the buyer's own rate (ledger 128)
+        ownRateBeside(o, LocalOwnRate.current)?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 13.sp, color = colors.faint, maxLines = 2, overflow = TextOverflow.Ellipsis) }
         o.rate?.let { Text(vatLine(it), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1) }
         if (o.off == true) Text(stringResource(R.string.off_currency_hint), fontSize = 10.5.sp, lineHeight = 14.sp, color = colors.accentText, maxLines = 4, overflow = TextOverflow.Ellipsis)
         o.carried?.quote?.takeIf { it.isNotEmpty() }?.let { q ->

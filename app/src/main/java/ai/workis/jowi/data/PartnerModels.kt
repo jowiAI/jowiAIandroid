@@ -775,7 +775,71 @@ data class PLProposal(
     val currencyNote: String? = null,
     /** Ledger 94 (2026-11-14): the comparison as a matrix — rows = the request, columns = the quotes. */
     @Serializable(with = PLMatrixTolerant::class) val matrix: PLMatrix? = null,
+    /** Ledger 128 (2026-11-25, `quote_currency.own_rate`): the currency the figures are read in and the ones the buyer writes ITS OWN rate for; null = one currency. The rate stays on the device. */
+    @Serializable(with = PLOwnRateTolerant::class) val ownRate: PLOwnRate? = null,
 )
+
+/** `proposal.ownRate {base, currencies}` — `currencies` never holds `base` or an empty code. */
+data class PLOwnRate(val base: String, val currencies: List<String>)
+
+/** An odd shape reads as "no rate asked" (null) and never sinks the list. */
+object PLOwnRateTolerant : KSerializer<PLOwnRate?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("PLOwnRate", PrimitiveKind.STRING)
+    private fun text(e: JsonElement?) = (e as? JsonPrimitive)?.takeIf { it !is JsonNull && it.isString }?.content?.trim().orEmpty()
+    override fun deserialize(decoder: Decoder): PLOwnRate? {
+        val json = decoder as? JsonDecoder ?: return null
+        val o = json.decodeJsonElement() as? JsonObject ?: return null
+        val base = text(o["base"]).takeIf { it.isNotEmpty() } ?: return null
+        val cur = (o["currencies"] as? JsonArray).orEmpty().map(::text).filter { it.isNotEmpty() && it != base }.distinct()
+        return PLOwnRate(base, cur).takeIf { cur.isNotEmpty() }
+    }
+    override fun serialize(encoder: Encoder, value: PLOwnRate?) = encoder.encodeNull()
+}
+
+/**
+ * `process` (ledger 128, Django `sourcing_sheet.for_buyer`): where the request stands, in counts —
+ * the four stages (`state` done | now | next), every row's asked / quotes (`state` none | wait | ok),
+ * the non-member firms as counts only (never a name). Every word is the server's; null = the list
+ * is not out for quotes.
+ */
+data class PLProcess(
+    val stages: List<PLProcessStage>,
+    val rows: List<PLProcessRow>,
+    val others: PLProcessOthers?,
+    val target: Int?, val quotes: Int?, val asked: Int?, val searching: Int?,
+)
+data class PLProcessStage(val n: Int, val title: String, val words: String, val state: String)
+data class PLProcessRow(val n: Int?, val id: String, val name: String, val qty: Double?, val unit: String, val asked: Int, val quotes: Int, val state: String, val words: String)
+data class PLProcessOthers(val asked: Int, val quoted: Int, val declined: Int, val waiting: Int)
+
+/** An odd shape reads as "nothing to draw" (null); a row or a stage that fails is dropped alone. */
+object PLProcessTolerant : KSerializer<PLProcess?> {
+    override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("PLProcess", PrimitiveKind.STRING)
+    private fun prim(e: JsonElement?) = (e as? JsonPrimitive)?.takeIf { it !is JsonNull }
+    private fun text(e: JsonElement?) = prim(e)?.content?.trim().orEmpty()
+    private fun num(e: JsonElement?) = prim(e)?.content?.toDoubleOrNull()?.takeIf { it.isFinite() }
+    private fun int(e: JsonElement?) = num(e)?.toInt()
+    override fun deserialize(decoder: Decoder): PLProcess? {
+        val json = decoder as? JsonDecoder ?: return null
+        val o = json.decodeJsonElement() as? JsonObject ?: return null
+        val stages = (o["stages"] as? JsonArray).orEmpty().mapNotNull { e ->
+            (e as? JsonObject)?.let { PLProcessStage(int(it["n"]) ?: 0, text(it["title"]), text(it["words"]), text(it["state"]).ifEmpty { "next" }) }
+        }
+        val rows = (o["rows"] as? JsonArray).orEmpty().mapIndexedNotNull { i, e ->
+            (e as? JsonObject)?.let {
+                PLProcessRow(
+                    int(it["n"]), text(it["id"]).ifEmpty { "#$i" }, text(it["name"]), num(it["qty"]), text(it["unit"]),
+                    int(it["asked"]) ?: 0, int(it["quotes"]) ?: 0, text(it["state"]), text(it["words"]),
+                )
+            }
+        }
+        val others = (o["others"] as? JsonObject)?.let {
+            PLProcessOthers(int(it["asked"]) ?: 0, int(it["quoted"]) ?: 0, int(it["declined"]) ?: 0, int(it["waiting"]) ?: 0)
+        }
+        return PLProcess(stages, rows, others, int(o["target"]), int(o["quotes"]), int(o["asked"]), int(o["searching"]))
+    }
+    override fun serialize(encoder: Encoder, value: PLProcess?) = encoder.encodeNull()
+}
 
 @Serializable
 data class PLRfqDoc(@Serializable(with = FlexString::class) val sellerId: String? = null, val lbl: PLLabel? = null, val number: String? = null, val stored: Boolean? = null)
@@ -909,6 +973,8 @@ data class PurchaseListDetail(
     val rfqLetter: String? = null,
     val rfqLetterDefault: String? = null,
     val pendingSellers: List<PLPendingSeller>? = null,
+    /** Ledger 128: where the request stands (2026-11-25); null = not out for quotes, an odd shape reads as nothing to draw. */
+    @Serializable(with = PLProcessTolerant::class) val process: PLProcess? = null,
     val orders: List<PLOrder>? = null,
     val virtualInvites: List<PLVirtualInvite>? = null,
     val projects: List<PLProject>? = null,
