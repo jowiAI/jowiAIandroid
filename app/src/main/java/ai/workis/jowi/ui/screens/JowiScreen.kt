@@ -244,6 +244,8 @@ data class JowiLine(
     val at: String? = null, // the turn's stamp; a live turn takes "now"
     /** "Teklif topla" on a match card: the spinner and the list stay on THAT card. */
     val collecting: Boolean = false,
+    /** "Teklif topla" came back without a list: the sentence under the card (the server's, else the app's word). */
+    val collectError: String? = null,
     // a written record is never deleted (2026-09-18): the server's row id and
     // whether this turn can still be WITHDRAWN into a stub in its place
     val serverId: String? = null,
@@ -738,8 +740,9 @@ class JowiViewModel : ViewModel() {
     fun collectQuotes(line: JowiLine) {
         val q = line.question ?: lines.lastOrNull { it.who == "user" }?.text ?: return
         // a card born from a photo: `item` names the row, the list keeps the photo
-        if (line.photoAsked) send(line.match?.item?.takeIf { it.isNotEmpty() } ?: q, null, createList = true, item = line.match?.item, photoKey = line.photoKey)
-        else send(q, null, createList = true)
+        // never under a list's scope: with `ctxList` the server answers ABOUT that list and opens none
+        if (line.photoAsked) send(line.match?.item?.takeIf { it.isNotEmpty() } ?: q, null, createList = true, item = line.match?.item, photoKey = line.photoKey, unscoped = true)
+        else send(q, null, createList = true, unscoped = true)
     }
 
     /** "Teklif topla" on a match card: the same sentence again, but the answer
@@ -770,13 +773,17 @@ class JowiViewModel : ViewModel() {
                 null -> return // needsChoice: no draft tapped yet
             }
         }
-        lines[idx] = lines[idx].copy(collecting = true)
+        lines[idx] = lines[idx].copy(collecting = true, collectError = null)
         viewModelScope.launch {
             val ctx = ScreenContext.current
+            var refusal: String? = null
             val r = runCatching {
                 Graph.api.ask(
                     AskBody(
-                        q = q, page = askPage(ctx), ctxList = ctxList(),
+                        // no `ctxList` (as iOS): under a list's scope the server answers ABOUT that
+                        // list and never reaches the match — the picks opened nothing, silently.
+                        // Where the rows go is `listId` / `title` below.
+                        q = q, page = askPage(ctx), ctxList = null,
                         createList = true, screen = ctx?.screen, state = ctx?.state,
                         visible = ctx?.visible?.takeIf { it.isNotEmpty() }, seller = ctx?.seller,
                         picks = picks, listId = into, title = title,
@@ -784,6 +791,8 @@ class JowiViewModel : ViewModel() {
                         photoKey = if (born) line.photoKey else null,
                     ),
                 )
+            }.onFailure { e ->
+                refusal = (e as? retrofit2.HttpException)?.let { ai.workis.jowi.data.serverSentence(it) }
             }.getOrNull()
             val at = lines.indexOfFirst { it.id == id }
             val opened = r?.listId?.takeIf { it.isNotEmpty() }
@@ -795,6 +804,8 @@ class JowiViewModel : ViewModel() {
                 lines[at] = lines[at].copy(
                     collecting = false,
                     listId = opened ?: lines[at].listId,
+                    // no list came back: say so under the card — "" = the app's own word
+                    collectError = if (opened != null) null else refusal ?: "",
                     canHide = if (sealed) false else lines[at].canHide,
                 )
                 if (sealed) {
@@ -1184,8 +1195,11 @@ fun JowiScreen(photo: Boolean = false, vm: JowiViewModel = viewModel()) {
     }
     vm.openList?.let { id ->
         // Android's back closes the list, back to the thread (not out of the tab)
-        androidx.activity.compose.BackHandler { vm.openList = null }
-        ai.workis.jowi.ui.screens.partner.ListDetailScreen(id, onBack = { vm.openList = null }, onOpenList = { vm.openList = it }, onCari = { cariFirm = it })
+        // closing it also takes it off Jowi's scope: a list that is no longer on screen must not
+        // stand as the thread's "<list> | Genel" and ride with the next question
+        val close = { vm.openList = null; ScreenContext.closeList() }
+        androidx.activity.compose.BackHandler { close() }
+        ai.workis.jowi.ui.screens.partner.ListDetailScreen(id, onBack = close, onOpenList = { vm.openList = it }, onCari = { cariFirm = it })
         return
     }
     // a value, not a bare string: an example or a clarify "back" lands with the
@@ -2180,6 +2194,9 @@ private fun MatchCard(m: AskMatch, line: JowiLine, vm: JowiViewModel) {
                     Icon(WorkisIcons.Sparkle, contentDescription = null, tint = if (live) colors.accentText else colors.faint, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(stringResource(R.string.collect_quotes), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = if (live) colors.accentText else colors.faint)
+                }
+                line.collectError?.let { e ->
+                    Text(e.ifEmpty { stringResource(R.string.st_error) }, fontSize = 12.sp, lineHeight = 16.sp, color = colors.danger)
                 }
             }
         }

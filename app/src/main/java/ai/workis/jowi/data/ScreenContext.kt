@@ -86,6 +86,9 @@ object ScreenContext {
         page = "lists"; openListId = id; openListTitle = title?.takeIf { it.isNotEmpty() }; openListDraft = draft
     }
 
+    /** The list left the screen (closed inside the Jowi tab): the page stays, the scope goes. */
+    fun closeList() { openListId = null; openListTitle = null; openListDraft = false }
+
     fun set(screen: String, state: JsonObject? = null, visible: List<VisibleItem>, seller: String? = null) {
         val labels = visible.map { it.copy(label = it.label.trim()) }
             .filter { it.label.isNotEmpty() }
