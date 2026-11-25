@@ -185,8 +185,9 @@ internal fun srcChips(p: SourcingBoard): List<SrcChip> {
         .map { SrcChip(it, null, counts[it] ?: 0, tones[it]) }
 }
 
+/** The server's `label` is printed; the catalog word only for an older server that sends no `chips` (or an empty label). */
 @Composable
-private fun chipWord(c: SrcChip): String = when (c.code) {
+private fun chipWord(c: SrcChip): String = c.label?.takeIf { it.isNotEmpty() } ?: when (c.code) {
     "all" -> stringResource(R.string.src_chip_all)
     "you" -> stringResource(R.string.src_chip_you)
     "send" -> stringResource(R.string.src_chip_send)
@@ -194,7 +195,7 @@ private fun chipWord(c: SrcChip): String = when (c.code) {
     "wait" -> stringResource(R.string.src_chip_wait)
     "ok" -> stringResource(R.string.src_chip_ok)
     "trial" -> stringResource(R.string.src_chip_trial)
-    else -> c.label?.takeIf { it.isNotEmpty() } ?: c.code
+    else -> c.code
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
