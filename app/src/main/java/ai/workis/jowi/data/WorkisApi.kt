@@ -479,6 +479,58 @@ interface WorkisApi {
     suspend fun consoleCargoPlan(@Path("vehicleId") vehicleId: String, @Body body: kotlinx.serialization.json.JsonObject): CargoNetResult
 
     // ===== ledger 128 · SOURCING (Tedarik) — doors go between this line and its END line =====
+    /** Console → Tedarik: the board (one row per request out for quotes, the lane's state). */
+    @GET("workis/console/sourcing/")
+    suspend fun consoleSourcing(): SourcingBoard
+
+    /** Tedarik › Ayarlar: the state plus the trial accounts and addresses. */
+    @GET("workis/console/sourcing/settings/")
+    suspend fun consoleSourcingSettings(): SourcingSettings
+
+    /** `{on}` Jowi asks by itself · `{what: "join", on}` the mailed link opens the firm's account. */
+    @POST("workis/console/sourcing/outreach/")
+    suspend fun consoleSourcingOutreach(@Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
+    /** `{buyers, emails}` — both as typed, comma separated. */
+    @POST("workis/console/sourcing/trial-buyers/")
+    suspend fun consoleSourcingTrialBuyers(@Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
+    /** One request's sheet — rows × firms, read once, drawn by row or by firm. */
+    @GET("workis/console/sourcing/lists/{listId}/sheet/")
+    suspend fun consoleSourcingSheet(@Path("listId") listId: String): SourcingSheetAnswer
+
+    /** `{to: {trialKey: address}}`. */
+    @POST("workis/console/sourcing/lists/{listId}/trial-send/")
+    suspend fun consoleSourcingTrialSend(@Path("listId") listId: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
+    /** `{item_id, name, email, city?, district?}`. */
+    @POST("workis/console/sourcing/lists/{listId}/firms/add/")
+    suspend fun consoleSourcingFirmAdd(@Path("listId") listId: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
+    /** A firm's act: `place` {city, district?} · `email` {email} · `send` {outcome?} · `drop` {item_id}. */
+    @POST("workis/console/sourcing/lists/{listId}/firms/{profileId}/{act}/")
+    suspend fun consoleSourcingFirmAct(
+        @Path("listId") listId: String,
+        @Path("profileId") profileId: String,
+        @Path("act") act: String,
+        @Body body: kotlinx.serialization.json.JsonObject,
+    ): SimpleResult
+
+    /** `{item_id}` — Jowi searches firms for the row (about a minute; mails nobody). */
+    @POST("workis/console/sourcing/lists/{listId}/research/")
+    suspend fun consoleSourcingResearch(@Path("listId") listId: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
+    /** The firm's mailed reply read into a draft — multipart `file` (pdf · image · txt · eml). */
+    @Multipart
+    @POST("workis/console/sourcing/invitations/{invitationId}/quote/")
+    suspend fun consoleSourcingQuote(@Path("invitationId") invitationId: String, @Part file: okhttp3.MultipartBody.Part): SimpleResult
+
+    @POST("workis/console/sourcing/quotes/{quoteId}/approve/")
+    suspend fun consoleSourcingApprove(@Path("quoteId") quoteId: String, @Body body: kotlinx.serialization.json.JsonObject): SimpleResult
+
+    /** The file itself: `form` · `reply` · `m<mail n>-<file n>`. */
+    @GET("workis/console/sourcing/invitations/{invitationId}/files/{what}/")
+    suspend fun consoleSourcingFile(@Path("invitationId") invitationId: String, @Path("what") what: String): retrofit2.Response<okhttp3.ResponseBody>
     // ===== ledger 128 · SOURCING (Tedarik) — END =====
 
     // .
