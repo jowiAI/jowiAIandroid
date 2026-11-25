@@ -500,6 +500,30 @@ interface WorkisApi {
     // .
 
     // ===== ledger 128 · COVERAGE (Kapsama) — doors go between this line and its END line =====
+    // The web's own JSON (snake_case). Research answers, stored results and batches come back
+    // as raw objects: the found firms go to `batch/` exactly as received (CoverageModels.kt).
+    /** `?days=` 1…365, the web's 30 by default. */
+    @GET("workis/console/coverage/")
+    suspend fun consoleCoverage(@Query("days") days: Int = 30): ConsoleCoveragePage
+
+    /** ~60 s — called through the long-timeout instance (`CoverageNet.slow`), never `Graph.api`. */
+    @POST("workis/console/coverage/groups/{id}/research/")
+    suspend fun consoleCoverageResearchGroup(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): kotlinx.serialization.json.JsonObject
+
+    /** `{text}` — an unmet ask in its own words; ~60 s, the long-timeout instance too. */
+    @POST("workis/console/coverage/research/")
+    suspend fun consoleCoverageResearchText(@Body body: kotlinx.serialization.json.JsonObject): kotlinx.serialization.json.JsonObject
+
+    /** The stored last research of the group; 404 = none kept. */
+    @GET("workis/console/coverage/groups/{id}/found/")
+    suspend fun consoleCoverageFound(@Path("id") id: String): kotlinx.serialization.json.JsonObject
+
+    /** `{firms: [raw firm objects]}` → `{success, batch}`. */
+    @POST("workis/console/coverage/batch/")
+    suspend fun consoleCoverageBatch(@Body body: kotlinx.serialization.json.JsonObject): kotlinx.serialization.json.JsonObject
+
+    @GET("workis/console/coverage/batch/{id}/")
+    suspend fun consoleCoverageBatchState(@Path("id") id: String): kotlinx.serialization.json.JsonObject
     // ===== ledger 128 · COVERAGE (Kapsama) — END =====
 
     // .
@@ -531,6 +555,17 @@ interface WorkisApi {
     // .
 
     // ===== ledger 128 · SYSTEM (Sistem) — doors go between this line and its END line =====
+    /** The coordinator alone: pilots, tester links, seals, tokens, webOnly. */
+    @GET("workis/console/system/")
+    suspend fun consoleSystem(): ConsoleSystemPage
+
+    /** `{action: appoint, email}` · `{action: pages, userId, pages: [key]}` (the FULL list) · `{action: dismiss, userId}`. */
+    @POST("workis/console/system/pilots/")
+    suspend fun consoleSystemPilots(@Body body: kotlinx.serialization.json.JsonObject): ConsoleSystemPilotsReply
+
+    /** `{emails, platform: android|ios, link ("" = the remembered one), lang}` → `{success, message}`. */
+    @POST("workis/console/system/tester-invite/")
+    suspend fun consoleSystemTesterInvite(@Body body: kotlinx.serialization.json.JsonObject): ConsoleSystemPilotsReply
     // ===== ledger 128 · SYSTEM (Sistem) — END =====
 
     // .
