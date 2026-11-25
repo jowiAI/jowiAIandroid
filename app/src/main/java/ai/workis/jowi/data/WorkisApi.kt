@@ -486,6 +486,13 @@ interface WorkisApi {
     // .
 
     // ===== ledger 128 · REGION P&L (Bölge K/Z) — doors go between this line and its END line =====
+    /** Console → Bölge K/Z: per region the open month, `soFar`, assets, closed months (`totals` snake_case). */
+    @GET("workis/console/region-pnl/")
+    suspend fun consoleRegionPnl(): ConsoleRegionPnl
+
+    /** `{region, kind (costKinds), amount (as typed, "1250,50"), note}` → `{success, id, message}` | `{success:false, error}`. */
+    @POST("workis/console/region-pnl/cost/")
+    suspend fun consoleRegionCost(@Body body: kotlinx.serialization.json.JsonObject): MoneyDeskResult
     // ===== ledger 128 · REGION P&L (Bölge K/Z) — END =====
 
     // .
@@ -500,6 +507,9 @@ interface WorkisApi {
     // .
 
     // ===== ledger 128 · MARKET (Pazar) — doors go between this line and its END line =====
+    /** Console → Pazar (read-only): stats, requests' lifecycle, current accounts, the autonomy lane. */
+    @GET("workis/console/market/")
+    suspend fun consoleMarket(): ConsoleMarket
     // ===== ledger 128 · MARKET (Pazar) — END =====
 
     // .
@@ -507,6 +517,13 @@ interface WorkisApi {
     // .
 
     // ===== ledger 128 · SUBSCRIPTIONS (Abonelikler) — doors go between this line and its END line =====
+    /** Console → Abonelikler: mrr / openTotal / overdue, one row per firm with its invoices. */
+    @GET("workis/console/subscriptions/")
+    suspend fun consoleSubscriptions(): ConsoleSubscriptions
+
+    /** `{ref}` → `{success, number, message}` — only on an invoice whose status is `issued`. */
+    @POST("workis/console/subscriptions/invoices/{id}/paid/")
+    suspend fun consoleInvoicePaid(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): MoneyDeskResult
     // ===== ledger 128 · SUBSCRIPTIONS (Abonelikler) — END =====
 
     // .
