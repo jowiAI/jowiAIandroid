@@ -100,6 +100,11 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   `totals` / `params` are snake_case, `why.words` / `why.legs` printed whole. Kapsama is the web's snake_case JSON; research firms stay raw
   `JsonObject`s and go back to `batch/` untouched; the two research calls use `CoverageNet.slow` (150 s read) — the shared client stays 60 s.
   Sistem: a pilot's page ticks are saved as the FULL list. Money on these pages is a JSON number.
+  Ledger 129: these pages print the SERVER's labels — Tedarik chips `label`, K/Z `kindLabel` → `kindLabels[kind]`, Kapsama `statusWords` /
+  `stateWords` / `noteWords` (a sent-but-empty `noteWords` prints nothing), `message` after `cost/` and `paid/`; the app's own tables are only the
+  fallback for an older server, icons and colours stay keyed on the codes. The sheet's grounds: a row's (or firm's) head on its tone's quiet
+  ground (k `accentSoft` · w `beigeBg` · g `successBg`), firms on the plain surface, sentences as icon + words with no capsule, and
+  "N firma sizi bekliyor" is that screen's one blue.
 - Buyer's request process + own rate (ledger 128, `ui/screens/partner/ListProcess.kt`): `process` under the stage strip of the request page
   (stages as sent, done green tick + word · now kiremit dot + word · next hollow; non-member firms as counts only). `proposal.ownRate
   {base, currencies}` → `OwnRateBox` above the comparison; the rate lives in prefs `workis_ownrate_<listId>`, is sent to NO door, only adds
