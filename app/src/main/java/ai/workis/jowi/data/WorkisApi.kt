@@ -478,7 +478,7 @@ interface WorkisApi {
     @POST("workis/console/cargo/routes/{vehicleId}/plan/")
     suspend fun consoleCargoPlan(@Path("vehicleId") vehicleId: String, @Body body: kotlinx.serialization.json.JsonObject): CargoNetResult
 
-    // ===== ledger 128 · SOURCING (Tedarik) — doors go between this line and its END line =====
+    // --- Console SOURCING (Tedarik) (ledger 128) ---
     /** Console → Tedarik: the board (one row per request out for quotes, the lane's state). */
     @GET("workis/console/sourcing/")
     suspend fun consoleSourcing(): SourcingBoard
@@ -531,13 +531,8 @@ interface WorkisApi {
     /** The file itself: `form` · `reply` · `m<mail n>-<file n>`. */
     @GET("workis/console/sourcing/invitations/{invitationId}/files/{what}/")
     suspend fun consoleSourcingFile(@Path("invitationId") invitationId: String, @Path("what") what: String): retrofit2.Response<okhttp3.ResponseBody>
-    // ===== ledger 128 · SOURCING (Tedarik) — END =====
 
-    // .
-    // .
-    // .
-
-    // ===== ledger 128 · REGION P&L (Bölge K/Z) — doors go between this line and its END line =====
+    // --- Console REGION P&L (Bölge K/Z) (ledger 128) ---
     /** Console → Bölge K/Z: per region the open month, `soFar`, assets, closed months (`totals` snake_case). */
     @GET("workis/console/region-pnl/")
     suspend fun consoleRegionPnl(): ConsoleRegionPnl
@@ -545,13 +540,8 @@ interface WorkisApi {
     /** `{region, kind (costKinds), amount (as typed, "1250,50"), note}` → `{success, id, message}` | `{success:false, error}`. */
     @POST("workis/console/region-pnl/cost/")
     suspend fun consoleRegionCost(@Body body: kotlinx.serialization.json.JsonObject): MoneyDeskResult
-    // ===== ledger 128 · REGION P&L (Bölge K/Z) — END =====
 
-    // .
-    // .
-    // .
-
-    // ===== ledger 128 · COVERAGE (Kapsama) — doors go between this line and its END line =====
+    // --- Console COVERAGE (Kapsama) (ledger 128) ---
     // The web's own JSON (snake_case). Research answers, stored results and batches come back
     // as raw objects: the found firms go to `batch/` exactly as received (CoverageModels.kt).
     /** `?days=` 1…365, the web's 30 by default. */
@@ -576,23 +566,13 @@ interface WorkisApi {
 
     @GET("workis/console/coverage/batch/{id}/")
     suspend fun consoleCoverageBatchState(@Path("id") id: String): kotlinx.serialization.json.JsonObject
-    // ===== ledger 128 · COVERAGE (Kapsama) — END =====
 
-    // .
-    // .
-    // .
-
-    // ===== ledger 128 · MARKET (Pazar) — doors go between this line and its END line =====
+    // --- Console MARKET (Pazar) (ledger 128) ---
     /** Console → Pazar (read-only): stats, requests' lifecycle, current accounts, the autonomy lane. */
     @GET("workis/console/market/")
     suspend fun consoleMarket(): ConsoleMarket
-    // ===== ledger 128 · MARKET (Pazar) — END =====
 
-    // .
-    // .
-    // .
-
-    // ===== ledger 128 · SUBSCRIPTIONS (Abonelikler) — doors go between this line and its END line =====
+    // --- Console SUBSCRIPTIONS (Abonelikler) (ledger 128) ---
     /** Console → Abonelikler: mrr / openTotal / overdue, one row per firm with its invoices. */
     @GET("workis/console/subscriptions/")
     suspend fun consoleSubscriptions(): ConsoleSubscriptions
@@ -600,13 +580,8 @@ interface WorkisApi {
     /** `{ref}` → `{success, number, message}` — only on an invoice whose status is `issued`. */
     @POST("workis/console/subscriptions/invoices/{id}/paid/")
     suspend fun consoleInvoicePaid(@Path("id") id: String, @Body body: kotlinx.serialization.json.JsonObject): MoneyDeskResult
-    // ===== ledger 128 · SUBSCRIPTIONS (Abonelikler) — END =====
 
-    // .
-    // .
-    // .
-
-    // ===== ledger 128 · SYSTEM (Sistem) — doors go between this line and its END line =====
+    // --- Console SYSTEM (Sistem) (ledger 128) ---
     /** The coordinator alone: pilots, tester links, seals, tokens, webOnly. */
     @GET("workis/console/system/")
     suspend fun consoleSystem(): ConsoleSystemPage
@@ -618,11 +593,6 @@ interface WorkisApi {
     /** `{emails, platform: android|ios, link ("" = the remembered one), lang}` → `{success, message}`. */
     @POST("workis/console/system/tester-invite/")
     suspend fun consoleSystemTesterInvite(@Body body: kotlinx.serialization.json.JsonObject): ConsoleSystemPilotsReply
-    // ===== ledger 128 · SYSTEM (Sistem) — END =====
-
-    // .
-    // .
-    // .
 
     @GET("workis/console/groups/")
     suspend fun consoleGroups(@Query("sector") sector: String? = null): GroupsPage

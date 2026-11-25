@@ -91,6 +91,19 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   sent null apart from an absent key). Doors come from `pages` (`ConsoleScreens` in `ConsoleRoot.kt`); without `panel` no
   `console/summary/` call, the root is a door list and the first page opens once per launch; `jowi: false` takes the Jowi tab off.
   `seat` is read for no permission. Kargo (ledger 114, page `cargo`) = `ConsoleCargoScreen.kt`.
+- Console pages of ledger 128 (`ConsoleSourcingScreen.kt` + `ConsoleSourcingSheet.kt`, `ConsoleRegionPnlScreen.kt`, `ConsoleCoverageScreen.kt`,
+  `ConsoleMarketScreen.kt`, `ConsoleSubscriptionsScreen.kt`, `ConsoleSystemScreen.kt`): page keys `sourcing · coverage · market · pnl · subs ·
+  system`, drawn ONLY from `workis.console.pages` (never by the role fallback — a seat without them gets 403), on the Panel as doors under the
+  older tiles two to a row. Each screen takes `onBack` and draws its own `ConsoleSub` bar and inner pages. Tedarik: the board draws the server's
+  `chips` (fallback `counts`), a request is ONE `…/sheet/` answer drawn by row or by firm, re-read after every act and every 20 s while a
+  research runs; never drawn: "TRY iste", `relay`, `rows.pickable`, `funnel.firms`; the inbox connection form is web-only. Bölge K/Z:
+  `totals` / `params` are snake_case, `why.words` / `why.legs` printed whole. Kapsama is the web's snake_case JSON; research firms stay raw
+  `JsonObject`s and go back to `batch/` untouched; the two research calls use `CoverageNet.slow` (150 s read) — the shared client stays 60 s.
+  Sistem: a pilot's page ticks are saved as the FULL list. Money on these pages is a JSON number.
+- Buyer's request process + own rate (ledger 128, `ui/screens/partner/ListProcess.kt`): `process` under the stage strip of the request page
+  (stages as sent, done green tick + word · now kiremit dot + word · next hollow; non-member firms as counts only). `proposal.ownRate
+  {base, currencies}` → `OwnRateBox` above the comparison; the rate lives in prefs `workis_ownrate_<listId>`, is sent to NO door, only adds
+  "≈ …" beside a price and one approximate total — the lowest mark, the shortcuts and the award body never read it.
 - Asking with a photo (ledger 119, `ui/screens/JowiPhoto.kt`): the "+" inside the ask field (system camera via `TakePicture` into
   `cache/photo`, system picker — no permission of the app's own), drawn only on a buying seat (`workis.canAskPhoto`, else not console
   and not expert). The photo waits in the view model (`staged`), leaves as multipart `image` (JPEG, long edge ≤ 2000) with `q` or
