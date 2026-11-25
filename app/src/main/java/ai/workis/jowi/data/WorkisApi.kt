@@ -478,6 +478,48 @@ interface WorkisApi {
     @POST("workis/console/cargo/routes/{vehicleId}/plan/")
     suspend fun consoleCargoPlan(@Path("vehicleId") vehicleId: String, @Body body: kotlinx.serialization.json.JsonObject): CargoNetResult
 
+    // ===== ledger 128 · SOURCING (Tedarik) — doors go between this line and its END line =====
+    // ===== ledger 128 · SOURCING (Tedarik) — END =====
+
+    // .
+    // .
+    // .
+
+    // ===== ledger 128 · REGION P&L (Bölge K/Z) — doors go between this line and its END line =====
+    // ===== ledger 128 · REGION P&L (Bölge K/Z) — END =====
+
+    // .
+    // .
+    // .
+
+    // ===== ledger 128 · COVERAGE (Kapsama) — doors go between this line and its END line =====
+    // ===== ledger 128 · COVERAGE (Kapsama) — END =====
+
+    // .
+    // .
+    // .
+
+    // ===== ledger 128 · MARKET (Pazar) — doors go between this line and its END line =====
+    // ===== ledger 128 · MARKET (Pazar) — END =====
+
+    // .
+    // .
+    // .
+
+    // ===== ledger 128 · SUBSCRIPTIONS (Abonelikler) — doors go between this line and its END line =====
+    // ===== ledger 128 · SUBSCRIPTIONS (Abonelikler) — END =====
+
+    // .
+    // .
+    // .
+
+    // ===== ledger 128 · SYSTEM (Sistem) — doors go between this line and its END line =====
+    // ===== ledger 128 · SYSTEM (Sistem) — END =====
+
+    // .
+    // .
+    // .
+
     @GET("workis/console/groups/")
     suspend fun consoleGroups(@Query("sector") sector: String? = null): GroupsPage
 

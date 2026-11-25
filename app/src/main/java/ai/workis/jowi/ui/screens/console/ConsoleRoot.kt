@@ -83,13 +83,26 @@ sealed interface ConsoleDest {
     data object Groups : ConsoleDest
     /** Kargo (ledger 114): the network's control tower, page key `cargo`. */
     data object Cargo : ConsoleDest
+    /** The web's six remaining pages (ledger 128): each screen draws its own bar and inner pages. */
+    data object Sourcing : ConsoleDest
+    data object Coverage : ConsoleDest
+    data object Market : ConsoleDest
+    data object Pnl : ConsoleDest
+    data object Subs : ConsoleDest
+    data object System : ConsoleDest
 }
 
 /**
  * The console pages this app has a screen for, in the web menu's order (ledger 113). A key
  * the server sends and the app cannot draw is skipped.
  */
-private val ConsoleScreens = listOf("panel", "apps", "partners", "queries", "cargo", "knowledge", "products", "groups")
+private val ConsoleScreens = listOf(
+    "panel", "apps", "partners", "queries", "sourcing", "coverage", "cargo", "knowledge", "products", "groups",
+    "market", "pnl", "subs", "system",
+)
+
+/** The six pages of ledger 128 — on the Panel they stand as doors under the older tiles, in the server's order. */
+private val NewerPages = listOf("sourcing", "coverage", "market", "pnl", "subs", "system")
 
 /** The door a page key opens; "conversations" rides with `queries` (the same page on the web). */
 private fun destOf(page: String): ConsoleDest? = when (page) {
@@ -101,6 +114,12 @@ private fun destOf(page: String): ConsoleDest? = when (page) {
     "knowledge" -> ConsoleDest.Knowledge
     "products" -> ConsoleDest.CatalogSellers
     "groups" -> ConsoleDest.Groups
+    "sourcing" -> ConsoleDest.Sourcing
+    "coverage" -> ConsoleDest.Coverage
+    "market" -> ConsoleDest.Market
+    "pnl" -> ConsoleDest.Pnl
+    "subs" -> ConsoleDest.Subs
+    "system" -> ConsoleDest.System
     else -> null
 }
 
@@ -111,7 +130,9 @@ fun ConsoleRoot(vm: ConsoleViewModel = viewModel()) {
     // pending or on a server that never sent the key — then every page, as before
     val workspaces by Graph.workspaces.value.collectAsState()
     val console = workspaces?.workis?.consoleValue
-    val pages = (console?.pages ?: ConsoleScreens).filter { it in ConsoleScreens }
+    // a server that never sent the key (role fallback) keeps the pages it always had: the six
+    // newer doors answer 403 to a seat that does not hold them, so they come only from `pages`
+    val pages = (console?.pages ?: (ConsoleScreens - NewerPages.toSet())).filter { it in ConsoleScreens }
     // a console without the Panel opens on the first page of its menu, once per launch
     LaunchedEffect(console) {
         if (!vm.openedFirst && console != null && "panel" !in pages) {
@@ -130,6 +151,12 @@ fun ConsoleRoot(vm: ConsoleViewModel = viewModel()) {
     when (val d = dest) {
         is ConsoleDest.Home -> ConsoleHome(vm, console, pages) { dest = it }
         ConsoleDest.Cargo -> ConsoleSub(stringResource(R.string.cargo_net_title), { dest = ConsoleDest.Home }) { ConsoleCargoScreen() }
+        ConsoleDest.Sourcing -> ConsoleSourcingScreen(onBack = { dest = ConsoleDest.Home })
+        ConsoleDest.Coverage -> ConsoleCoverageScreen(onBack = { dest = ConsoleDest.Home })
+        ConsoleDest.Market -> ConsoleMarketScreen(onBack = { dest = ConsoleDest.Home })
+        ConsoleDest.Pnl -> ConsoleRegionPnlScreen(onBack = { dest = ConsoleDest.Home })
+        ConsoleDest.Subs -> ConsoleSubscriptionsScreen(onBack = { dest = ConsoleDest.Home })
+        ConsoleDest.System -> ConsoleSystemScreen(onBack = { dest = ConsoleDest.Home })
         is ConsoleDest.Pipeline -> ConsoleSub(stringResource(R.string.console_all_apps), { dest = ConsoleDest.Home }) {
             ConsolePipeline(vm) { dest = ConsoleDest.Detail(it) }
         }
@@ -373,6 +400,18 @@ private fun ConsoleHome(vm: ConsoleViewModel, console: ai.workis.jowi.data.Works
             }
             Spacer(Modifier.height(14.dp))
         }
+        // the six newer pages (ledger 128): doors under the older tiles, two to a row, in the
+        // order the server sent them; one left over stays half width
+        pages.filter { it in NewerPages }.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                pair.forEach { page ->
+                    val (label, icon) = pageFace(page)
+                    CapsuleDoor(icon, label, Modifier.weight(1f)) { destOf(page)?.let(onOpen) }
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(14.dp))
+        }
 
         // web order: Jowi answered above the question topics (both open Sorular)
         s?.jowiAnswered?.takeIf { has("queries") && (it.total ?: 0) > 0 }?.let { ja ->
@@ -431,7 +470,13 @@ private fun ConsoleHome(vm: ConsoleViewModel, console: ai.workis.jowi.data.Works
 @Composable
 private fun PageDoor(page: String, onOpen: (ConsoleDest) -> Unit) {
     val dest = destOf(page) ?: return
-    val (label, icon) = when (page) {
+    val (label, icon) = pageFace(page)
+    CapsuleDoor(icon, label, Modifier.fillMaxWidth()) { onOpen(dest) }
+}
+
+/** A page's own word and icon — the door list and the Panel's newer doors read the same pair. */
+@Composable
+private fun pageFace(page: String): Pair<String, ImageVector> = when (page) {
         "apps" -> stringResource(R.string.console_all_apps) to WorkisIcons.Tray
         "partners" -> stringResource(R.string.partners_title) to WorkisIcons.Building
         "queries" -> stringResource(R.string.questions_title) to Icons.Filled.Email
@@ -439,9 +484,13 @@ private fun PageDoor(page: String, onOpen: (ConsoleDest) -> Unit) {
         "cargo" -> stringResource(R.string.cargo_title) to WorkisIcons.Truck
         "knowledge" -> stringResource(R.string.expert_knowledge_title) to WorkisIcons.Pencil
         "products" -> stringResource(R.string.catalog_title) to WorkisIcons.ShippingBox
+        "sourcing" -> stringResource(R.string.console_sourcing_title) to WorkisIcons.Search
+        "coverage" -> stringResource(R.string.console_coverage_title) to WorkisIcons.Checklist
+        "market" -> stringResource(R.string.console_market_title) to WorkisIcons.Globe
+        "pnl" -> stringResource(R.string.console_pnl_title) to WorkisIcons.ChartBars
+        "subs" -> stringResource(R.string.console_subs_title) to WorkisIcons.CreditCard
+        "system" -> stringResource(R.string.console_system_title) to WorkisIcons.Shield
         else -> stringResource(R.string.groups_door) to WorkisIcons.Grid
-    }
-    CapsuleDoor(icon, label, Modifier.fillMaxWidth()) { onOpen(dest) }
 }
 
 /**
