@@ -1042,6 +1042,7 @@
     <string name="plate_facts_save">Levha bilgilerini kaydet</string>
     <string name="plate_verified">Workis doğruladı</string>
     <string name="pnl_add_cost">Gider ekle</string>
+    <string name="pnl_affiliations">Beyan edilen bağlantı</string>
     <string name="pnl_asset_station">Şarj istasyonu</string>
     <string name="pnl_asset_vehicle">Araç</string>
     <string name="pnl_assets">Amortismana giren yatırımlar</string>

@@ -1042,6 +1042,7 @@
     <string name="plate_facts_save">Save the plate details</string>
     <string name="plate_verified">Verified by Workis</string>
     <string name="pnl_add_cost">Add cost</string>
+    <string name="pnl_affiliations">Declared connection</string>
     <string name="pnl_asset_station">Charging station</string>
     <string name="pnl_asset_vehicle">Vehicle</string>
     <string name="pnl_assets">Amortised investments</string>
