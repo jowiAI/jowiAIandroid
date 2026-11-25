@@ -31,6 +31,15 @@ data class ConsoleCoveragePage(
     @Serializable(with = FlexInt::class) val target: Int? = null,
     @Serializable(with = FlexInt::class) val days: Int? = null,
     val totals: CoverageTotals? = null,
+    /** What the page's codes are called, in the request's language: `{status, state, note}` → `{code: words}`. */
+    val labels: CoverageLabels? = null,
+)
+
+@Serializable
+data class CoverageLabels(
+    val status: Map<String, String>? = null,
+    val state: Map<String, String>? = null,
+    val note: Map<String, String>? = null,
 )
 
 @Serializable
@@ -71,6 +80,8 @@ data class CoverageRow(
     @SerialName("n_sellers") @Serializable(with = FlexInt::class) val nSellers: Int? = null,
     /** short · thin · ok */
     val status: String? = null,
+    /** The server's name for `status` (camelCase on this snake_case page). */
+    val statusWords: String? = null,
     @Serializable(with = FlexInt::class) val asks: Int? = null,
     @SerialName("uncovered_rows") @Serializable(with = FlexInt::class) val uncoveredRows: Int? = null,
     @SerialName("last_research") val lastResearch: String? = null,
@@ -118,7 +129,12 @@ data class CoverageBatchFirm(
     /** queued · candidate · reading · read · failed · skipped */
     val state: String? = null,
     val note: String? = null,
-    /** The server's own words for `note` (Django batch_view) — an unknown note's text. */
+    /** The server's name for `state`. */
+    val stateWords: String? = null,
+    /**
+     * `note` as words (Django batch_view `note_words`): a key's sentence, an error's own text,
+     * `born` → "" = print nothing. null = the key was not sent (an older server).
+     */
     val noteWords: String? = null,
     @SerialName("profile_id") @Serializable(with = FlexString::class) val profileId: String? = null,
     @Serializable(with = FlexInt::class) val families: Int? = null,

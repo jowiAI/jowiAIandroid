@@ -224,10 +224,11 @@ private fun androidx.compose.foundation.lazy.LazyListScope.pnlRegionItems(index:
     val key = r.id ?: "r$index"
     // the open month's figures
     item(key = "$key-fig") {
-        PnlSection(WorkisIcons.MapPin, r.region.orEmpty()) {
+        PnlSection(WorkisIcons.MapPin, r.region.orEmpty(), sub = r.companyName?.takeIf { it.isNotEmpty() }) {
             PnlFigure(stringResource(R.string.pnl_revenue), r.revenue)
             PnlCostFigure(r.cost)
             PnlFigure(stringResource(R.string.pnl_net), r.net, strong = true)
+            r.affiliations?.takeIf { it.isNotEmpty() }?.let { PnlAffiliations(it) }
         }
     }
     // the open month's lines
@@ -275,14 +276,17 @@ private fun PnlCard(content: @Composable () -> Unit) {
     ) { content() }
 }
 
-/** A section: its icon in the accent tone, the name in ink (never upper-cased); the card; the hint under it. */
+/** A section: its icon in the accent tone, the name in ink (never upper-cased), `sub` under the name; the card; the hint under it. */
 @Composable
-private fun PnlSection(icon: ImageVector, title: String, hint: String? = null, content: @Composable () -> Unit) {
+private fun PnlSection(icon: ImageVector, title: String, hint: String? = null, sub: String? = null, content: @Composable () -> Unit) {
     val colors = WorkisTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
-            Icon(icon, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(15.dp))
-            Text(title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp), modifier = Modifier.padding(horizontal = 4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                Icon(icon, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(15.dp))
+                Text(title, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = colors.ink)
+            }
+            sub?.let { Text(it, fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted) }
         }
         PnlCard(content)
         hint?.let { PnlHint(it, Modifier.padding(horizontal = 4.dp)) }
@@ -319,9 +323,19 @@ private fun pnlParamsLine(p: PnlParams): String =
         stringResource(R.string.pnl_lead_share_param) + " " + pnlPct(p.leadShare) + " · " +
         stringResource(R.string.pnl_hq_leg_param) + " " + pnlPct(p.attrHq)
 
-/** The kind in the app's words; an unknown kind reads the server's own label, then the code. */
+/**
+ * The kind: the line's own `kindLabel`, else the page's `kindLabels[kind]`, else the app's table
+ * (kept only for an older server), else the code.
+ */
 @Composable
-private fun pnlKindWord(k: String?, label: String? = null, page: ConsoleRegionPnl? = null): String = when (k) {
+private fun pnlKindWord(k: String?, label: String? = null, page: ConsoleRegionPnl? = null): String =
+    label?.takeIf { it.isNotEmpty() }
+        ?: page?.kindLabels?.get(k.orEmpty())?.takeIf { it.isNotEmpty() }
+        ?: pnlKindTable(k)
+
+/** The app's own names — the fallback for a server that sends no labels. */
+@Composable
+private fun pnlKindTable(k: String?): String = when (k) {
     "cargo_fee" -> stringResource(R.string.pnl_kind_cargo_fee)
     "subs_attr" -> stringResource(R.string.pnl_kind_subs_attr)
     "commission_attr" -> stringResource(R.string.pnl_kind_commission_attr)
@@ -333,7 +347,7 @@ private fun pnlKindWord(k: String?, label: String? = null, page: ConsoleRegionPn
     "cost_other" -> stringResource(R.string.pnl_kind_other)
     "amort_vehicle" -> stringResource(R.string.pnl_kind_amort_vehicle)
     "amort_station" -> stringResource(R.string.pnl_kind_amort_station)
-    else -> label?.takeIf { it.isNotEmpty() } ?: page?.kindLabels?.get(k.orEmpty())?.takeIf { it.isNotEmpty() } ?: k.orEmpty()
+    else -> k.orEmpty()
 }
 
 /** The month and the rule the pool runs on — the web's sub-line. */
@@ -387,6 +401,19 @@ private fun PnlDistribution(net: Double?, carryIn: Double?, distributable: Doubl
     PnlFigure(stringResource(R.string.pnl_platform_share), platform)
     if (carryOut != null && carryOut != 0.0) {
         PnlFigure(stringResource(R.string.pnl_carry_out), carryOut, tone = if (carryOut < 0) WorkisTheme.colors.danger else WorkisTheme.colors.ink)
+    }
+}
+
+/** The connections the field lead DECLARED — the row's name, then each one on its own line, printed whole. */
+@Composable
+private fun PnlAffiliations(lines: List<String>) {
+    val colors = WorkisTheme.colors
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(WorkisIcons.Link, contentDescription = null, tint = colors.muted, modifier = Modifier.padding(top = 2.dp).size(15.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(stringResource(R.string.pnl_affiliations), fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
+            lines.forEach { Text(it, fontSize = 13.sp, lineHeight = 18.sp, color = colors.muted) }
+        }
     }
 }
 

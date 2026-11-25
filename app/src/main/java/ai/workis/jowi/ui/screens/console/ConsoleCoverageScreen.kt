@@ -48,6 +48,8 @@ import ai.workis.jowi.Graph
 import ai.workis.jowi.R
 import ai.workis.jowi.data.ConsoleCoveragePage
 import ai.workis.jowi.data.CoverageBatch
+import ai.workis.jowi.data.CoverageBatchFirm
+import ai.workis.jowi.data.CoverageLabels
 import ai.workis.jowi.data.CoverageMoving
 import ai.workis.jowi.data.CoverageNeed
 import ai.workis.jowi.data.CoverageNet
@@ -290,6 +292,13 @@ private fun CovButton(label: String, icon: ImageVector?, enabled: Boolean = true
     }
 }
 
+/** The group's status: the row's `statusWords`, else the page's `labels.status`, else the app's word. Icon and colour stay on the code. */
+@Composable
+private fun covStatusWord(r: CoverageRow, labels: CoverageLabels?): String =
+    r.statusWords?.takeIf { it.isNotEmpty() }
+        ?: labels?.status?.get(r.status.orEmpty())?.takeIf { it.isNotEmpty() }
+        ?: covStatusWord(r.status)
+
 @Composable
 private fun covStatusWord(s: String?): String = when (s) {
     "short" -> stringResource(R.string.cov_status_short)
@@ -441,7 +450,7 @@ private fun CovGroupRow(r: CoverageRow, vm: ConsoleCoverageViewModel) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             CovLabel(
                 covStatusIcon(r.status),
-                "${covStatusWord(r.status)} · ${r.nSellers ?: 0} ${stringResource(R.string.cov_sellers_word)}",
+                "${covStatusWord(r, vm.page?.labels)} · ${r.nSellers ?: 0} ${stringResource(R.string.cov_sellers_word)}",
                 covStatusColor(r.status),
             )
             Spacer(Modifier.weight(1f))
@@ -504,7 +513,7 @@ private fun CovSlotRows(key: String, vm: ConsoleCoverageViewModel) {
         }
         val res = slot.result
         if (res != null && !slot.busy) CovResult(key, res, slot, vm)
-        slot.batch?.let { CovBatchRows(it) }
+        slot.batch?.let { CovBatchRows(it, vm.page?.labels) }
     }
 }
 
@@ -584,6 +593,13 @@ private fun CovFirmRow(f: JsonObject, ticked: Boolean, locked: Boolean, onToggle
     }
 }
 
+/** A batch firm's state: its `stateWords`, else the page's `labels.state`, else the app's word. Icon and colour stay on the code. */
+@Composable
+private fun covStateWord(f: CoverageBatchFirm, labels: CoverageLabels?): String =
+    f.stateWords?.takeIf { it.isNotEmpty() }
+        ?: labels?.state?.get(f.state.orEmpty())?.takeIf { it.isNotEmpty() }
+        ?: covStateWord(f.state)
+
 @Composable
 private fun covStateWord(s: String?): String = when (s) {
     "queued" -> stringResource(R.string.cov_state_queued)
@@ -613,9 +629,9 @@ private fun covStateColor(s: String?): Color {
     }
 }
 
-/** The batch's `note` keys in the app's words; an unknown note is the server's own words (`noteWords`), else as it came. */
+/** The batch's `note` keys in the app's words — only for a server that sends no `noteWords`; an unknown note as it came. */
 @Composable
-private fun covNoteWords(note: String?, serverWords: String?): String = when (note.orEmpty()) {
+private fun covNoteWords(note: String?): String = when (note.orEmpty()) {
     "", "born" -> ""
     "known" -> stringResource(R.string.cov_already_on_workis)
     "site" -> stringResource(R.string.cov_site_unreachable)
@@ -623,11 +639,11 @@ private fun covNoteWords(note: String?, serverWords: String?): String = when (no
     "already read" -> stringResource(R.string.cov_note_already_read)
     "plan" -> stringResource(R.string.cov_note_plan)
     "continues" -> stringResource(R.string.cov_note_continues)
-    else -> serverWords?.takeIf { it.isNotEmpty() } ?: note.orEmpty()
+    else -> note.orEmpty()
 }
 
 @Composable
-private fun CovBatchRows(b: CoverageBatch) {
+private fun CovBatchRows(b: CoverageBatch, labels: CoverageLabels?) {
     val colors = WorkisTheme.colors
     b.firms.orEmpty().forEach { f ->
         val moving = b.state != "done" && f.state in CoverageMoving
@@ -638,10 +654,11 @@ private fun CovBatchRows(b: CoverageBatch) {
                     maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                 )
                 if (moving) CircularProgressIndicator(Modifier.size(12.dp), strokeWidth = 1.5.dp, color = Kiremit500)
-                CovLabel(covStateIcon(f.state), covStateWord(f.state), covStateColor(f.state))
+                CovLabel(covStateIcon(f.state), covStateWord(f, labels), covStateColor(f.state))
             }
             if (f.state == "read") CovHint("${f.families ?: 0} ${stringResource(R.string.cov_families_awaiting)}")
-            covNoteWords(f.note, f.noteWords).takeIf { it.isNotEmpty() }?.let { CovHint(it) }
+            // the server's words whenever the key came ("" = nothing, e.g. `born`); ours only for an older server
+            (f.noteWords ?: covNoteWords(f.note)).takeIf { it.isNotEmpty() }?.let { CovHint(it) }
         }
     }
 }
