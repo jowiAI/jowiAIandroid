@@ -444,13 +444,21 @@ private fun FirmWords(f: SourcingFirm) {
     }
 }
 
+/** Name, place, address and send date — what stays beside a price. */
 @Composable
-private fun FirmSummary(f: SourcingFirm) {
+private fun FirmFacts(f: SourcingFirm) {
     val colors = WorkisTheme.colors
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         FirmTitle(f)
         AddressLine(f)
         sentLine(f)?.let { Text(it, fontSize = 12.sp, color = colors.muted) }
+    }
+}
+
+@Composable
+private fun FirmSummary(f: SourcingFirm) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        FirmFacts(f)
         FirmWords(f)
     }
 }
@@ -581,12 +589,15 @@ private fun ItemCard(vm: SourcingSheetViewModel, s: SourcingSheet, i: SourcingIt
         body = if (!isOpen) null else { {
             val firms = i.firmKeys.orEmpty().mapNotNull { s.firm(it) }
             firms.forEach { f ->
-                Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth().clickable { f.key?.let(onFirm) }) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        FirmSummary(f)
-                        if (canDrop(f)) DropButton(vm, f, id)
+                // the sentence runs the row's full width, under the price column too (ledger 130:
+                // beside the price a long sentence broke into five short lines)
+                Column(Modifier.fillMaxWidth().clickable { f.key?.let(onFirm) }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Box(Modifier.weight(1f)) { FirmFacts(f) }
+                        f.price(id)?.let { Spacer(Modifier.width(8.dp)); PriceCell(it, s.quoteCurrency) }
                     }
-                    f.price(id)?.let { Spacer(Modifier.width(8.dp)); PriceCell(it, s.quoteCurrency) }
+                    FirmWords(f)
+                    if (canDrop(f)) DropButton(vm, f, id)
                 }
                 HorizontalDivider(color = colors.border)
             }
