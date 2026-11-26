@@ -108,11 +108,14 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   `stateWords` / `noteWords` (a sent-but-empty `noteWords` prints nothing), `message` after `cost/` and `paid/`; the app's own tables are only the
   fallback for an older server, icons and colours stay keyed on the codes. The sheet's sentences are icon + words with no capsule.
   The sheet's grounds (ledger 135, replacing 129/134): NO tinted ground — every head on `surface`, a 3dp kiremit-500 edge down the leading
-  side of a row's head whose `tone` is `k`, and what a head opens one step down (`canvas` at 55% over `surface`); a band token
+  side of a row's head whose `tone` is `k`, and what a head opens on the table ground (ledger 139: dark `tableGround`, light `beigeBg` at 16% over `surface`) with
+  `tableBorder` separators and `tableFaint` for every faint word there; a band token
   (`accentSoft` · `beigeBg` · `successBg`) is the ground of a short note, never of a block. Blue there (ledgers 140/141): the head's
   "N firma sizi bekliyor" chip is a door — firm face, scrolled to the first firm with `needs` — and on the firm face and the firm's own
-  page that firm's `words` are blue with the hand (no edge on its head); by row the sentence stays kiremit. Ledgers 138 · 139 · 142 · 143 ·
-  144 are on HOLD in the ledger (owner looks on the phone first) — not mirrored.
+  page that firm's `words` are blue with the hand up to and including the first ": " and kiremit after it (ledger 143; no colon = blue
+  throughout; no edge on its head); by row the sentence stays kiremit. On the board (ledger 144) a row whose `stand.code` is `"you"` draws
+  its tag blue with the hand and the `you` chip's dot is blue — the key is the server's code, nothing derived. `tableBorder` /
+  `tableFaint` (ledger 138) are the hairline and faint ink ON a table ground; in light they equal `border` / `faint`.
 - Buyer's request process + own rate (ledger 128, `ui/screens/partner/ListProcess.kt`): `process` under the stage strip of the request page
   (stages as sent, done green tick + word · now kiremit dot + word · next hollow; non-member firms as counts only). `proposal.ownRate
   {base, currencies}` → `OwnRateBox` above the comparison; the rate lives in prefs `workis_ownrate_<listId>`, is sent to NO door, only adds

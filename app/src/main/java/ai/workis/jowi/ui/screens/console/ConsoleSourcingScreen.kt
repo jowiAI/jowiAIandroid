@@ -324,7 +324,8 @@ private fun ChipRow(chips: List<SrcChip>, filter: String, onPick: (String) -> Un
                     .padding(horizontal = 11.dp, vertical = 6.dp),
             ) {
                 // the web's dot: the tone the rows of that chip carry (the chip's word stands beside it)
-                c.tone?.let { Box(Modifier.size(7.dp).background(srcToneColor(it), CircleShape)) }
+                // the `you` chip's rows carry the blue "sıra sizde" tag (ledger 144)
+                c.tone?.let { Box(Modifier.size(7.dp).background(if (c.code == "you") colors.blue else srcToneColor(it), CircleShape)) }
                 val ink = if (on) colors.ink else colors.muted
                 Text(chipWord(c), fontSize = 13.sp, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Normal, color = if (c.count == 0 && !on) ink.copy(alpha = 0.5f) else ink)
                 Text("${c.count}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = if (c.count == 0 && !on) ink.copy(alpha = 0.5f) else ink)
@@ -354,7 +355,7 @@ private fun RequestRow(r: SourcingBoardRow, onOpen: () -> Unit) {
                 if (r.isTrial == true) trialWord else null,
             ).joinToString(" · ")
             if (sub.isNotEmpty()) Text(sub, fontSize = 12.sp, color = colors.muted)
-            r.stand?.words?.takeIf { it.isNotEmpty() }?.let { SrcToneTag(it, r.stand.tone) }
+            r.stand?.words?.takeIf { it.isNotEmpty() }?.let { SrcToneTag(it, r.stand.tone, mine = r.stand.code == "you") }
         }
         Text("›", fontSize = 18.sp, color = colors.faint, modifier = Modifier.padding(start = 8.dp))
     }
@@ -559,15 +560,19 @@ internal fun srcToneIcon(tone: String?): ImageVector = when (tone) {
     else -> WorkisIcons.Clock
 }
 
-/** The server's sentence in its tone: icon + words on a quiet well of the same colour. */
+/**
+ * The server's sentence in its tone: icon + words on a quiet well of the same colour. `mine` = the
+ * reader's own move is pending (the server's `stand.code == "you"`, nothing derived): blue with the
+ * pointing hand — the mark the sheet's head chip and the firm's sentence continue (ledger 144).
+ */
 @Composable
-internal fun SrcToneTag(words: String, tone: String?) {
-    val c = srcToneColor(tone)
+internal fun SrcToneTag(words: String, tone: String?, mine: Boolean = false) {
+    val c = if (mine) WorkisTheme.colors.blue else srcToneColor(tone)
     Row(
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.background(c.copy(alpha = 0.12f), RoundedCornerShape(50)).padding(horizontal = 8.dp, vertical = 3.dp),
     ) {
-        Icon(srcToneIcon(tone), contentDescription = null, tint = c, modifier = Modifier.size(11.dp))
+        Icon(if (mine) WorkisIcons.HandTap else srcToneIcon(tone), contentDescription = null, tint = c, modifier = Modifier.size(11.dp))
         Text(words, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = c)
     }
 }
@@ -593,8 +598,8 @@ internal fun SrcSectionTitle(title: String) {
 }
 
 @Composable
-internal fun SrcHint(words: String, modifier: Modifier = Modifier) {
-    Text(words, fontSize = 12.sp, lineHeight = 16.sp, color = WorkisTheme.colors.faint, modifier = modifier)
+internal fun SrcHint(words: String, modifier: Modifier = Modifier, color: Color = WorkisTheme.colors.faint) {
+    Text(words, fontSize = 12.sp, lineHeight = 16.sp, color = color, modifier = modifier)
 }
 
 /** The last act's sentence as the server sent it — beige note, or danger on a refusal. */

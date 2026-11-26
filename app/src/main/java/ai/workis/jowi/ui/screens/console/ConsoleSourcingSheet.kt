@@ -58,7 +58,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -293,9 +296,10 @@ private fun handOver(context: Context, f: SrcFile) {
 // ---------- small shared pieces ----------
 
 /*
- * The sheet's grounds (ledger 135). No tinted ground at all: a block is told apart by LEVEL, not
- * hue — every head stands on the card surface, what it opens sits one step down toward the canvas.
- * A row's head that needs a HAND (tone `k`) carries a kiremit edge on its leading side; the tone
+ * The sheet's grounds (ledgers 135 / 139). Every head stands on the card surface; what it opens
+ * stands on the comparison table's ground — warm in dark, off the grey card by HUE (a step down in
+ * the same grey did not read on the phone), a faint beige in light — with the table's own hairline
+ * and faint ink. A row's head that needs a HAND (tone `k`) carries a kiremit edge on its leading side; the tone
  * otherwise lives in the number and the sentence. (Earlier cuts: a full band ground per tone tinted
  * half the screen; a band token is the ground of a short note, never of a block.) Blue (`b`, the
  * app's own letter) is the "sıra sizde" mark.
@@ -303,11 +307,11 @@ private fun handOver(context: Context, f: SrcFile) {
 @Composable
 private fun srcInk(tone: String?): Color = if (tone == "b") WorkisTheme.colors.blue else srcToneColor(tone)
 
-/** The rows a head opens: the card surface under the canvas at 55% — between canvas and surface. */
+/** The rows a head opens: the table ground in dark, the surface under `beigeBg` at 16% in light (an opened product's pair). */
 @Composable
 private fun srcRecess(): Color {
     val colors = WorkisTheme.colors
-    return colors.canvas.copy(alpha = 0.55f).compositeOver(colors.surface)
+    return if (colors.isDark) colors.tableGround else colors.beigeBg.copy(alpha = 0.16f).compositeOver(colors.surface)
 }
 
 private fun srcMarkIcon(tone: String?): ImageVector = if (tone == "b") WorkisIcons.HandTap else srcToneIcon(tone)
@@ -317,8 +321,13 @@ private fun srcMarkIcon(tone: String?): ImageVector = if (tone == "b") WorkisIco
  * blob; it wraps as text. `boxed` draws the quiet rounded well for the short head chips.
  */
 @Composable
-private fun SrcMark(words: String, tone: String?, boxed: Boolean = false, modifier: Modifier = Modifier) {
+private fun SrcMark(words: String, tone: String?, boxed: Boolean = false, modifier: Modifier = Modifier, rest: String? = null) {
     val c = srcInk(tone)
+    // `rest` (ledger 143): the tone of what follows the sentence's first ": " — the blue stays on
+    // the opening words, the product and the reason keep their own tone. The sentence is the
+    // server's, printed whole; only its colour is split.
+    val restInk = rest?.let { srcInk(it) }
+    val cut = if (restInk != null) words.indexOf(": ") else -1
     Row(
         verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(5.dp),
         modifier = modifier.then(
@@ -327,7 +336,13 @@ private fun SrcMark(words: String, tone: String?, boxed: Boolean = false, modifi
         ),
     ) {
         Icon(srcMarkIcon(tone), contentDescription = null, tint = c, modifier = Modifier.padding(top = 3.dp).size(11.dp))
-        Text(words, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = c)
+        if (restInk != null && cut >= 0) Text(
+            buildAnnotatedString {
+                append(words.substring(0, cut + 2))
+                withStyle(SpanStyle(color = restInk)) { append(words.substring(cut + 2)) }
+            },
+            fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = c,
+        ) else Text(words, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, color = c)
     }
 }
 
@@ -349,7 +364,7 @@ private fun GroundCard(
             verticalArrangement = Arrangement.spacedBy(10.dp), content = head,
         )
         if (body != null) {
-            HorizontalDivider(color = colors.border)
+            HorizontalDivider(color = colors.tableBorder)
             Column(
                 Modifier.fillMaxWidth().background(srcRecess()).padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp), content = body,
@@ -417,7 +432,7 @@ private fun FirmTitle(f: SourcingFirm, big: Boolean = false) {
             if (p != null) Text(p, fontSize = 12.sp, color = colors.muted)
             else if (f.unplaced == true) SrcSmallChip(stringResource(R.string.src_city_not_written), "k")
         }
-        sourceWord(f)?.let { Text("· $it", fontSize = 12.sp, color = colors.faint) }
+        sourceWord(f)?.let { Text("· $it", fontSize = 12.sp, color = colors.tableFaint) }
     }
 }
 
@@ -441,7 +456,10 @@ private fun FirmWords(f: SourcingFirm, mine: Boolean = false) {
     // the blue chip leads and the firm stands once): the waiting sentence is the blue mark (ledger 141)
     if (f.sent != true) SrcMark(stringResource(R.string.src_not_sent), "w")
     else f.words?.takeIf { it.isNotEmpty() }?.let { w ->
-        SrcMark(w, if (f.needs == true) (if (mine) "b" else "k") else if (f.hasQuote == true) "g" else "n")
+        SrcMark(
+            w, if (f.needs == true) (if (mine) "b" else "k") else if (f.hasQuote == true) "g" else "n",
+            rest = if (f.needs == true && mine) "k" else null,
+        )
     }
 }
 
@@ -622,7 +640,7 @@ private fun ItemCard(vm: SourcingSheetViewModel, s: SourcingSheet, i: SourcingIt
                     FirmWords(f)
                     if (canDrop(f)) DropButton(vm, f, id)
                 }
-                HorizontalDivider(color = colors.border)
+                HorizontalDivider(color = colors.tableBorder)
             }
             ItemFoot(vm, s, i, onAdd)
         } },
@@ -657,7 +675,7 @@ private fun ItemHead(i: SourcingItem, modifier: Modifier) {
 private fun ItemFoot(vm: SourcingSheetViewModel, s: SourcingSheet, i: SourcingItem, onAdd: () -> Unit) {
     val colors = WorkisTheme.colors
     if (s.isTrial == true) {
-        SrcHint(stringResource(R.string.src_trial_only))
+        SrcHint(stringResource(R.string.src_trial_only), color = colors.tableFaint)
         return
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -676,6 +694,7 @@ private fun ItemFoot(vm: SourcingSheetViewModel, s: SourcingSheet, i: SourcingIt
             when (r.state) {
                 "done" -> SrcHint(
                     stringResource(R.string.src_last_search) + " " + WorkisClock.day(r.at.orEmpty()) + " · ${r.found ?: 0} " + stringResource(R.string.src_firms_found),
+                    color = colors.tableFaint,
                 )
                 "failed" -> Text(stringResource(R.string.src_search_failed), fontSize = 12.sp, color = colors.accentText)
                 else -> Unit
@@ -710,14 +729,14 @@ private fun FirmCard(vm: SourcingSheetViewModel, s: SourcingSheet, f: SourcingFi
             val isOpen = vm.open["f$key"] ?: (f.needs == true || f.sent != true)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { vm.open["f$key"] = !isOpen }) {
                 Text(stringResource(R.string.src_rows_asked) + " · ${ids.size}", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.muted, modifier = Modifier.weight(1f))
-                Text(if (isOpen) "⌃" else "⌄", fontSize = 16.sp, color = colors.faint)
+                Text(if (isOpen) "⌃" else "⌄", fontSize = 16.sp, color = colors.tableFaint)
             }
             if (isOpen) ids.mapNotNull { s.item(it) }.forEach { i ->
                 val iid = i.id.orEmpty()
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("${i.n ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.faint)
+                            Text("${i.n ?: 0}", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.tableFaint)
                             Text(i.name.orEmpty(), fontSize = 13.sp, color = colors.ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                         val sub = listOf(i.spec.orEmpty(), qtyText(i)).filter { it.isNotEmpty() }.joinToString(" · ")
@@ -730,7 +749,7 @@ private fun FirmCard(vm: SourcingSheetViewModel, s: SourcingSheet, f: SourcingFi
                                     else -> R.string.src_asked_word
                                 },
                             ),
-                            fontSize = 11.sp, fontWeight = FontWeight.Medium, color = colors.faint,
+                            fontSize = 11.sp, fontWeight = FontWeight.Medium, color = colors.tableFaint,
                         )
                         if (canDrop(f)) DropButton(vm, f, iid)
                     }
@@ -886,7 +905,7 @@ private fun FirmHeadSection(vm: SourcingSheetViewModel, f: SourcingFirm, onPlace
                 FirmTitle(f, big = true)
                 val w = f.words.orEmpty()
                 if (f.sent == true) {
-                    if (w.isNotEmpty()) { if (f.needs == true) SrcMark(w, "b") else Text(w, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink) }
+                    if (w.isNotEmpty()) { if (f.needs == true) SrcMark(w, "b", rest = "k") else Text(w, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink) }
                 } else Text(w.ifEmpty { stringResource(R.string.src_not_sent) }, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
             }
             HorizontalDivider(color = colors.border)
