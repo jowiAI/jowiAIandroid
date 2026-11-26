@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -101,7 +103,7 @@ private val ConsoleScreens = listOf(
     "market", "pnl", "subs", "system",
 )
 
-/** The six pages of ledger 128 — on the Panel they stand as doors under the older tiles, in the server's order. */
+/** The six pages of ledger 128 — drawn only from `workis.console.pages`, never by the role fallback. */
 private val NewerPages = listOf("sourcing", "coverage", "market", "pnl", "subs", "system")
 
 /** The door a page key opens; "conversations" rides with `queries` (the same page on the web). */
@@ -325,9 +327,9 @@ private fun ConsoleHome(vm: ConsoleViewModel, console: ai.workis.jowi.data.Works
                 }
             }
         } else {
-        // The web Panel's order, tile for tile (ledger 61): two big tiles (applications,
-        // questions), the count rows (partners, correspondence, experts), the two activity
-        // tiles, the sidebar's doors, then "Jowi yanıtladı" and "/ Soru konuları".
+        // The web Panel's order (ledger 61, doors grouped by ledger 133): two big tiles
+        // (applications, questions), the activity card, the door groups (Network · Supply ·
+        // Catalogue · Finance, then Sistem alone), then "Jowi yanıtladı" and "/ Soru konuları".
         // Every tile IS the door to its surface — no duplicated list previews below.
         // a door is drawn only for a page this console holds (`pages`, ledger 113)
         if (has("apps") || has("queries")) Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.height(160.dp)) {
@@ -345,32 +347,25 @@ private fun ConsoleHome(vm: ConsoleViewModel, console: ai.workis.jowi.data.Works
         }
         Spacer(Modifier.height(14.dp))
 
-        // the count rows: Partnerler · Yazışmalar · Uzmanlar (coordinator only, null for a lead — half a row, as on the web)
-        if (has("partners") || has("queries")) Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            if (!has("partners")) Spacer(Modifier.weight(1f)) else CapsuleTile(WorkisIcons.Building, stringResource(R.string.partners_title), s?.activePartners, Modifier.weight(1f)) { onOpen(ConsoleDest.Partners()) }
-            if (!has("queries")) Spacer(Modifier.weight(1f)) else CapsuleTile(WorkisIcons.Bubble, stringResource(R.string.conversations_title), openConversations, Modifier.weight(1f)) { onOpen(ConsoleDest.Conversations) }
-        }
-        s?.experts?.takeIf { has("partners") }?.let { n ->
-            Spacer(Modifier.height(14.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                CapsuleTile(WorkisIcons.GraduationCap, stringResource(R.string.tile_experts), n, Modifier.weight(1f)) { onOpen(ConsoleDest.Partners(initialSeat = "expert")) }
-                Spacer(Modifier.weight(1f))
-            }
-        }
-        Spacer(Modifier.height(14.dp))
-
-        // Seat activity: the web's two tiles — seats over the window, firms with the window's
-        // lists / quotes / orders inside the tile (the free-floating "son 7 gün" line is gone)
+        // Seat activity: read, not a door (ledger 133) — ONE plain content card split by a
+        // hairline: title, the fraction in mono, the detail line
         s?.activeSeats?.let { a ->
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.height(IntrinsicSize.Max)) {
-                ActivityTile(
-                    WorkisIcons.People, stringResource(R.string.tile_active_seats),
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+                    .background(colors.surface, RoundedCornerShape(20.dp))
+                    .border(1.dp, colors.border, RoundedCornerShape(20.dp)),
+            ) {
+                ActivityCell(
+                    stringResource(R.string.tile_active_seats),
                     value = "${a.activeSeats ?: 0} / ${a.totalSeats ?: 0}",
                     detail = "${a.days ?: 7} " + stringResource(R.string.days_word),
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
-                ActivityTile(
-                    WorkisIcons.Building, stringResource(R.string.tile_active_firms),
+                Box(Modifier.width(1.dp).fillMaxHeight().background(colors.border))
+                ActivityCell(
+                    stringResource(R.string.tile_active_firms),
                     value = "${a.activePartners ?: 0} / ${a.totalPartners ?: 0}",
                     detail = "${a.lists ?: 0} " + stringResource(R.string.lists_unit) + " · ${a.quotes ?: 0} " + stringResource(R.string.quotes_unit) + " · ${a.orders ?: 0} " + stringResource(R.string.orders_unit),
                     modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -379,39 +374,23 @@ private fun ConsoleHome(vm: ConsoleViewModel, console: ai.workis.jowi.data.Works
             Spacer(Modifier.height(14.dp))
         }
 
-        // Bilgi — the expert knowledge screen on the console door (roles 3|4) and
-        // Ürünler — the seller picker (a lead sees only the sellers that opened their
-        // catalogue to it): the web SIDEBAR's doors, kept because the phone has no sidebar.
-        // No count — the summary never carries `knowledgeUnits`.
-        if (has("knowledge") || has("products")) {
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (!has("knowledge")) Spacer(Modifier.weight(1f)) else CapsuleDoor(WorkisIcons.Pencil, stringResource(R.string.expert_knowledge_title), Modifier.weight(1f)) { onOpen(ConsoleDest.Knowledge) }
-                if (!has("products")) Spacer(Modifier.weight(1f)) else CapsuleDoor(WorkisIcons.ShippingBox, stringResource(R.string.catalog_title), Modifier.weight(1f)) { onOpen(ConsoleDest.CatalogSellers) }
-            }
-            Spacer(Modifier.height(14.dp))
-        }
-        // Gruplar (ledger 62) — the Workis groups page — and Kargo, the network's control
-        // tower (ledger 114), under Bilgi / Ürünler; one alone stays half width
-        if (has("groups") || has("cargo")) {
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                if (has("groups")) CapsuleDoor(WorkisIcons.Grid, stringResource(R.string.groups_door), Modifier.weight(1f)) { onOpen(ConsoleDest.Groups) }
-                if (has("cargo")) CapsuleDoor(WorkisIcons.Truck, stringResource(R.string.cargo_title), Modifier.weight(1f)) { onOpen(ConsoleDest.Cargo) }
-                if (!(has("groups") && has("cargo"))) Spacer(Modifier.weight(1f))
-            }
-            Spacer(Modifier.height(14.dp))
-        }
-        // the six newer pages (ledger 128): doors under the older tiles, two to a row, in the
-        // order the server sent them; one left over stays half width
-        pages.filter { it in NewerPages }.chunked(2).forEach { pair ->
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                pair.forEach { page ->
-                    val (label, icon) = pageFace(page)
-                    CapsuleDoor(icon, label, Modifier.weight(1f)) { destOf(page)?.let(onOpen) }
-                }
-                if (pair.size == 1) Spacer(Modifier.weight(1f))
-            }
-            Spacer(Modifier.height(14.dp))
-        }
+        // The doors, grouped by what they are for (ledger 133, iOS c88c789): one content card
+        // per group, its doors three abreast. A door is drawn only for a page this console
+        // holds (`pages`, ledger 113); a group with none is not drawn. The count rows of old
+        // (Partnerler · Uzmanlar · Yazışmalar) are the Network group's cells now.
+        val expertsFace = stringResource(R.string.tile_experts) to WorkisIcons.GraduationCap
+        fun held(page: String): PanelDoor? = if (has(page)) destOf(page)?.let { PanelDoor(page, it) } else null
+        DoorGroup(stringResource(R.string.console_group_network), listOfNotNull(
+            if (has("partners")) PanelDoor("partners", ConsoleDest.Partners(), s?.activePartners) else null,
+            // coordinator only — null for a lead
+            s?.experts?.takeIf { has("partners") }?.let { PanelDoor("experts", ConsoleDest.Partners(initialSeat = "expert"), it, expertsFace) },
+            // Yazışmalar counts OPEN threads (the summary's field, else the open rows of the list)
+            if (has("queries")) PanelDoor("conversations", ConsoleDest.Conversations, openConversations) else null,
+        ), onOpen)
+        DoorGroup(stringResource(R.string.console_group_supply), listOfNotNull(held("sourcing"), held("coverage"), held("cargo")), onOpen)
+        DoorGroup(stringResource(R.string.console_group_catalog), listOfNotNull(held("products"), held("groups"), held("knowledge")), onOpen)
+        DoorGroup(stringResource(R.string.console_group_finance), listOfNotNull(held("market"), held("pnl"), held("subs")), onOpen)
+        DoorGroup(null, listOfNotNull(held("system")), onOpen)
 
         // web order: Jowi answered above the question topics (both open Sorular)
         s?.jowiAnswered?.takeIf { has("queries") && (it.total ?: 0) > 0 }?.let { ja ->
@@ -474,7 +453,7 @@ private fun PageDoor(page: String, onOpen: (ConsoleDest) -> Unit) {
     CapsuleDoor(icon, label, Modifier.fillMaxWidth()) { onOpen(dest) }
 }
 
-/** A page's own word and icon — the door list and the Panel's newer doors read the same pair. */
+/** A page's own word and icon — the door list and the Panel's door groups read the same pair. */
 @Composable
 private fun pageFace(page: String): Pair<String, ImageVector> = when (page) {
         "apps" -> stringResource(R.string.console_all_apps) to WorkisIcons.Tray
@@ -726,23 +705,97 @@ private fun ConsoleCatalogSellersScreen(onPick: (ai.workis.jowi.data.CatalogSell
     }
 }
 
-/** The web's activity tile: icon + title, the big mono value, a faint mono detail. */
+/** One half of the Panel's activity card (ledger 133): title, the fraction in mono, its detail line. */
 @Composable
-private fun ActivityTile(icon: ImageVector, title: String, value: String, detail: String, modifier: Modifier) {
+private fun ActivityCell(title: String, value: String, detail: String, modifier: Modifier) {
     val colors = WorkisTheme.colors
     Column(
-        modifier = modifier
-            .background(colors.surface, RoundedCornerShape(20.dp))
-            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(icon, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(14.dp))
-            Text(title, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+        Text(title, fontSize = 13.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(value, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = colors.ink)
-        Text(detail, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 14.sp, color = colors.faint, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(detail, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 15.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** A door on the Panel's group cards (ledger 133); `key` is a page key, or `experts` / `conversations`. */
+private data class PanelDoor(
+    val key: String,
+    val dest: ConsoleDest,
+    val count: Int? = null,
+    val face: Pair<String, ImageVector>? = null,
+)
+
+/**
+ * A group of doors (ledger 133): the heading (stored in capitals, never upper-cased here) and up
+ * to three doors abreast in one content card, hairlines between the cells. More wrap to a second
+ * row; fewer share the width; a lone door is a full-width row with a chevron. No doors, nothing.
+ */
+@Composable
+private fun DoorGroup(title: String?, doors: List<PanelDoor>, onOpen: (ConsoleDest) -> Unit) {
+    if (doors.isEmpty()) return
+    val colors = WorkisTheme.colors
+    val shape = RoundedCornerShape(20.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(colors.surface, shape)
+            .border(1.dp, colors.border, shape),
+    ) {
+        if (title != null) Text(
+            title,
+            fontWeight = FontWeight.SemiBold, fontSize = 12.sp, letterSpacing = 0.7.sp, color = colors.muted,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
+        )
+        doors.chunked(3).forEachIndexed { i, row ->
+            if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                row.forEachIndexed { n, d ->
+                    if (n > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(colors.border))
+                    DoorCell(d, wide = doors.size == 1, modifier = Modifier.weight(1f).fillMaxHeight()) { onOpen(d.dest) }
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(14.dp))
+}
+
+@Composable
+private fun DoorCell(door: PanelDoor, wide: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val colors = WorkisTheme.colors
+    val (label, icon) = door.face ?: pageFace(door.key)
+    if (wide) {
+        // a lone door is a row, not a third of one
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = modifier
+                .clickable(onClick = onClick)
+                .heightIn(min = 52.dp)
+                .padding(horizontal = 16.dp),
+        ) {
+            Icon(icon, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(19.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(label, fontWeight = FontWeight.Medium, fontSize = 16.sp, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(6.dp))
+            Icon(Icons.Filled.KeyboardArrowRight, contentDescription = null, tint = colors.faint)
+        }
+    } else {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = modifier
+                .clickable(onClick = onClick)
+                .heightIn(min = 74.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 14.dp),
+        ) {
+            Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
+                Icon(icon, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(21.dp))
+                Spacer(Modifier.weight(1f))
+                door.count?.let { Text(it.toString(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = colors.ink, modifier = Modifier.padding(start = 4.dp)) }
+            }
+            Text(label, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -766,37 +819,6 @@ private fun BigTile(icon: ImageVector, number: Int?, label: String, sub: String?
             Spacer(Modifier.height(4.dp))
             Text(it, fontFamily = WorkisMono, fontSize = 12.sp, color = colors.accentText, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-    }
-}
-
-@Composable
-private fun CapsuleTile(icon: ImageVector, title: String, count: Int?, modifier: Modifier = Modifier.fillMaxWidth(), onClick: () -> Unit) {
-    val colors = WorkisTheme.colors
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .background(colors.surface, RoundedCornerShape(20.dp))
-            .border(1.dp, colors.border, RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 22.dp),
-    ) {
-        Icon(icon, contentDescription = null, tint = Kiremit500, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(10.dp))
-        Text(
-            title,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 15.sp,
-            color = colors.ink,
-            maxLines = 1,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            count?.toString() ?: "—",
-            fontFamily = WorkisMono,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 16.sp,
-            color = colors.ink,
-        )
     }
 }
 

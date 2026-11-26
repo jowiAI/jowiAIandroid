@@ -78,6 +78,10 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   coordinator only), two activity tiles (Aktif koltuklar · Aktif firmalar carrying "N liste · N teklif · N sipariş"), the sidebar's
   doors (Bilgi · Ürünler · Gruplar), "Jowi yanıtladı" with ALL sources (>3 → two a row) and up to eight topics, then "/ Soru
   konuları" as its own section. Yazışmalar counts OPEN threads (`openConversations`, else open rows of the list), never the raw size.
+  Ledger 133: the two activity figures are ONE plain card split by a hairline (read, not doors), and the doors are one content card
+  per group (`DoorGroup`: Ağ = Partnerler · Uzmanlar · Yazışmalar with counts · Tedarik · Katalog · Finans, then Sistem alone, no
+  heading) — three abreast, icon over name, count top-right, hairlines between; only held pages, an empty group not drawn, a lone
+  door a full-width row. The headings are stored in capitals — never upper-cased in code. A console without the Panel keeps its door list.
 - Alım hafızası (ledger 54): the order thread's `kind: "private"` reply keeps the sent words → "Tabloya ilet" re-posts them with
   `audience: "table"` (ORDER door only). The satisfaction tick (`SatisfactionCard.kt`, `SatisfactionTicks`) is drawn from the confirm
   reply's `satisfaction` right under the confirmation (Onaylar + the order stage) and as Onaylar's last section — words as sent,

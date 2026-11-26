@@ -362,6 +362,10 @@
     <string name="console_all_apps">Applications</string>
     <string name="console_coverage_title">Coverage</string>
     <string name="console_empty">All clear — no applications or open questions right now.</string>
+    <string name="console_group_catalog">CATALOGUE</string>
+    <string name="console_group_finance">FINANCE</string>
+    <string name="console_group_network">NETWORK</string>
+    <string name="console_group_supply">SOURCING</string>
     <string name="console_market_title">Market</string>
     <string name="console_next_steps">NEXT STEPS</string>
     <string name="console_no_pages">The coordinator has not opened a page yet.</string>

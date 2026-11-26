@@ -362,6 +362,10 @@
     <string name="console_all_apps">Başvurular</string>
     <string name="console_coverage_title">Kapsama</string>
     <string name="console_empty">Her şey temiz — şu an bekleyen başvuru ya da açık soru yok.</string>
+    <string name="console_group_catalog">KATALOG</string>
+    <string name="console_group_finance">FİNANS</string>
+    <string name="console_group_network">AĞ</string>
+    <string name="console_group_supply">TEDARİK</string>
     <string name="console_market_title">Pazar</string>
     <string name="console_next_steps">SONRAKI ADIMLAR</string>
     <string name="console_no_pages">Koordinatör henüz bir sayfa açmadı.</string>
