@@ -450,17 +450,31 @@ private fun AddressLine(f: SourcingFirm) {
 }
 
 @Composable
-private fun FirmWords(f: SourcingFirm, mine: Boolean = false) {
+private fun FirmWords(f: SourcingFirm, mine: Boolean = false, itemId: String? = null) {
     // the words are the server's; the mark says which lines need a hand (kiremit), which brought a
     // quote (green) and which only wait (quiet) — never colour alone. `mine` (the firm face, where
     // the blue chip leads and the firm stands once): the waiting sentence is the blue mark (ledger 141)
     if (f.sent != true) SrcMark(stringResource(R.string.src_not_sent), "w")
-    else f.words?.takeIf { it.isNotEmpty() }?.let { w ->
+    else f.words?.let { rowWords(it, f, itemId) }?.takeIf { it.isNotEmpty() }?.let { w ->
         SrcMark(
             w, if (f.needs == true) (if (mine) "b" else "k") else if (f.hasQuote == true) "g" else "n",
             rest = if (f.needs == true && mine) "k" else null,
         )
     }
+}
+
+/**
+ * Under a ROW a doubting firm says only what is doubted about THAT row (ledger 145): the server's
+ * opening words, then the row's own doubts — a doubt about another row or about the whole quote is
+ * not repeated here. Nothing is worded here; the sentence is cut at the server's colon.
+ */
+private fun rowWords(w: String, f: SourcingFirm, itemId: String?): String {
+    if (itemId == null || f.state != "doubt") return w
+    val own = f.doubtsFor(itemId) ?: return w
+    val cut = w.indexOf(": ")
+    if (cut < 0) return w
+    val lead = w.substring(0, cut)
+    return if (own.isEmpty()) lead else lead + ": " + own.joinToString("; ")
 }
 
 /** Name, place, address and send date — what stays beside a price. */
@@ -637,7 +651,7 @@ private fun ItemCard(vm: SourcingSheetViewModel, s: SourcingSheet, i: SourcingIt
                         Box(Modifier.weight(1f)) { FirmFacts(f) }
                         f.price(id)?.let { Spacer(Modifier.width(8.dp)); PriceCell(it, s.quoteCurrency) }
                     }
-                    FirmWords(f)
+                    FirmWords(f, itemId = id)
                     if (canDrop(f)) DropButton(vm, f, id)
                 }
                 HorizontalDivider(color = colors.tableBorder)
@@ -1071,7 +1085,9 @@ private fun ItemsSection(vm: SourcingSheetViewModel, s: SourcingSheet, f: Sourci
     val colors = WorkisTheme.colors
     val ids = f.itemIds.orEmpty()
     val anyPrice = ids.any { f.price(it) != null }
-    val doubts = f.doubts.orEmpty()
+    // a doubt the server tied to a row stands under that row; the list after the rows holds only
+    // the whole-quote ones — all of them when the server tied none (ledger 145)
+    val doubts = if (f.doubtLines == null) f.doubts.orEmpty() else f.wholeDoubts
     if (ids.isEmpty() && doubts.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SrcSectionTitle(stringResource(if (anyPrice) R.string.src_quote else R.string.src_rows_asked))
@@ -1087,19 +1103,24 @@ private fun ItemsSection(vm: SourcingSheetViewModel, s: SourcingSheet, f: Sourci
                         }
                         f.price(iid)?.name?.takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 11.sp, color = colors.muted) }
                         qtyText(i).takeIf { it.isNotEmpty() }?.let { Text(it, fontSize = 12.sp, color = colors.muted) }
+                        f.doubtsFor(iid).orEmpty().forEach { DoubtLine(it) }
                         if (canDrop(f)) DropButton(vm, f, iid)
                     }
                     f.price(iid)?.let { Spacer(Modifier.width(8.dp)); PriceCell(it, s.quoteCurrency) }
                 }
             }
-            doubts.forEach { d ->
-                Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(WorkisIcons.Warning, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp).padding(top = 2.dp))
-                    Text(stringResource(R.string.src_doubt) + ": " + d, fontSize = 13.sp, lineHeight = 18.sp, color = colors.accentText)
-                }
-            }
+            doubts.forEach { DoubtLine(it) }
         }
         if (anyPrice) SrcHint(stringResource(R.string.src_no_vat), Modifier.padding(horizontal = 4.dp))
+    }
+}
+
+@Composable
+private fun DoubtLine(d: String) {
+    val colors = WorkisTheme.colors
+    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Icon(WorkisIcons.Warning, contentDescription = null, tint = colors.accentText, modifier = Modifier.size(14.dp).padding(top = 2.dp))
+        Text(stringResource(R.string.src_doubt) + ": " + d, fontSize = 13.sp, lineHeight = 18.sp, color = colors.accentText)
     }
 }
 

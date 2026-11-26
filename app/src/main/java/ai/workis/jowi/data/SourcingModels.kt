@@ -167,6 +167,8 @@ data class SourcingFirm(
     val canApprove: Boolean? = null,
     val canUploadReply: Boolean? = null,
     val doubts: List<String>? = null,
+    /** Each doubt with the ROWS it is about (ledger 145; an older server sends none). No row = about the whole quote. */
+    val doubtLines: List<SourcingDoubtLine>? = null,
     val itemIds: List<String>? = null,
     val quotedItemIds: List<String>? = null,
     val prices: Map<String, SourcingPrice?>? = null,
@@ -178,7 +180,17 @@ data class SourcingFirm(
     val canPlace: Boolean? = null,
 ) {
     fun price(itemId: String): SourcingPrice? = prices?.get(itemId)
+
+    /** The doubts about this row — null when the server did not say which row a doubt belongs to. */
+    fun doubtsFor(itemId: String): List<String>? =
+        doubtLines?.filter { it.itemIds?.contains(itemId) == true }?.mapNotNull { it.text }
+
+    /** The doubts about the quote as a whole. */
+    val wholeDoubts: List<String> get() = doubtLines.orEmpty().filter { it.itemIds.isNullOrEmpty() }.mapNotNull { it.text }
 }
+
+@Serializable
+data class SourcingDoubtLine(val text: String? = null, val itemIds: List<String>? = null)
 
 @Serializable
 data class SourcingOut(val to: String? = null, val subject: String? = null, val body: String? = null)
