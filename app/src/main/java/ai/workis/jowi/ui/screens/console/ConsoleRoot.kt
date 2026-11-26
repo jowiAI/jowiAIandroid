@@ -348,14 +348,18 @@ private fun ConsoleHome(vm: ConsoleViewModel, console: ai.workis.jowi.data.Works
         Spacer(Modifier.height(14.dp))
 
         // Seat activity: read, not a door (ledger 133) — ONE plain content card split by a
-        // hairline: title, the fraction in mono, the detail line
+        // hairline: title, the fraction in mono, the detail line. In dark the figures are READ
+        // and the door cards GONE THROUGH, told apart by hue: the card stands on the table's
+        // warm ground with its own hairline (ledger 142). Light keeps the plain card.
         s?.activeSeats?.let { a ->
+            val warm = colors.isDark
+            val edge = if (warm) colors.tableBorder else colors.border
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(IntrinsicSize.Min)
-                    .background(colors.surface, RoundedCornerShape(20.dp))
-                    .border(1.dp, colors.border, RoundedCornerShape(20.dp)),
+                    .background(if (warm) colors.tableGround else colors.surface, RoundedCornerShape(20.dp))
+                    .border(1.dp, edge, RoundedCornerShape(20.dp)),
             ) {
                 ActivityCell(
                     stringResource(R.string.tile_active_seats),
@@ -363,7 +367,7 @@ private fun ConsoleHome(vm: ConsoleViewModel, console: ai.workis.jowi.data.Works
                     detail = "${a.days ?: 7} " + stringResource(R.string.days_word),
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                 )
-                Box(Modifier.width(1.dp).fillMaxHeight().background(colors.border))
+                Box(Modifier.width(1.dp).fillMaxHeight().background(edge))
                 ActivityCell(
                     stringResource(R.string.tile_active_firms),
                     value = "${a.activePartners ?: 0} / ${a.totalPartners ?: 0}",
@@ -709,13 +713,15 @@ private fun ConsoleCatalogSellersScreen(onPick: (ai.workis.jowi.data.CatalogSell
 @Composable
 private fun ActivityCell(title: String, value: String, detail: String, modifier: Modifier) {
     val colors = WorkisTheme.colors
+    // in dark the card is on the table ground (ledger 142): its quiet lines take the table's faint ink
+    val quiet = if (colors.isDark) colors.tableFaint else colors.muted
     Column(
         modifier = modifier.padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(title, fontSize = 13.sp, color = colors.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(title, fontSize = 13.sp, color = quiet, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(value, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, color = colors.ink)
-        Text(detail, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 15.sp, color = colors.muted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(detail, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 15.sp, color = quiet, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
