@@ -42,7 +42,7 @@ val WorkisMono: FontFamily = FontFamily(
 
 /**
  * The reading step (2026-10-13, ledger 57 — testers found the public pages small; the
- * web went +2, the web app follows, the phone the same day; `jowiAIs/docs/BRAND.md`
+ * web went +2, the web app follows, the phone the same day; `jowiAIs/docs/BRAND+old.md`
  * "Reading step"). Applied HERE, not at the ~1,000 call sites: the size written at a
  * call site is the DESIGN size. Text sizes up to 15 (the body range) render 2sp larger
  * and never under 11 (HIG's caption2 floor — the 8–10 sites all land on 11); headings

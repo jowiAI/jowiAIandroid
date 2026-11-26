@@ -102,9 +102,13 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   Sistem: a pilot's page ticks are saved as the FULL list. Money on these pages is a JSON number.
   Ledger 129: these pages print the SERVER's labels — Tedarik chips `label`, K/Z `kindLabel` → `kindLabels[kind]`, Kapsama `statusWords` /
   `stateWords` / `noteWords` (a sent-but-empty `noteWords` prints nothing), `message` after `cost/` and `paid/`; the app's own tables are only the
-  fallback for an older server, icons and colours stay keyed on the codes. The sheet's grounds: a row's (or firm's) head on its tone's quiet
-  ground (k `accentSoft` · w `beigeBg` · g `successBg`), firms on the plain surface, sentences as icon + words with no capsule, and
-  "N firma sizi bekliyor" is that screen's one blue.
+  fallback for an older server, icons and colours stay keyed on the codes. The sheet's sentences are icon + words with no capsule.
+  The sheet's grounds (ledger 135, replacing 129/134): NO tinted ground — every head on `surface`, a 3dp kiremit-500 edge down the leading
+  side of a row's head whose `tone` is `k`, and what a head opens one step down (`canvas` at 55% over `surface`); a band token
+  (`accentSoft` · `beigeBg` · `successBg`) is the ground of a short note, never of a block. Blue there (ledgers 140/141): the head's
+  "N firma sizi bekliyor" chip is a door — firm face, scrolled to the first firm with `needs` — and on the firm face and the firm's own
+  page that firm's `words` are blue with the hand (no edge on its head); by row the sentence stays kiremit. Ledgers 138 · 139 · 142 · 143 ·
+  144 are on HOLD in the ledger (owner looks on the phone first) — not mirrored.
 - Buyer's request process + own rate (ledger 128, `ui/screens/partner/ListProcess.kt`): `process` under the stage strip of the request page
   (stages as sent, done green tick + word · now kiremit dot + word · next hollow; non-member firms as counts only). `proposal.ownRate
   {base, currencies}` → `OwnRateBox` above the comparison; the rate lives in prefs `workis_ownrate_<listId>`, is sent to NO door, only adds

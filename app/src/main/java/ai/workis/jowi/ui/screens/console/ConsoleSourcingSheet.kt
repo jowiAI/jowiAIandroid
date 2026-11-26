@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,7 +50,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -289,34 +293,24 @@ private fun handOver(context: Context, f: SrcFile) {
 // ---------- small shared pieces ----------
 
 /*
- * The sheet's grounds (owner, on the phone, 2026-11-26: every block read alike). A row's HEAD stands
- * on the quiet ground of its tone — kiremit nobody asked, beige under the target, green on target —
- * and the firms under it on the plain surface, so the eye finds where a row starts and which rows
- * need a hand. Blue (`b`, the app's own letter) is the one "sıra sizde" mark.
+ * The sheet's grounds (ledger 135). No tinted ground at all: a block is told apart by LEVEL, not
+ * hue — every head stands on the card surface, what it opens sits one step down toward the canvas.
+ * A row's head that needs a HAND (tone `k`) carries a kiremit edge on its leading side; the tone
+ * otherwise lives in the number and the sentence. (Earlier cuts: a full band ground per tone tinted
+ * half the screen; a band token is the ground of a short note, never of a block.) Blue (`b`, the
+ * app's own letter) is the "sıra sizde" mark.
  */
 @Composable
 private fun srcInk(tone: String?): Color = if (tone == "b") WorkisTheme.colors.blue else srcToneColor(tone)
 
+/** The rows a head opens: the card surface under the canvas at 55% — between canvas and surface. */
 @Composable
-private fun srcGround(tone: String?): Color? {
+private fun srcRecess(): Color {
     val colors = WorkisTheme.colors
-    return when (tone) {
-        "k" -> colors.accentSoft
-        "w" -> colors.beigeBg
-        "g" -> colors.successBg
-        else -> null
-    }
+    return colors.canvas.copy(alpha = 0.55f).compositeOver(colors.surface)
 }
 
 private fun srcMarkIcon(tone: String?): ImageVector = if (tone == "b") WorkisIcons.HandTap else srcToneIcon(tone)
-
-/** A firm's ground: needs a hand (kiremit) · nothing sent (beige) · brought a quote (green) · plain. */
-private fun firmTone(f: SourcingFirm): String? = when {
-    f.needs == true -> "k"
-    f.sent != true -> "w"
-    f.hasQuote == true -> "g"
-    else -> null
-}
 
 /**
  * Icon + the server's words in the tone's ink. No well: a long sentence in a capsule turned into a
@@ -337,10 +331,10 @@ private fun SrcMark(words: String, tone: String?, boxed: Boolean = false, modifi
     }
 }
 
-/** A card whose head stands on a ground (or the plain surface) and whose body stays on the plain surface. */
+/** A card whose head stands on the card surface (`edge` = the kiremit line down its leading side) and whose body sits one step down. */
 @Composable
 private fun GroundCard(
-    ground: Color?,
+    edge: Boolean,
     head: @Composable ColumnScope.() -> Unit,
     body: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
@@ -348,12 +342,18 @@ private fun GroundCard(
     val shape = RoundedCornerShape(20.dp)
     Column(Modifier.fillMaxWidth().clip(shape).background(colors.surface).border(1.dp, colors.border, shape)) {
         Column(
-            Modifier.fillMaxWidth().background(ground ?: colors.surface).padding(horizontal = 16.dp, vertical = 14.dp),
+            Modifier
+                .fillMaxWidth()
+                .drawBehind { if (edge) drawRect(Kiremit500, size = Size(3.dp.toPx(), size.height)) }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp), content = head,
         )
         if (body != null) {
             HorizontalDivider(color = colors.border)
-            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = body)
+            Column(
+                Modifier.fillMaxWidth().background(srcRecess()).padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp), content = body,
+            )
         }
     }
 }
@@ -435,12 +435,13 @@ private fun AddressLine(f: SourcingFirm) {
 }
 
 @Composable
-private fun FirmWords(f: SourcingFirm) {
+private fun FirmWords(f: SourcingFirm, mine: Boolean = false) {
     // the words are the server's; the mark says which lines need a hand (kiremit), which brought a
-    // quote (green) and which only wait (quiet) — never colour alone
+    // quote (green) and which only wait (quiet) — never colour alone. `mine` (the firm face, where
+    // the blue chip leads and the firm stands once): the waiting sentence is the blue mark (ledger 141)
     if (f.sent != true) SrcMark(stringResource(R.string.src_not_sent), "w")
     else f.words?.takeIf { it.isNotEmpty() }?.let { w ->
-        SrcMark(w, if (f.needs == true) "k" else if (f.hasQuote == true) "g" else "n")
+        SrcMark(w, if (f.needs == true) (if (mine) "b" else "k") else if (f.hasQuote == true) "g" else "n")
     }
 }
 
@@ -459,7 +460,7 @@ private fun FirmFacts(f: SourcingFirm) {
 private fun FirmSummary(f: SourcingFirm) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         FirmFacts(f)
-        FirmWords(f)
+        FirmWords(f, mine = true)
     }
 }
 
@@ -480,13 +481,27 @@ internal fun SourcingSheetPage(
     val colors = WorkisTheme.colors
     val s = vm.sheet
     var adding by remember { mutableStateOf<SourcingItem?>(null) }
+    val listState = rememberLazyListState()
+    // the firm the blue chip leads to: set on its tap, scrolled to once "Firmaya göre" is drawn (ledger 140)
+    var jump by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(jump, face) {
+        val key = jump ?: return@LaunchedEffect
+        if (face != "firm") return@LaunchedEffect
+        val at = vm.sheet?.firms.orEmpty().indexOfFirst { it.key == key }
+        if (at >= 0) {
+            // what stands above the firms: the note, the head, the trial block, the face switch
+            val above = (if (vm.note.isNullOrEmpty()) 0 else 1) + 1 + (if (row.trial != null) 1 else 0) + 1
+            listState.animateScrollToItem(above + at)
+        }
+        jump = null
+    }
     when {
         s == null && vm.loadError != null -> SrcLoadError(vm.loadError.orEmpty()) { vm.load() }
         s == null -> SrcSpinner()
         else -> PullToRefreshBox(isRefreshing = vm.refreshing, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            LazyColumn(Modifier.fillMaxSize(), state = listState, verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 vm.note?.takeIf { it.isNotEmpty() }?.let { n -> item { SrcNote(n, vm.noteIsError) } }
-                item { SheetHead(s, row) }
+                item { SheetHead(s, row) { key -> onFace("firm"); jump = key } }
                 row.trial?.let { t -> item { TrialSection(vm, t) } }
                 item {
                     SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -520,7 +535,7 @@ internal fun SourcingSheetPage(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SheetHead(s: SourcingSheet, row: SourcingBoardRow) {
+private fun SheetHead(s: SourcingSheet, row: SourcingBoardRow, onWaiting: (String) -> Unit) {
     val colors = WorkisTheme.colors
     SrcCard {
         Text(row.title.orEmpty(), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = colors.ink)
@@ -536,7 +551,15 @@ private fun SheetHead(s: SourcingSheet, row: SourcingBoardRow) {
             if (s.full == true) s.unplaced?.takeIf { it > 0 }?.let { add("$it " + stringResource(R.string.src_firms_unplaced) to "k") }
         }
         if (chips.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            chips.forEach { (w, t) -> SrcMark(w, t, boxed = true) }
+            // the blue mark is a door: to the first firm that waits, on the firm face
+            val waiting = s.firms.orEmpty().firstOrNull { it.needs == true }?.key?.takeIf { it.isNotEmpty() }
+            val hint = stringResource(R.string.src_by_firm)
+            chips.forEach { (w, t) ->
+                if (t == "b" && waiting != null) SrcMark(
+                    w, t, boxed = true,
+                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClickLabel = hint) { onWaiting(waiting) },
+                ) else SrcMark(w, t, boxed = true)
+            }
         }
         if (s.ownRegionOnly == true) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Icon(WorkisIcons.MapPin, contentDescription = null, tint = colors.muted, modifier = Modifier.size(13.dp))
@@ -576,7 +599,7 @@ private fun ItemCard(vm: SourcingSheetViewModel, s: SourcingSheet, i: SourcingIt
     val default = i.state == "none" || (i.unsent ?: 0) > 0 || i.research?.state == "running"
     val isOpen = vm.open["i$id"] ?: default
     GroundCard(
-        ground = srcGround(i.tone),
+        edge = i.tone == "k",
         head = {
             Row(
                 verticalAlignment = Alignment.Top,
@@ -622,7 +645,6 @@ private fun ItemHead(i: SourcingItem, modifier: Modifier) {
             add(stringResource(R.string.src_asked) + " ${i.asked ?: 0} · " + stringResource(R.string.src_quotes_word) + " ${i.quotes ?: 0}")
             i.unsent?.takeIf { it > 0 }?.let { add(stringResource(R.string.src_not_sent_n) + " $it") }
         }
-        // muted, not faint: the head may stand on a toned ground
         Text(parts.joinToString(" · "), fontSize = 12.sp, lineHeight = 16.sp, color = colors.muted)
         i.sameAs?.let { Text(stringResource(R.string.src_same_as) + " $it", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.ink) }
         i.words?.takeIf { it.isNotEmpty() }?.let { SrcMark(it, i.tone, modifier = Modifier.padding(top = 2.dp)) }
@@ -677,7 +699,7 @@ private fun FirmCard(vm: SourcingSheetViewModel, s: SourcingSheet, f: SourcingFi
     val key = f.key.orEmpty()
     val ids = f.itemIds.orEmpty()
     GroundCard(
-        ground = srcGround(firmTone(f)),
+        edge = false, // the waiting firm's blue sentence is its one mark (ledger 141)
         head = {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { if (key.isNotEmpty()) onFirm(key) }) {
                 Box(Modifier.weight(1f)) { FirmSummary(f) }
@@ -864,7 +886,7 @@ private fun FirmHeadSection(vm: SourcingSheetViewModel, f: SourcingFirm, onPlace
                 FirmTitle(f, big = true)
                 val w = f.words.orEmpty()
                 if (f.sent == true) {
-                    if (w.isNotEmpty()) { if (f.needs == true) SrcMark(w, "k") else Text(w, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink) }
+                    if (w.isNotEmpty()) { if (f.needs == true) SrcMark(w, "b") else Text(w, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink) }
                 } else Text(w.ifEmpty { stringResource(R.string.src_not_sent) }, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
             }
             HorizontalDivider(color = colors.border)
