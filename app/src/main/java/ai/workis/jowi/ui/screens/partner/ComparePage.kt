@@ -365,7 +365,7 @@ private fun CompareTable(rows: List<CmpRow>, cols: List<CmpCol>, picks: Map<Stri
     var colStart by rememberSaveable { mutableIntStateOf(0) }
     val shape = RoundedCornerShape(20.dp)
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
-    BoxWithConstraints(Modifier.fillMaxWidth().clip(shape).background(colors.tableGround).border(1.dp, colors.border, shape)) {
+    BoxWithConstraints(Modifier.fillMaxWidth().clip(shape).background(colors.tableGround).border(1.dp, colors.tableBorder, shape)) {
         val wide = maxWidth >= 600.dp
         val k = minOf(cols.size, maxOf(2, ((maxWidth - (if (wide) NAME_WIDTH else 0.dp)) / 124.dp).toInt()))
         val start = minOf(colStart, maxOf(0, cols.size - k))
@@ -382,14 +382,14 @@ private fun CompareTable(rows: List<CmpRow>, cols: List<CmpCol>, picks: Map<Stri
                         Icon(WorkisIcons.Checklist, contentDescription = null, tint = colors.muted, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(stringResource(R.string.pick_all_at_once), fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.ink, modifier = Modifier.weight(1f))
-                        Text("⌄", color = colors.faint)
+                        Text("⌄", color = colors.tableFaint)
                     }
                     DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = colors.surface) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.jowi_pick), color = colors.ink) }, onClick = { open = false; vm.pickAll(emptyMap()) })
                         DropdownMenuItem(text = { Text(stringResource(R.string.pick_lowest_each), color = colors.ink) }, onClick = { open = false; vm.pickAll(cmpLowestPicks(rows)) })
                     }
                 }
-                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.tableBorder))
             }
             // the legend, and the pager when more quotes came than the width holds — beside the
             // legend where the row is wide enough, else on a line of its own under it
@@ -420,7 +420,7 @@ private fun CompareTable(rows: List<CmpRow>, cols: List<CmpCol>, picks: Map<Stri
 private fun PagerArrow(icon: ImageVector, enabled: Boolean, onClick: () -> Unit) {
     val colors = WorkisTheme.colors
     Box(Modifier.size(34.dp).clip(CircleShape).clickable(enabled = enabled, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(icon, contentDescription = null, tint = if (enabled) colors.ink else colors.faint.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = null, tint = if (enabled) colors.ink else colors.tableFaint.copy(alpha = 0.4f), modifier = Modifier.size(20.dp))
     }
 }
 
@@ -444,7 +444,7 @@ private fun MatrixRow(r: CmpRow, index: Int, cols: List<CmpCol>, known: Set<Stri
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     r.name, fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold, lineHeight = 19.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
-                    color = if (left || !r.quoted) colors.faint else colors.ink,
+                    color = if (left || !r.quoted) colors.tableFaint else colors.ink,
                     textDecoration = if (left) TextDecoration.LineThrough else null,
                 )
                 if (!r.quoted) Text(stringResource(R.string.no_quote_yet), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 11.sp, color = colors.accentText)
@@ -455,13 +455,13 @@ private fun MatrixRow(r: CmpRow, index: Int, cols: List<CmpCol>, known: Set<Stri
                 }
             }
             Spacer(Modifier.width(6.dp))
-            Text((WorkisMoney.qty(r.qty) + " " + WorkisUnit.text(r.unit, null, units)).trim(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp, color = if (r.quoted) colors.ink else colors.faint, softWrap = false)
+            Text((WorkisMoney.qty(r.qty) + " " + WorkisUnit.text(r.unit, null, units)).trim(), fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp, color = if (r.quoted) colors.ink else colors.tableFaint, softWrap = false)
         }
     }
     val cells: @Composable (Modifier) -> Unit = { m ->
         Row(m.height(IntrinsicSize.Min)) {
             cols.forEachIndexed { i, c ->
-                if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(colors.border))
+                if (i > 0) Box(Modifier.width(1.dp).fillMaxHeight().background(colors.tableBorder))
                 QuoteCell(c.name, r.options.filter { sellerKey(it) == c.id }, chosen, quoting, Modifier.weight(1f), onPick)
             }
         }
@@ -473,7 +473,7 @@ private fun MatrixRow(r: CmpRow, index: Int, cols: List<CmpCol>, known: Set<Stri
                 if (r.quoted) { band(Modifier.width(NAME_WIDTH).fillMaxHeight()); cells(Modifier.weight(1f)) }
                 else band(Modifier.fillMaxWidth())
             }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.tableBorder))
         } else {
             band(Modifier.fillMaxWidth())
             if (r.quoted) cells(Modifier.fillMaxWidth())
@@ -489,8 +489,8 @@ private fun QuoteCell(seller: String, mine: List<PLProposalOption>, chosen: PLPr
     val colors = WorkisTheme.colors
     Column(modifier.padding(if (mine.isEmpty()) 10.dp else 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (mine.isEmpty()) {
-            Text(seller, fontSize = 10.5.sp, fontWeight = FontWeight.Medium, color = colors.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("—", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.faint)
+            Text(seller, fontSize = 10.5.sp, fontWeight = FontWeight.Medium, color = colors.tableFaint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("—", fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = colors.tableFaint)
         }
         mine.forEach { o ->
             val on = chosen != null && chosen.key == o.key
@@ -523,7 +523,7 @@ private fun PriceCell(o: PLProposalOption, seller: String, on: Boolean, quoting:
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) {
                 if (on) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
-                else Box(Modifier.size(13.dp).border(1.5.dp, colors.faint, CircleShape))
+                else Box(Modifier.size(13.dp).border(1.5.dp, colors.tableFaint, CircleShape))
             }
             Spacer(Modifier.width(5.dp))
             Text(seller, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, color = tone, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
@@ -540,15 +540,15 @@ private fun PriceCell(o: PLProposalOption, seller: String, on: Boolean, quoting:
         Row(verticalAlignment = Alignment.Bottom) {
             Text(WorkisMoney.text(o.amount, null), fontFamily = WorkisMono, fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium, fontSize = 11.5.sp, color = tone, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             Spacer(Modifier.width(4.dp))
-            Text(o.currency.orEmpty(), fontFamily = WorkisMono, fontWeight = if (o.off == true) FontWeight.Bold else FontWeight.Medium, fontSize = 10.sp, color = if (o.off == true) colors.accentText else colors.faint, maxLines = 1, softWrap = false)
+            Text(o.currency.orEmpty(), fontFamily = WorkisMono, fontWeight = if (o.off == true) FontWeight.Bold else FontWeight.Medium, fontSize = 10.sp, color = if (o.off == true) colors.accentText else colors.tableFaint, maxLines = 1, softWrap = false)
         }
         // beside, never instead of: the price through the buyer's own rate (ledger 128)
-        ownRateBeside(o, LocalOwnRate.current)?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 13.sp, color = colors.faint, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-        o.rate?.let { Text(vatLine(it), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.faint, maxLines = 1) }
+        ownRateBeside(o, LocalOwnRate.current)?.let { Text(it, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 13.sp, color = colors.tableFaint, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+        o.rate?.let { Text(vatLine(it), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = colors.tableFaint, maxLines = 1) }
         if (o.off == true) Text(stringResource(R.string.off_currency_hint), fontSize = 10.5.sp, lineHeight = 14.sp, color = colors.accentText, maxLines = 4, overflow = TextOverflow.Ellipsis)
         o.carried?.quote?.takeIf { it.isNotEmpty() }?.let { q ->
             val until = o.carried.until?.takeIf { it.isNotEmpty() }?.let { " · " + stringResource(R.string.valid_until_label) + " " + WorkisClock.day(it) }.orEmpty()
-            Text(stringResource(R.string.carried_from) + " " + q + until, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 13.sp, color = colors.faint, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(R.string.carried_from) + " " + q + until, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, lineHeight = 13.sp, color = colors.tableFaint, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         o.fails?.takeIf { it > 0 }?.let { f ->
             Text("$f " + stringResource(R.string.fails_word), fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 10.sp, color = Beige, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -565,7 +565,7 @@ private fun PriceCell(o: PLProposalOption, seller: String, on: Boolean, quoting:
 @Composable
 private fun SellerBlock(c: CmpCol, parts: List<CmpPart>, quoting: Boolean, onQuotePdf: (String) -> Unit, onTakeAll: () -> Unit) {
     val colors = WorkisTheme.colors
-    SurfaceCard(fill = colors.tableSub) {
+    SurfaceCard(border = colors.tableBorder, fill = colors.tableSub) {
         Text(c.name, fontFamily = WorkisMono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = colors.accentText, maxLines = 2, overflow = TextOverflow.Ellipsis)
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (parts.isEmpty()) SumLine(stringResource(R.string.picked_items), "—")
@@ -577,23 +577,23 @@ private fun SellerBlock(c: CmpCol, parts: List<CmpPart>, quoting: Boolean, onQuo
             }
         }
         if (c.terms.isNotEmpty()) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.tableBorder))
             c.terms.forEach { term ->
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    Text(term.label, fontSize = 11.sp, color = colors.faint)
+                    Text(term.label, fontSize = 11.sp, color = colors.tableFaint)
                     Text(term.text, fontSize = 13.sp, lineHeight = 18.sp, color = colors.ink)
                     if (term.conflict) Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(WorkisIcons.Warning, contentDescription = null, tint = Beige, modifier = Modifier.size(12.dp))
                         Spacer(Modifier.width(4.dp))
                         Text(stringResource(R.string.term_conflict), fontSize = 11.sp, color = Beige)
-                    } else if (term.fromChat) Text(stringResource(R.string.term_from_chat), fontSize = 11.sp, color = colors.faint)
+                    } else if (term.fromChat) Text(stringResource(R.string.term_from_chat), fontSize = 11.sp, color = colors.tableFaint)
                 }
             }
         }
         if (c.all.isNotEmpty()) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.border))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.tableBorder))
             Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                Text(stringResource(R.string.everything_quoted) + " · " + stringResource(R.string.ex_vat_word), fontSize = 11.sp, color = colors.faint)
+                Text(stringResource(R.string.everything_quoted) + " · " + stringResource(R.string.ex_vat_word), fontSize = 11.sp, color = colors.tableFaint)
                 Text(c.all.joinToString(" + ") { WorkisMoney.text(it.second, it.first) }, fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 12.sp, color = colors.muted)
             }
         }
@@ -607,7 +607,7 @@ private fun SellerBlock(c: CmpCol, parts: List<CmpPart>, quoting: Boolean, onQuo
         val qid = c.quoteId?.takeIf { it.isNotEmpty() }
         if (c.pdf && qid != null) {
             Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { onQuotePdf(WORKIS_BASE_URL + "workis/quotes/$qid/pdf/") }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(WorkisIcons.DocText, contentDescription = null, tint = colors.faint, modifier = Modifier.size(15.dp))
+                Icon(WorkisIcons.DocText, contentDescription = null, tint = colors.tableFaint, modifier = Modifier.size(15.dp))
                 Spacer(Modifier.width(10.dp))
                 Text(stringResource(R.string.quote_doc), fontSize = 13.sp, fontWeight = FontWeight.Medium, color = colors.muted)
             }
