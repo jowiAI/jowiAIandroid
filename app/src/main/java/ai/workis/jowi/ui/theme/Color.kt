@@ -82,6 +82,12 @@ data class WorkisColors(
      */
     val tableGround: Color,
     val tableSub: Color,
+    /**
+     * Hairline and faint ink ON the table ground (ledger 138): in dark the general pair is 1.27:1 and
+     * 2.95:1 on `#2F2C25`, these are 1.83 and 5.06 (the web's values); in light they ARE `border` / `faint`.
+     */
+    val tableBorder: Color,
+    val tableFaint: Color,
     val isDark: Boolean,
 )
 
@@ -102,6 +108,8 @@ val WorkisLightColors = WorkisColors(
     accentSoft = Color(0xFFF9DCCC),
     tableGround = Color(0xFFFAF7F2),
     tableSub = Color(0xFFFAF7F2),
+    tableBorder = Color(0xFFDDD5C9),
+    tableFaint = Color(0xFF857B6E),
     isDark = false,
 )
 
@@ -122,6 +130,8 @@ val WorkisDarkColors = WorkisColors(
     accentSoft = Color(0xFF4F2412),
     tableGround = Color(0xFF2F2C25),
     tableSub = Color(0xFF37342B),
+    tableBorder = Color(0xFF59543F),
+    tableFaint = Color(0xFFA39C80),
     isDark = true,
 )
 
