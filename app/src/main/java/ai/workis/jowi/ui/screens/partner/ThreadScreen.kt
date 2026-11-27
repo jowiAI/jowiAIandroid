@@ -63,10 +63,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -85,6 +88,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
@@ -721,31 +725,76 @@ private fun MessageRow(m: ThreadMessage, seats: List<String>, vm: ThreadViewMode
             }
         }
         m.mine == true -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            // Seat hues (ledgers 150 / 152): the reader's own bubble stands on its seat's ground with a
+            // 3dp edge in the seat's ink on the trailing side, no outline. The CARRIER's has no green
+            // ground — green is a result on this screen — it stands on the common card with the green
+            // edge and the message itself in green.
+            val hue = seatHue(m.seat)
+            val unfilled = m.seat == "carrier"
+            val shape = RoundedCornerShape(16.dp)
             Column(
-                Modifier.fillMaxWidth(0.82f).background(Kiremit500.copy(alpha = 0.10f), RoundedCornerShape(16.dp)).border(1.dp, Kiremit500.copy(alpha = 0.5f), RoundedCornerShape(16.dp)).padding(12.dp),
+                Modifier
+                    .fillMaxWidth(0.82f)
+                    .clip(shape)
+                    .background(if (unfilled) colors.surface else hue.ground)
+                    .then(if (unfilled) Modifier.border(1.dp, colors.border, shape) else Modifier)
+                    .drawBehind { val w = 3.dp.toPx(); drawRect(hue.edge, topLeft = Offset(if (layoutDirection == LayoutDirection.Rtl) 0f else size.width - w, 0f), size = Size(w, size.height)) }
+                    .padding(12.dp),
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text(body, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
+                Text(body, fontSize = 14.sp, lineHeight = 20.sp, color = if (unfilled) hue.ink else colors.ink)
                 TranslationToggle(translated != null, showOriginal) { showOriginal = !showOriginal }
                 Stamp(m, mine = true, cargo = m.cargo == true && vm.isOrderParty)
                 if (!readOnly) Receipt(m, seats, onRetract)
             }
         }
         else -> Row(Modifier.fillMaxWidth().padding(end = 28.dp)) {
+            // another seat's card: the card as before, plus a 3dp leading edge and the name line in
+            // the seat's ink; a seat the app does not know carries no hue (ledger 150)
+            val known = seatKnown(m.seat)
+            val hue = seatHue(m.seat)
+            val shape = RoundedCornerShape(16.dp)
             Column(
-                Modifier.weight(1f).background(colors.surface, RoundedCornerShape(16.dp)).border(1.dp, colors.border, RoundedCornerShape(16.dp)).padding(12.dp),
+                Modifier
+                    .weight(1f)
+                    .clip(shape)
+                    .background(colors.surface)
+                    .border(1.dp, colors.border, shape)
+                    .drawBehind { if (known) { val w = 3.dp.toPx(); drawRect(hue.edge, topLeft = Offset(if (layoutDirection == LayoutDirection.Rtl) size.width - w else 0f, 0f), size = Size(w, size.height)) } }
+                    .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
                     listOfNotNull(m.who?.takeIf { it.isNotEmpty() }, seatWord(m.seat)).joinToString(" · "),
-                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = colors.accentText,
+                    fontFamily = WorkisMono, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.sp, color = if (known) hue.ink else colors.faint,
                 )
                 Text(body, fontSize = 14.sp, lineHeight = 20.sp, color = colors.ink)
                 TranslationToggle(translated != null, showOriginal) { showOriginal = !showOriginal }
                 Stamp(m, mine = false, cargo = m.cargo == true && vm.isOrderParty)
             }
         }
+    }
+}
+
+private class SeatHue(val ink: Color, val edge: Color, val ground: Color)
+
+private fun seatKnown(seat: String?): Boolean = seat == "buyer" || seat == "seller" || seat == "carrier"
+
+/**
+ * Seat hues (ledgers 150 / 152): buyer kiremit, seller beige, carrier green. The seat is the server's
+ * — the sender's ROLE in this order; an unknown seat reads as the buyer's on the reader's own bubble
+ * and carries no hue on a card. LIGHT only: the seller's edge is beige at half strength (the light
+ * beige ink read as black on a 3dp strip; the name keeps the full ink). The buyer's own ground is the
+ * neutral grey of `border` — a kiremit fill was a dark brown in dark and a salmon slab in light.
+ */
+@Composable
+private fun seatHue(seat: String?): SeatHue {
+    val colors = WorkisTheme.colors
+    return when (seat) {
+        "seller" -> SeatHue(colors.beige, if (colors.isDark) colors.beige else colors.beige.copy(alpha = 0.5f), colors.beigeBg)
+        "carrier" -> SeatHue(colors.success, colors.success, colors.successBg)
+        else -> SeatHue(colors.accentText, colors.accentText, colors.border)
     }
 }
 

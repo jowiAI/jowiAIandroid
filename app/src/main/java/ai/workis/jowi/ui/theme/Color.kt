@@ -17,7 +17,7 @@ val OnKiremitFill = Color(0xFF16171B)
 
 /**
  * The note and status idioms are scheme PAIRS, not dark-only constants
- * (decisions 2026-09-21, WEB_PALETTE_SYNC rules 8 and 10). They read as the
+ * (decisions 2026-09-21, `jowiAIs/docs/WORKIS_THEME.md` rules 8 and 10). They read as the
  * same weight in both themes — the light band step matches the dark one — and
  * because the band flips with the theme, text inside it on a scheme token
  * (`ink`, `muted`) comes right by itself: no `on-beige-bg` token is needed.

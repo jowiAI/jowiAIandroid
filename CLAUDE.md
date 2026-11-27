@@ -82,6 +82,11 @@ tick, status never color-only). API shapes are never repeated there — API_CONT
   per group (`DoorGroup`: Ağ = Partnerler · Uzmanlar · Yazışmalar with counts · Tedarik · Katalog · Finans, then Sistem alone, no
   heading) — three abreast, icon over name, count top-right, hairlines between; only held pages, an empty group not drawn, a lone
   door a full-width row. The headings are stored in capitals — never upper-cased in code. A console without the Panel keeps its door list.
+- Yazışma seat hues (ledgers 150 / 152, `ThreadScreen.kt` `seatHue`), keyed on the message's `seat` as sent: another seat's card = the
+  common card + a 3dp LEADING edge and the "NAME · ROLE" line in the seat's ink (buyer `accentText` · seller `beige`, edge at 50% in light ·
+  carrier `success`); the reader's own bubble = no outline, a 3dp TRAILING edge — buyer on `border` grey (never `accentSoft`), seller on
+  `beigeBg`, carrier on the common card with its message text green (green is a result on this screen, never a ground). An unknown seat
+  (`coordinator`): no edge, name `faint`, own bubble as the buyer's. System lines, Jowi's card, the withdrawn trace and "kargo" carry no hue.
 - Alım hafızası (ledger 54): the order thread's `kind: "private"` reply keeps the sent words → "Tabloya ilet" re-posts them with
   `audience: "table"` (ORDER door only). The satisfaction tick (`SatisfactionCard.kt`, `SatisfactionTicks`) is drawn from the confirm
   reply's `satisfaction` right under the confirmation (Onaylar + the order stage) and as Onaylar's last section — words as sent,
